@@ -1,0 +1,17 @@
+{
+  "name": "clous",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Next-Gen BaaS & Type-Safe ORM Platform",
+  "type": "module",
+  "scripts": {
+    "build": "tsc -b packages/core",
+    "test": "vitest run",
+    "demo": "node examples/basic/index.ts"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.3",
+    "vitest": "^3.0.7"
+  },
+  "packageManager": "pnpm@12.6.0"
+}
