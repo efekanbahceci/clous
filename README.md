@@ -1,10 +1,5 @@
 # Clous 
 
-> **Next-Generation BaaS & Type-Safe ORM Platform**  
-> Uniting the power of Supabase's PostgreSQL & Auth with Prisma's world-class DX and end-to-end type safety.
-
----
-
 ##  What is Clous?
 
 **Clous** completely automates backend infrastructure. By defining a single declarative schema in TypeScript, Clous compiles and generates:
