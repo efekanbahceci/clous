@@ -1,11 +1,11 @@
-# Clous ⚡
+# Clous 
 
 > **Next-Generation BaaS & Type-Safe ORM Platform**  
 > Uniting the power of Supabase's PostgreSQL & Auth with Prisma's world-class DX and end-to-end type safety.
 
 ---
 
-## 🌟 What is Clous?
+##  What is Clous?
 
 **Clous** completely automates backend infrastructure. By defining a single declarative schema in TypeScript, Clous compiles and generates:
 1. **Isolated PostgreSQL Databases**: Provisioned per project with native Row Level Security (RLS).
@@ -15,7 +15,7 @@
 
 ---
 
-## 🏗️ Monorepo Architecture
+##  Monorepo Architecture
 
 ```
 clous/
@@ -35,7 +35,7 @@ clous/
 
 ---
 
-## 🚀 Quickstart & Demo
+##  Quickstart & Demo
 
 ### 1. Install Dependencies
 ```bash
@@ -54,7 +54,7 @@ pnpm demo
 
 ---
 
-## 💻 Example: Defining a Schema
+## Example: Defining a Schema
 
 ```typescript
 import {
@@ -134,7 +134,7 @@ const types = tsEmitter.emit(appSchema);
 
 ---
 
-## 🗺️ Roadmap Status
+##  Roadmap Status
 
 - [x] **Phase 1: Core Engine Prototype (Local-First)** *(Current)*
   - Abstract Syntax Tree (AST) & Intermediate Representation (IR)
