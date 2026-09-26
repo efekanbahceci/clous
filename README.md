@@ -1,146 +1,240 @@
-# Clous 
+# @clous/core
 
-##  What is Clous?
+A schema compiler for backend infrastructure. You define your data model once in TypeScript. Clous converts it into PostgreSQL DDL, TypeScript type definitions, and an OpenAPI specification.
 
-**Clous** completely automates backend infrastructure. By defining a single declarative schema in TypeScript, Clous compiles and generates:
-1. **Isolated PostgreSQL Databases**: Provisioned per project with native Row Level Security (RLS).
-2. **End-to-End TypeScript SDK**: Auto-generated `.d.ts` types and client queries without manual mapping.
-3. **Dynamic JWT-Secured REST / GraphQL APIs**: Ready-to-use CRUD endpoints adhering to RLS policies.
-4. **Declarative Security**: Define complex authorization rules in pure TypeScript without touching raw SQL.
+No runtime dependencies beyond `zod`. No external services. No API keys.
 
 ---
 
-##  Monorepo Architecture
+## Installation
 
+```bash
+npm install @clous/core
 ```
-clous/
-├── packages/
-│   └── core/            # The Core Engine (Compiler, AST, Builder, Emitters)
-│       ├── src/
-│       │   ├── ast/     # AST definitions & Zod validation schemas
-│       │   ├── builder/ # Fluent schema builder API
-│       │   └── emitters/# PostgresSqlEmitter, TsTypeEmitter
-│       └── tests/       # Vitest unit test suite
-├── examples/
-│   └── basic/           # Working end-to-end compilation demo
-├── ARCHITECTURE.md      # Detailed system design & roadmaps
-├── pnpm-workspace.yaml
-└── package.json
-```
+
+Node.js 20 or higher is required.
 
 ---
 
-##  Quickstart & Demo
+## How It Works
 
-### 1. Install Dependencies
-```bash
-pnpm install
+You write a schema. Clous compiles it. You take the output and use it however you want.
+
 ```
-
-### 2. Run Tests
-```bash
-pnpm test
-```
-
-### 3. Run the Core Compiler Demo
-```bash
-pnpm demo
+schema.ts  →  @clous/core  →  schema.sql       (run against your PostgreSQL database)
+                           →  db-types.d.ts    (import into your project for type safety)
+                           →  openapi.json     (import into Postman, Swagger UI, etc.)
 ```
 
 ---
 
-## Example: Defining a Schema
+## Step 1 — Define Your Schema
+
+Create a file called `schema.ts` in your project:
 
 ```typescript
-import {
-  schema,
-  table,
-  uuid,
-  text,
-  integer,
-  boolean,
-  timestamp,
-  PostgresSqlEmitter,
-  TsTypeEmitter,
-} from '@clous/core';
+import { schema, table, uuid, text, integer, boolean, timestamp } from '@clous/core';
 
-// 1. Define Users with Row Level Security (RLS)
 const users = table('users', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  email: text('email').unique().notNull(),
-  fullName: text('full_name').notNull(),
-  role: text('role').notNull().default('customer'),
+  id:        uuid('id').primaryKey().defaultRandom(),
+  email:     text('email').unique().notNull(),
+  name:      text('name').notNull(),
+  role:      text('role').notNull().default('user'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
-})
-  .policy('users_read_all', {
-    for: 'select',
-    using: 'true',
-  })
-  .policy('users_update_own', {
-    for: 'update',
-    to: 'authenticated',
-    using: 'auth.uid() = id',
-    withCheck: 'auth.uid() = id',
-  });
-
-// 2. Define Products
-const products = table('products', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  title: text('title').notNull(),
-  price: integer('price').notNull(),
-  isActive: boolean('is_active').notNull().default(true),
-  createdAt: timestamp('created_at').notNull().defaultNow(),
-})
-  .index(['title'])
-  .policy('products_public_read', {
-    for: 'select',
-    using: 'is_active = true',
-  });
-
-// 3. Define Orders with Foreign Key
-const orders = table('orders', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  userId: uuid('user_id')
-    .notNull()
-    .references('users', 'id', { onDelete: 'cascade' }),
-  total: integer('total').notNull(),
-  createdAt: timestamp('created_at').notNull().defaultNow(),
-})
-  .index(['user_id'])
-  .policy('orders_user_own', {
-    for: 'all',
-    to: 'authenticated',
-    using: 'auth.uid() = user_id',
-    withCheck: 'auth.uid() = user_id',
-  });
-
-// 4. Compile into AST
-export const appSchema = schema({
-  tables: [users, products, orders],
 });
 
-// 5. Emit PostgreSQL DDL & TypeScript Types
-const sqlEmitter = new PostgresSqlEmitter();
-const tsEmitter = new TsTypeEmitter();
+const posts = table('posts', {
+  id:        uuid('id').primaryKey().defaultRandom(),
+  title:     text('title').notNull(),
+  likes:     integer('likes').notNull().default(0),
+  published: boolean('is_published').notNull().default(false),
+  authorId:  uuid('author_id')
+               .notNull()
+               .references('users', 'id', { onDelete: 'cascade' }),
+})
+  .index(['author_id']);
 
-const ddl = sqlEmitter.emit(appSchema);
-const types = tsEmitter.emit(appSchema);
+export const appSchema = schema({
+  tables: [users, posts],
+});
+```
+
+`schema()` validates the structure immediately. If you reference a foreign key that does not exist, or use a duplicate table name, it throws a descriptive error at compile time — not at runtime.
+
+---
+
+## Step 2 — Generate Output
+
+Create a file called `generate.ts`:
+
+```typescript
+import { PostgresSqlEmitter, DtsEmitter, OpenApiEmitter } from '@clous/core';
+import { appSchema } from './schema.js';
+import fs from 'node:fs';
+
+// 1. PostgreSQL DDL
+const sqlEmitter = new PostgresSqlEmitter();
+const sql = sqlEmitter.emit(appSchema);
+fs.mkdirSync('./generated', { recursive: true });
+fs.writeFileSync('./generated/schema.sql', sql);
+
+// 2. TypeScript type definitions
+const dtsEmitter = new DtsEmitter();
+await dtsEmitter.writeToFile('./generated/db-types.d.ts', appSchema);
+
+// 3. OpenAPI 3.0 specification
+const openApiEmitter = new OpenApiEmitter();
+const spec = openApiEmitter.emit(appSchema, {
+  title: 'My API',
+  serverUrl: 'https://api.example.com',
+});
+fs.writeFileSync('./generated/openapi.json', JSON.stringify(spec, null, 2));
+```
+
+Run it:
+
+```bash
+npx tsx generate.ts
+```
+
+You now have three files in `./generated/`.
+
+---
+
+## Step 3 — Use the Output
+
+**Apply the SQL to your database:**
+
+```bash
+psql -d your_database_name < ./generated/schema.sql
+```
+
+**Use the TypeScript types in your code:**
+
+```typescript
+import type { UsersRow, UsersInsert } from './generated/db-types.js';
+
+// The type tells you exactly which fields are required
+const newUser: UsersInsert = {
+  email: 'ali@example.com',
+  name: 'Ali',
+  // role is optional because it has a default value
+};
+
+// The Row type reflects what the database returns
+function display(user: UsersRow) {
+  console.log(user.email, user.role);
+}
+```
+
+**Import the OpenAPI spec into Postman, Insomnia, or Swagger UI** by pointing to `./generated/openapi.json`.
+
+---
+
+## Column Types
+
+| Function | PostgreSQL Type |
+|---|---|
+| `uuid(name)` | UUID |
+| `text(name)` | TEXT |
+| `varchar(name, length?)` | VARCHAR(n) |
+| `integer(name)` | INTEGER |
+| `bigint(name)` | BIGINT |
+| `boolean(name)` | BOOLEAN |
+| `timestamp(name)` | TIMESTAMP WITHOUT TIME ZONE |
+| `timestamptz(name)` | TIMESTAMP WITH TIME ZONE |
+| `jsonb(name)` | JSONB |
+| `float(name)` | DOUBLE PRECISION |
+| `serial(name)` | SERIAL |
+
+## Column Modifiers
+
+```typescript
+text('email')
+  .notNull()
+  .nullable()
+  .unique()
+  .default('value')
+  .defaultNow()          // DEFAULT now()
+  .defaultRandom()       // DEFAULT gen_random_uuid()
+  .references('table', 'column', { onDelete: 'cascade' })
 ```
 
 ---
 
-##  Roadmap Status
+## Row Level Security
 
-- [x] **Phase 1: Core Engine Prototype (Local-First)** *(Current)*
-  - Abstract Syntax Tree (AST) & Intermediate Representation (IR)
-  - Zod structural validation & foreign-key semantic checks
-  - Fluent Builder API (`table`, `column`, `policy`, `references`)
-  - `PostgresSqlEmitter` (DDL, Constraints, Indexes, RLS Policies)
-  - `TsTypeEmitter` (Row, Insert, Update, Database interfaces)
-  - Vitest test suite with 100% pass rate
-- [ ] **Phase 2: Type Safety & Dynamic Runtime API** (ts-morph, Fastify CRUD)
-- [ ] **Phase 3: Developer CLI & Local Docker Compose**
-- [ ] **Phase 4: Control Plane & SaaS Dashboard**
-- [ ] **Phase 5: Cloud Orchestration (MicroVMs / Docker & Caddy Gateway)**
+Policies are defined alongside your schema and compiled into PostgreSQL `CREATE POLICY` statements.
 
-For comprehensive system diagrams and deep-dives, see [ARCHITECTURE.md](file:///Users/efekan/Desktop/Projeler/clous/ARCHITECTURE.md).
+```typescript
+const documents = table('documents', {
+  id:      uuid('id').primaryKey().defaultRandom(),
+  ownerId: uuid('owner_id').notNull(),
+  content: text('content').notNull(),
+})
+  .policy('documents_owner_only', {
+    for: 'all',
+    to: 'authenticated',
+    using: 'auth.uid() = owner_id',
+    withCheck: 'auth.uid() = owner_id',
+  });
+```
+
+The `PostgresSqlEmitter` automatically generates the `auth.uid()`, `auth.role()`, and `auth.email()` PostgreSQL functions that read values from per-request session variables. These are designed to work with any JWT-based authentication layer that sets those variables before executing queries.
+
+Available policy operations for `for`: `select`, `insert`, `update`, `delete`, `all`.
+
+---
+
+## Emitter Options
+
+### PostgresSqlEmitter
+
+```typescript
+sqlEmitter.emit(appSchema, {
+  includeExtensions: true,   // CREATE EXTENSION IF NOT EXISTS "pgcrypto"
+  includeAuthHelpers: true,  // generates auth.uid() / auth.role() / auth.email()
+  dropIfExists: false,       // prepend DROP TABLE IF EXISTS ... CASCADE
+  enableRlsByDefault: true,  // always ENABLE ROW LEVEL SECURITY on every table
+});
+```
+
+### TsTypeEmitter
+
+Returns the generated TypeScript code as a string instead of writing to disk.
+
+```typescript
+import { TsTypeEmitter } from '@clous/core';
+
+const emitter = new TsTypeEmitter();
+const code = emitter.emit(appSchema);
+console.log(code);
+```
+
+### OpenApiEmitter
+
+```typescript
+openApiEmitter.emit(appSchema, {
+  title: 'My API',
+  description: 'Optional description',
+  version: '1.0.0',
+  serverUrl: 'https://api.example.com',
+});
+```
+
+---
+
+## Indexes
+
+```typescript
+table('posts', { ... })
+  .index(['author_id'])                                          // simple index
+  .index(['title', 'created_at'], { unique: true })             // composite unique index
+  .index(['content'], { method: 'gin' })                        // GIN index (full-text search)
+```
+
+---
+
+## License
+
+MIT
