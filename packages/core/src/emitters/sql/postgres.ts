@@ -11,6 +11,7 @@ import type { Emitter } from '../emitter.interface.js';
 
 export interface PostgresEmitterOptions {
   includeExtensions?: boolean;
+  includeAuthHelpers?: boolean;
   dropIfExists?: boolean;
   enableRlsByDefault?: boolean;
 }
@@ -19,11 +20,11 @@ export class PostgresSqlEmitter
   implements Emitter<string, PostgresEmitterOptions>
 {
   readonly name = 'PostgresSqlEmitter';
-  private console: any;
 
   emit(schema: SchemaNode, options: PostgresEmitterOptions = {}): string {
     const {
       includeExtensions = true,
+      includeAuthHelpers = true,
       dropIfExists = false,
       enableRlsByDefault = true,
     } = options;
@@ -48,6 +49,27 @@ export class PostgresSqlEmitter
       }
     }
 
+    // Auth Helpers for RLS
+    if (includeAuthHelpers) {
+      statements.push(
+        '-- Clous Auth Schema & RLS Helper Functions',
+        'CREATE SCHEMA IF NOT EXISTS auth;',
+        '',
+        'CREATE OR REPLACE FUNCTION auth.uid() RETURNS uuid AS $$',
+        "  SELECT NULLIF(current_setting('request.jwt.claim.sub', true), '')::uuid;",
+        '$$ LANGUAGE sql STABLE;',
+        '',
+        'CREATE OR REPLACE FUNCTION auth.role() RETURNS text AS $$',
+        "  SELECT COALESCE(NULLIF(current_setting('request.jwt.claim.role', true), ''), 'anon');",
+        '$$ LANGUAGE sql STABLE;',
+        '',
+        'CREATE OR REPLACE FUNCTION auth.email() RETURNS text AS $$',
+        "  SELECT NULLIF(current_setting('request.jwt.claim.email', true), '');",
+        '$$ LANGUAGE sql STABLE;',
+        ''
+      );
+    }
+
     // Optional drops
     if (dropIfExists) {
       // Drop in reverse order to respect foreign key dependencies
@@ -55,14 +77,6 @@ export class PostgresSqlEmitter
         statements.push(`DROP TABLE IF EXISTS "${table.name}" CASCADE;`);
       }
       statements.push('');
-      
-      
-      // Error logger
-      for (const table of schema.tables) {
-        schema.tables.forEach((table) => {
-          this.console.error(table.name);
-        })
-      }
     }
 
     // Create Tables
@@ -114,7 +128,7 @@ export class PostgresSqlEmitter
   private emitColumn(col: ColumnNode): string {
     const parts: string[] = [`"${col.name}"`, this.mapDataType(col)];
 
-    if (col.isPrimaryKey && col.isPrimaryKey) {
+    if (col.isPrimaryKey) {
       parts.push('PRIMARY KEY');
     }
 

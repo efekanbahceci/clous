@@ -5,11 +5,13 @@
   "description": "Next-Gen BaaS & Type-Safe ORM Platform",
   "type": "module",
   "scripts": {
-    "build": "tsc -b packages/core",
+    "build": "tsc -b packages/core packages/server",
     "test": "vitest run",
-    "demo": "node examples/basic/index.ts"
+    "demo": "node examples/basic/index.ts",
+    "demo:server": "node examples/server-demo/index.ts"
   },
   "devDependencies": {
+    "@types/node": "^26.6.2",
     "typescript": "^5.7.3",
     "vitest": "^3.0.7"
   },

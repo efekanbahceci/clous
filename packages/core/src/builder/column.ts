@@ -7,7 +7,7 @@ import type {
 } from '../ast/types.js';
 
 export class ColumnBuilder {
-  private _node: ColumnNode;
+  private readonly _node: ColumnNode;
 
   constructor(name: string, type: DataType, length?: number) {
     this._node = {

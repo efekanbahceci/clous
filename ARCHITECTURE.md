@@ -111,9 +111,15 @@ The heart of Clous is an isolated, compiler-driven TypeScript module that transf
   - [x] `PostgresSqlEmitter` (DDL, Indexes, RLS Policies).
   - [x] `TsTypeEmitter` (Row, Insert, Update, Database interfaces).
   - [x] Vitest unit test suite (100% passing).
-- [ ] **Phase 2: Type Safety & Runtime API**
-  - [ ] `ts-morph` physical `.d.ts` file generator.
-  - [ ] Fastify + `pg` dynamic CRUD runtime server with JWT auth and RLS session propagation.
+- [x] **Phase 2: Type Safety & Dynamic Runtime Engine (@clous/server)**
+  - [x] Physical `.d.ts` file generator (`DtsEmitter`).
+  - [x] Fastify-based headless API runtime engine (`createClousServer`).
+  - [x] `PgExecutor` with automated PostgreSQL Row Level Security (RLS) context injection (`set_config('request.jwt.claim.sub', ...)`).
+  - [x] `MemoryExecutor` for testing and local development without database overhead.
+  - [x] Dynamic CRUD endpoints (`GET /api/:table`, `GET /api/:table/:id`, `POST`, `PATCH`, `DELETE`) with column filtering, pagination, sorting, and field selection.
+  - [x] Standard error handling with Zod and PostgreSQL error code mapping.
+  - [x] Public API security layer (CORS, Helmet, Rate Limiting).
+  - [x] OpenAPI 3.0 specification emitter (`OpenApiEmitter`).
 - [ ] **Phase 3: Developer CLI & Local Docker**
   - [ ] CLI with `cac` (`clous init`, `clous generate`, `clous dev`).
   - [ ] Local single-command Docker Compose stack.
