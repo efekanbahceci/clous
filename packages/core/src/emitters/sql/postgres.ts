@@ -199,6 +199,15 @@ export class PostgresSqlEmitter
       return val ? 'TRUE' : 'FALSE';
     }
     if (typeof val === 'object' && val.kind === 'raw') {
+      // Allowlist: Only permit safe, known SQL expressions.
+      // This prevents DDL injection via crafted raw default values.
+      const safeExpressions = /^(now\(\)|gen_random_uuid\(\)|current_timestamp|true|false|\d+(\.\d+)?|uuid_generate_v4\(\)|CURRENT_DATE|CURRENT_TIME)$/i;
+      if (!safeExpressions.test(val.expression.trim())) {
+        throw new Error(
+          `Unsafe raw SQL expression in default value: "${val.expression}". ` +
+          `Only whitelisted expressions are allowed (e.g. now(), gen_random_uuid()).`
+        );
+      }
       return val.expression;
     }
     return `'${String(val)}'`;

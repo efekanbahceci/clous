@@ -1,18 +1,52 @@
 {
   "name": "@clous/core",
   "version": "0.1.0",
-  "description": "Clous Core Engine - Compiler-driven BaaS & Type-Safe ORM",
+  "description": "Type-safe, compiler-driven schema builder for BaaS platforms. Generates PostgreSQL DDL (with RLS), TypeScript types, and OpenAPI 3.0 specs from a single declarative schema.",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "license": "MIT",
+  "sideEffects": false,
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     }
   },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "keywords": [
+    "clous",
+    "baas",
+    "orm",
+    "type-safe",
+    "schema",
+    "postgresql",
+    "rls",
+    "openapi",
+    "compiler",
+    "typescript",
+    "codegen",
+    "sdk-generator"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/efekanbahceci/clous.git",
+    "directory": "packages/core"
+  },
+  "homepage": "https://github.com/efekanbahceci/clous#readme",
+  "bugs": {
+    "url": "https://github.com/efekanbahceci/clous/issues"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
+    "prepublishOnly": "pnpm run build && pnpm run test",
     "test": "vitest run",
     "test:watch": "vitest"
   },
