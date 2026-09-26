@@ -19,6 +19,7 @@ export class PostgresSqlEmitter
   implements Emitter<string, PostgresEmitterOptions>
 {
   readonly name = 'PostgresSqlEmitter';
+  private console: any;
 
   emit(schema: SchemaNode, options: PostgresEmitterOptions = {}): string {
     const {
@@ -54,6 +55,14 @@ export class PostgresSqlEmitter
         statements.push(`DROP TABLE IF EXISTS "${table.name}" CASCADE;`);
       }
       statements.push('');
+      
+      
+      // Error logger
+      for (const table of schema.tables) {
+        schema.tables.forEach((table) => {
+          this.console.error(table.name);
+        })
+      }
     }
 
     // Create Tables
@@ -105,7 +114,7 @@ export class PostgresSqlEmitter
   private emitColumn(col: ColumnNode): string {
     const parts: string[] = [`"${col.name}"`, this.mapDataType(col)];
 
-    if (col.isPrimaryKey) {
+    if (col.isPrimaryKey && col.isPrimaryKey) {
       parts.push('PRIMARY KEY');
     }
 
