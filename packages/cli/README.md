@@ -116,7 +116,7 @@ For automated CI/CD pipelines (GitHub Actions, GitLab CI), you can configure the
 | Variable | Description |
 |---|---|
 | `CLOUS_ACCESS_TOKEN` | Personal access token for authenticating cloud commands |
-| `CLOUS_API_URL` | Override Web Panel / Control Plane API URL (default: `https://api.clous.dev`) |
+| `CLOUS_API_URL` | Override Web Panel / Control Plane API URL (default: `http://localhost:3000`) |
 | `CLOUS_CONFIG_DIR` | Custom directory for credentials storage |
 
 ---

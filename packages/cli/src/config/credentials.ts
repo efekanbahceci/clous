@@ -16,7 +16,7 @@ export interface Credentials {
   updatedAt?: string;
 }
 
-const DEFAULT_API_URL = 'https://api.clous.dev';
+const DEFAULT_API_URL = process.env.CLOUS_API_URL || 'http://localhost:3000';
 
 export class CredentialsManager {
   /**
@@ -33,24 +33,28 @@ export class CredentialsManager {
       } catch {
         fileCreds = {};
       }
-    }
-
-    const localPath = path.join(process.cwd(), '.clous', 'credentials.json');
-    if (!fileCreds.token && fs.existsSync(localPath)) {
-      try {
-        const raw = fs.readFileSync(localPath, 'utf8');
-        fileCreds = JSON.parse(raw);
-      } catch {
-        // Ignore corrupted local file
+    } else {
+      const localPath = path.join(process.cwd(), '.clous', 'credentials.json');
+      if (fs.existsSync(localPath)) {
+        try {
+          const raw = fs.readFileSync(localPath, 'utf8');
+          fileCreds = JSON.parse(raw);
+        } catch {
+          fileCreds = {};
+        }
       }
     }
 
     const envToken = process.env.CLOUS_ACCESS_TOKEN;
     const envApiUrl = process.env.CLOUS_API_URL;
+    let resolvedApiUrl = envApiUrl || fileCreds.apiUrl || DEFAULT_API_URL;
+    if (resolvedApiUrl === 'https://api.clous.dev') {
+      resolvedApiUrl = DEFAULT_API_URL;
+    }
 
     return {
       token: envToken || fileCreds.token,
-      apiUrl: envApiUrl || fileCreds.apiUrl || DEFAULT_API_URL,
+      apiUrl: resolvedApiUrl,
       profile: fileCreds.profile,
       updatedAt: fileCreds.updatedAt,
     };
@@ -133,6 +137,6 @@ export class CredentialsManager {
    * Returns current active API URL.
    */
   static getApiUrl(): string {
-    return this.load().apiUrl || DEFAULT_API_URL;
+    return process.env.CLOUS_API_URL || DEFAULT_API_URL;
   }
 }
