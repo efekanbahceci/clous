@@ -1,0 +1,54 @@
+{
+  "name": "@clous/cli",
+  "version": "0.1.0",
+  "description": "Command-line interface for Clous - Local schema compilation, code generation, and cloud synchronization.",
+  "type": "module",
+  "bin": {
+    "clous": "./dist/bin.js"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "license": "MIT",
+  "sideEffects": false,
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "keywords": [
+    "clous",
+    "cli",
+    "baas",
+    "orm",
+    "codegen",
+    "schema",
+    "postgresql",
+    "typescript"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/efekanbahceci/clous.git",
+    "directory": "packages/cli"
+  },
+  "homepage": "https://github.com/efekanbahceci/clous#readme",
+  "bugs": {
+    "url": "https://github.com/efekanbahceci/clous/issues"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "prepublishOnly": "pnpm run build && pnpm run test",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@clous/core": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.2",
+    "typescript": "^5.7.3",
+    "vitest": "^3.0.7"
+  }
+}

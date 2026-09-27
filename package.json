@@ -5,7 +5,7 @@
   "description": "Next-Gen BaaS & Type-Safe ORM Platform",
   "type": "module",
   "scripts": {
-    "build": "tsc -b packages/core packages/server",
+    "build": "tsc -p packages/core/tsconfig.build.json && tsc -p packages/server/tsconfig.build.json && tsc -p packages/cli/tsconfig.build.json",
     "test": "vitest run",
     "demo": "node examples/basic/index.ts",
     "demo:server": "node examples/server-demo/index.ts"
