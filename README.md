@@ -1,240 +1,338 @@
-# @clous/core
+# Clous
 
-A schema compiler for backend infrastructure. You define your data model once in TypeScript. Clous converts it into PostgreSQL DDL, TypeScript type definitions, and an OpenAPI specification.
-
-No runtime dependencies beyond `zod`. No external services. No API keys.
+Next-generation Backend-as-a-Service (BaaS) and type-safe ORM platform. Clous takes a single declarative schema written in TypeScript and compiles it into PostgreSQL DDL with native Row Level Security (RLS), end-to-end TypeScript definitions, and an OpenAPI 3.0 specification.
 
 ---
 
-## Installation
+## Architecture Overview
+
+Clous is engineered as a modular monorepo separating schema compilation, developer tooling, and runtime execution:
+
+```
+clous/
+├── packages/
+│   ├── core/           # Compiler engine (AST, Builder, SQL/TS/OpenAPI Emitters)
+│   ├── server/         # Dynamic Fastify runtime engine with RLS session injection
+│   └── cli/            # Developer toolchain (offline code generation & auth sync)
+├── examples/
+│   ├── basic/          # Compiler pipeline example
+│   └── server-demo/    # Live Fastify runtime CRUD server demo
+├── ARCHITECTURE.md     # In-depth architectural design specification
+└── package.json        # Workspace configuration
+```
+
+### Packages
+
+| Package | Version | Status | Description |
+|---|---|---|---|
+| `@clous/core` | 1.0.1 | Published | Core compiler engine, Intermediate Representation (IR), and emitters. |
+| `@clous/cli` | 0.1.0 | Published | Developer CLI for local code generation, watching, and cloud sync. |
+| `@clous/server` | 0.1.0 | Internal | Dynamic CRUD runtime engine mounting endpoints directly from AST. |
+
+---
+
+## The Compilation Pipeline
+
+Clous treats your TypeScript schema as the single source of truth. Every layer of your backend infrastructure is derived synchronously without manual drift:
+
+```
+                        +----------------------+
+                        |      schema.ts       |
+                        | (Declarative Schema) |
+                        +----------+-----------+
+                                   |
+                                   v
+                        +----------------------+
+                        |   Semantic Parser    |
+                        |   & AST Validation   |
+                        +----------+-----------+
+                                   |
+            +----------------------+----------------------+
+            |                      |                      |
+            v                      v                      v
++-----------------------+ +------------------+ +---------------------+
+|  PostgresSqlEmitter   | |   DtsEmitter     | |   OpenApiEmitter    |
+| (Tables, Indexes, RLS)| | (.d.ts Types)    | | (OpenAPI 3.0 Spec)  |
++-----------------------+ +------------------+ +---------------------+
+```
+
+1. **Semantic Validation:** Table names, column types, and foreign key references are validated at build time. Foreign keys pointing to non-existent tables or invalid types halt execution with explicit diagnostics.
+2. **PostgreSQL DDL Generation:** Emits standard SQL including `CREATE TABLE`, constraints, composite indexes, and PostgreSQL `CREATE POLICY` statements. It automatically deploys `auth.uid()` and `auth.role()` functions backed by per-request session variables.
+3. **Type Definitions:** Emits TypeScript definitions (`Row`, `Insert`, `Update`, `Database`). Generated interfaces distinguish between required columns, nullable columns, and optional defaults.
+4. **OpenAPI 3.0 Specification:** Produces a structured specification for REST endpoints, pagination parameters, and request/response schemas.
+
+---
+
+## Getting Started
+
+### 1. Installation
+
+Install the CLI globally or as a project devDependency:
 
 ```bash
-npm install @clous/core
+npm install -g @clous/cli
+# or inside a local project:
+npm install -D @clous/cli @clous/core
 ```
 
 Node.js 20 or higher is required.
 
----
+### 2. Initialize a Project
 
-## How It Works
+Scaffold a starter schema in your current directory:
 
-You write a schema. Clous compiles it. You take the output and use it however you want.
-
-```
-schema.ts  →  @clous/core  →  schema.sql       (run against your PostgreSQL database)
-                           →  db-types.d.ts    (import into your project for type safety)
-                           →  openapi.json     (import into Postman, Swagger UI, etc.)
+```bash
+clous init
 ```
 
----
+This creates a `schema.ts` file and initializes a `.clous/` project configuration directory.
 
-## Step 1 — Define Your Schema
+### 3. Define Your Data Model
 
-Create a file called `schema.ts` in your project:
+Define your tables, relations, and security policies declaratively:
 
 ```typescript
-import { schema, table, uuid, text, integer, boolean, timestamp } from '@clous/core';
+import {
+  schema,
+  table,
+  uuid,
+  text,
+  integer,
+  boolean,
+  timestamp,
+} from '@clous/core';
 
-const users = table('users', {
-  id:        uuid('id').primaryKey().defaultRandom(),
-  email:     text('email').unique().notNull(),
-  name:      text('name').notNull(),
-  role:      text('role').notNull().default('user'),
+// 1. Users Table with Row Level Security
+export const users = table('users', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  email: text('email').unique().notNull(),
+  fullName: text('full_name').notNull(),
+  role: text('role').notNull().default('user'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
-});
-
-const posts = table('posts', {
-  id:        uuid('id').primaryKey().defaultRandom(),
-  title:     text('title').notNull(),
-  likes:     integer('likes').notNull().default(0),
-  published: boolean('is_published').notNull().default(false),
-  authorId:  uuid('author_id')
-               .notNull()
-               .references('users', 'id', { onDelete: 'cascade' }),
 })
-  .index(['author_id']);
+  .policy('users_read_all', {
+    for: 'select',
+    using: 'true',
+  })
+  .policy('users_update_own', {
+    for: 'update',
+    to: 'authenticated',
+    using: 'auth.uid() = id',
+    withCheck: 'auth.uid() = id',
+  });
 
+// 2. Posts Table with Foreign Key Cascading
+export const posts = table('posts', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  title: text('title').notNull(),
+  content: text('content').notNull(),
+  likes: integer('likes').notNull().default(0),
+  published: boolean('is_published').notNull().default(false),
+  authorId: uuid('author_id')
+    .notNull()
+    .references('users', 'id', { onDelete: 'cascade' }),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+})
+  .index(['author_id'])
+  .policy('posts_public_read', {
+    for: 'select',
+    using: 'is_published = true',
+  });
+
+// 3. Compile and Export Schema
 export const appSchema = schema({
+  version: '1.0.0',
   tables: [users, posts],
 });
+
+export default appSchema;
 ```
 
-`schema()` validates the structure immediately. If you reference a foreign key that does not exist, or use a duplicate table name, it throws a descriptive error at compile time — not at runtime.
+### 4. Compile the Schema
 
----
-
-## Step 2 — Generate Output
-
-Create a file called `generate.ts`:
-
-```typescript
-import { PostgresSqlEmitter, DtsEmitter, OpenApiEmitter } from '@clous/core';
-import { appSchema } from './schema.js';
-import fs from 'node:fs';
-
-// 1. PostgreSQL DDL
-const sqlEmitter = new PostgresSqlEmitter();
-const sql = sqlEmitter.emit(appSchema);
-fs.mkdirSync('./generated', { recursive: true });
-fs.writeFileSync('./generated/schema.sql', sql);
-
-// 2. TypeScript type definitions
-const dtsEmitter = new DtsEmitter();
-await dtsEmitter.writeToFile('./generated/db-types.d.ts', appSchema);
-
-// 3. OpenAPI 3.0 specification
-const openApiEmitter = new OpenApiEmitter();
-const spec = openApiEmitter.emit(appSchema, {
-  title: 'My API',
-  serverUrl: 'https://api.example.com',
-});
-fs.writeFileSync('./generated/openapi.json', JSON.stringify(spec, null, 2));
-```
-
-Run it:
+Compile the schema into SQL DDL, TypeScript definitions, and an OpenAPI specification:
 
 ```bash
-npx tsx generate.ts
+clous generate
 ```
 
-You now have three files in `./generated/`.
+Output files are written to `./generated/`:
+* `generated/schema.sql` (PostgreSQL DDL with RLS)
+* `generated/db-types.d.ts` (TypeScript interfaces)
+* `generated/openapi.json` (OpenAPI 3.0 specification)
 
 ---
 
-## Step 3 — Use the Output
+## CLI Reference
 
-**Apply the SQL to your database:**
+The `@clous/cli` package separates offline developer operations from cloud synchronization commands:
 
-```bash
-psql -d your_database_name < ./generated/schema.sql
-```
+### Local Commands (Offline / No Account Required)
 
-**Use the TypeScript types in your code:**
+These commands run completely offline without external network calls:
 
-```typescript
-import type { UsersRow, UsersInsert } from './generated/db-types.js';
-
-// The type tells you exactly which fields are required
-const newUser: UsersInsert = {
-  email: 'ali@example.com',
-  name: 'Ali',
-  // role is optional because it has a default value
-};
-
-// The Row type reflects what the database returns
-function display(user: UsersRow) {
-  console.log(user.email, user.role);
-}
-```
-
-**Import the OpenAPI spec into Postman, Insomnia, or Swagger UI** by pointing to `./generated/openapi.json`.
-
----
-
-## Column Types
-
-| Function | PostgreSQL Type |
+| Command | Description |
 |---|---|
-| `uuid(name)` | UUID |
-| `text(name)` | TEXT |
-| `varchar(name, length?)` | VARCHAR(n) |
-| `integer(name)` | INTEGER |
-| `bigint(name)` | BIGINT |
-| `boolean(name)` | BOOLEAN |
-| `timestamp(name)` | TIMESTAMP WITHOUT TIME ZONE |
-| `timestamptz(name)` | TIMESTAMP WITH TIME ZONE |
-| `jsonb(name)` | JSONB |
-| `float(name)` | DOUBLE PRECISION |
-| `serial(name)` | SERIAL |
+| `clous init` | Initialize a new Clous project with a starter schema |
+| `clous generate` | Compile schema into SQL DDL, TypeScript types, and OpenAPI spec |
+| `clous validate` | Run compile-time integrity checks on schema relations and syntax |
+| `clous dev` | Watch `schema.ts` and recompile automatically on save |
 
-## Column Modifiers
+### Cloud Commands (Web Panel & Control Plane Synchronization)
 
-```typescript
-text('email')
-  .notNull()
-  .nullable()
-  .unique()
-  .default('value')
-  .defaultNow()          // DEFAULT now()
-  .defaultRandom()       // DEFAULT gen_random_uuid()
-  .references('table', 'column', { onDelete: 'cascade' })
+These commands connect your local workspace to the Clous Web Panel:
+
+| Command | Description |
+|---|---|
+| `clous login` | Authenticate CLI via local callback listener or access token |
+| `clous whoami` | Inspect the currently authenticated profile and active API URL |
+| `clous link` | Link current workspace directory to a remote project ID |
+| `clous status` | Inspect local schema status, linked project, and auth state |
+| `clous logout` | Remove stored access credentials from local machine |
+
+### CLI Options
+
+```
+-s, --schema <path>     Path to schema file (default: schema.ts)
+-o, --out <dir>         Output directory for generated files (default: generated)
+-t, --token <token>     Personal access token for headless CI/CD authentication
+-p, --project-id <id>   Project ID for linking
+-f, --force             Overwrite existing files without prompting
+-h, --help              Display help information
+-v, --version           Display CLI version
 ```
 
 ---
 
-## Row Level Security
+## Runtime Engine (`@clous/server`)
 
-Policies are defined alongside your schema and compiled into PostgreSQL `CREATE POLICY` statements.
-
-```typescript
-const documents = table('documents', {
-  id:      uuid('id').primaryKey().defaultRandom(),
-  ownerId: uuid('owner_id').notNull(),
-  content: text('content').notNull(),
-})
-  .policy('documents_owner_only', {
-    for: 'all',
-    to: 'authenticated',
-    using: 'auth.uid() = owner_id',
-    withCheck: 'auth.uid() = owner_id',
-  });
-```
-
-The `PostgresSqlEmitter` automatically generates the `auth.uid()`, `auth.role()`, and `auth.email()` PostgreSQL functions that read values from per-request session variables. These are designed to work with any JWT-based authentication layer that sets those variables before executing queries.
-
-Available policy operations for `for`: `select`, `insert`, `update`, `delete`, `all`.
-
----
-
-## Emitter Options
-
-### PostgresSqlEmitter
+The runtime engine takes a compiled `SchemaNode` AST and spins up a fully functional, production-ready Fastify server with dynamic CRUD routes, JWT authentication, and automatic RLS context propagation:
 
 ```typescript
-sqlEmitter.emit(appSchema, {
-  includeExtensions: true,   // CREATE EXTENSION IF NOT EXISTS "pgcrypto"
-  includeAuthHelpers: true,  // generates auth.uid() / auth.role() / auth.email()
-  dropIfExists: false,       // prepend DROP TABLE IF EXISTS ... CASCADE
-  enableRlsByDefault: true,  // always ENABLE ROW LEVEL SECURITY on every table
+import { createClousServer } from '@clous/server';
+import { appSchema } from './schema.js';
+
+const server = await createClousServer({
+  schema: appSchema,
+  db: {
+    connectionString: process.env.DATABASE_URL,
+  },
+  auth: {
+    jwtSecret: process.env.JWT_SECRET,
+    required: false,
+  },
+  server: {
+    port: 3000,
+    host: '0.0.0.0',
+  },
 });
+
+await server.start();
 ```
 
-### TsTypeEmitter
+### Endpoints Mounted Automatically
 
-Returns the generated TypeScript code as a string instead of writing to disk.
+For each table in your schema:
+* `GET /api/:table` - List records with pagination (`?page=1&limit=20`), sorting (`?sort=created_at&order=desc`), column selection (`?select=id,title`), and equality filters (`?published=true`).
+* `GET /api/:table/:id` - Retrieve a single record by primary key.
+* `POST /api/:table` - Create record with payload validation against required columns.
+* `PATCH /api/:table/:id` - Update record (prevents updating primary keys).
+* `DELETE /api/:table/:id` - Delete record.
 
-```typescript
-import { TsTypeEmitter } from '@clous/core';
+System and documentation endpoints:
+* `GET /api/_clous/health` - Server and database connection health check.
+* `GET /api/_clous/schema` - Active schema AST JSON.
+* `GET /api/_clous/openapi.json` - Real-time OpenAPI 3.0 specification.
+* `GET /api/_clous/docs` - Interactive Scalar API documentation playground.
 
-const emitter = new TsTypeEmitter();
-const code = emitter.emit(appSchema);
-console.log(code);
+### Transactional RLS Session Injection
+
+When querying PostgreSQL via `PgExecutor`, each request is executed within a database transaction. The user's JWT claims (`sub`, `role`, `email`) are injected using PostgreSQL session variables:
+
+```sql
+BEGIN;
+SELECT
+  set_config('request.jwt.claim.sub', $1, true),
+  set_config('request.jwt.claim.role', $2, true),
+  set_config('request.jwt.claim.email', $3, true);
+-- Queries run here automatically evaluate CREATE POLICY rules
+COMMIT;
 ```
 
-### OpenApiEmitter
+This guarantees thread-safe, request-scoped Row Level Security without connection pool contamination.
+
+---
+
+## Column Types & Modifiers
+
+### Supported Column Types
+
+| Function | PostgreSQL Type | TypeScript Row Type |
+|---|---|---|
+| `uuid(name)` | `UUID` | `string` |
+| `text(name)` | `TEXT` | `string` |
+| `varchar(name, length?)` | `VARCHAR(n)` | `string` |
+| `integer(name)` | `INTEGER` | `number` |
+| `bigint(name)` | `BIGINT` | `string` |
+| `boolean(name)` | `BOOLEAN` | `boolean` |
+| `timestamp(name)` | `TIMESTAMP WITHOUT TIME ZONE` | `string \| Date` |
+| `timestamptz(name)` | `TIMESTAMP WITH TIME ZONE` | `string \| Date` |
+| `jsonb(name)` | `JSONB` | `any` |
+| `float(name)` | `DOUBLE PRECISION` | `number` |
+| `serial(name)` | `SERIAL` | `number` |
+
+### Column Modifiers
 
 ```typescript
-openApiEmitter.emit(appSchema, {
-  title: 'My API',
-  description: 'Optional description',
-  version: '1.0.0',
-  serverUrl: 'https://api.example.com',
-});
+text('title')
+  .primaryKey()                                             // PRIMARY KEY constraint
+  .notNull()                                                // NOT NULL constraint
+  .nullable()                                               // Allow NULL
+  .unique()                                                 // UNIQUE constraint
+  .default('Draft')                                         // Default scalar value
+  .defaultNow()                                             // DEFAULT now()
+  .defaultRandom()                                          // DEFAULT gen_random_uuid()
+  .references('users', 'id', { onDelete: 'cascade' })       // Foreign key reference
 ```
 
 ---
 
-## Indexes
+## Roadmap
 
-```typescript
-table('posts', { ... })
-  .index(['author_id'])                                          // simple index
-  .index(['title', 'created_at'], { unique: true })             // composite unique index
-  .index(['content'], { method: 'gin' })                        // GIN index (full-text search)
-```
+- [x] **Phase 1: Core Engine & Emitters**
+  - Abstract Syntax Tree (AST) & Intermediate Representation (IR)
+  - Fluent builder API (`table`, `column`, `policy`, `references`, `index`)
+  - Semantic integrity validation & foreign key verification
+  - `PostgresSqlEmitter` (Tables, Foreign Keys, Indexes, RLS Policies)
+  - `TsTypeEmitter` & `DtsEmitter` (Row, Insert, Update, Database interfaces)
+  - `OpenApiEmitter` (OpenAPI 3.0 specification)
+
+- [x] **Phase 2: Runtime Engine & RLS Integration**
+  - Fastify CRUD engine with dynamic parameterization
+  - Transactional PostgreSQL executor (`PgExecutor`) with RLS context injection
+  - In-memory executor (`MemoryExecutor`) for testing without database dependencies
+  - JWT authentication plugin and anonymous fallback context
+  - Interactive Scalar API documentation playground (`/api/_clous/docs`)
+
+- [x] **Phase 3: Developer CLI Toolchain**
+  - Scaffolding (`clous init`)
+  - Offline code generation (`clous generate`)
+  - Semantic schema validation (`clous validate`)
+  - Real-time watcher (`clous dev`)
+  - Authentication and project linking architecture (`clous login`, `clous link`, `clous whoami`, `clous status`)
+
+- [ ] **Phase 4: Control Plane & Web Dashboard**
+  - Visual schema designer and table editor
+  - Centralized Better Auth management (OAuth, email/password, organizations)
+  - Remote schema synchronization (`clous pull`, `clous push`)
+  - Migration diffing engine
+
+- [ ] **Phase 5: Cloud Infrastructure & Orchestration**
+  - Multi-tenant PostgreSQL isolation
+  - Automated project provisioning and metrics
 
 ---
 
 ## License
 
-MIT
+MIT © [Efekan Bahçeci](https://github.com/efekanbahceci)
