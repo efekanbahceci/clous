@@ -297,39 +297,6 @@ text('title')
 
 ---
 
-## Roadmap
-
-- [x] **Phase 1: Core Engine & Emitters**
-  - Abstract Syntax Tree (AST) & Intermediate Representation (IR)
-  - Fluent builder API (`table`, `column`, `policy`, `references`, `index`)
-  - Semantic integrity validation & foreign key verification
-  - `PostgresSqlEmitter` (Tables, Foreign Keys, Indexes, RLS Policies)
-  - `TsTypeEmitter` & `DtsEmitter` (Row, Insert, Update, Database interfaces)
-  - `OpenApiEmitter` (OpenAPI 3.0 specification)
-
-- [x] **Phase 2: Runtime Engine & RLS Integration**
-  - Fastify CRUD engine with dynamic parameterization
-  - Transactional PostgreSQL executor (`PgExecutor`) with RLS context injection
-  - In-memory executor (`MemoryExecutor`) for testing without database dependencies
-  - JWT authentication plugin and anonymous fallback context
-  - Interactive Scalar API documentation playground (`/api/_clous/docs`)
-
-- [x] **Phase 3: Developer CLI Toolchain**
-  - Scaffolding (`clous init`)
-  - Offline code generation (`clous generate`)
-  - Semantic schema validation (`clous validate`)
-  - Real-time watcher (`clous dev`)
-  - Authentication and project linking architecture (`clous login`, `clous link`, `clous whoami`, `clous status`)
-
-- [ ] **Phase 4: Control Plane & Web Dashboard**
-  - Visual schema designer and table editor
-  - Centralized Better Auth management (OAuth, email/password, organizations)
-  - Remote schema synchronization (`clous pull`, `clous push`)
-  - Migration diffing engine
-
-- [ ] **Phase 5: Cloud Infrastructure & Orchestration**
-  - Multi-tenant PostgreSQL isolation
-  - Automated project provisioning and metrics
 
 ---
 
