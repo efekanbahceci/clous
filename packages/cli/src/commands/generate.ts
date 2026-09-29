@@ -9,6 +9,7 @@ import { resolveSchemaPath } from '../config/paths.js';
 import { loadSchema } from '../utils/loader.js';
 import { logger } from '../utils/logger.js';
 import { ansi } from '../utils/ansi.js';
+import { ui } from '../utils/ui.js';
 
 export interface GenerateOptions {
   cwd?: string;
@@ -27,7 +28,7 @@ export async function generateCommand(options: GenerateOptions = {}): Promise<{
   const outDir = path.resolve(cwd, options.outDir || 'generated');
 
   if (!options.silent) {
-    logger.info(`Loading schema from: ${ansi.dim(path.relative(cwd, schemaPath) || schemaPath)}`);
+    logger.info(`Compiling schema: ${ansi.bold(path.relative(cwd, schemaPath) || schemaPath)}`);
   }
 
   const startTime = Date.now();
@@ -65,14 +66,26 @@ export async function generateCommand(options: GenerateOptions = {}): Promise<{
   const elapsed = Date.now() - startTime;
 
   if (!options.silent) {
-    logger.success(
-      `Compiled ${appSchema.tables.length} tables in ${elapsed}ms`
-    );
-    logger.plain('');
-    logger.plain('Generated files:');
-    logger.plain(`  ${ansi.cyan('•')} ${path.relative(cwd, sqlPath)} (PostgreSQL DDL with RLS)`);
-    logger.plain(`  ${ansi.cyan('•')} ${path.relative(cwd, dtsPath)} (TypeScript .d.ts types)`);
-    logger.plain(`  ${ansi.cyan('•')} ${path.relative(cwd, openApiPath)} (OpenAPI 3.0 Spec)`);
+    const relSql = path.relative(cwd, sqlPath);
+    const relDts = path.relative(cwd, dtsPath);
+    const relOpenApi = path.relative(cwd, openApiPath);
+
+    console.log('');
+    ui.box({
+      title: `Generated Artifacts (${elapsed}ms)`,
+      borderColor: ansi.green,
+      minWidth: 64,
+      lines: [
+        `Schema:   ${ansi.bold(path.relative(cwd, schemaPath) || schemaPath)} (v${appSchema.version}, ${appSchema.tables.length} tables)`,
+        `Target:   ${ansi.dim(path.relative(cwd, outDir) || outDir)}`,
+        '',
+        'Artifacts Created:',
+        `  ${ansi.cyan('•')} ${ansi.bold(relSql.padEnd(26))} ${ansi.dim('PostgreSQL DDL (RLS + Functions)')}`,
+        `  ${ansi.cyan('•')} ${ansi.bold(relDts.padEnd(26))} ${ansi.dim('TypeScript SDK Interfaces (.d.ts)')}`,
+        `  ${ansi.cyan('•')} ${ansi.bold(relOpenApi.padEnd(26))} ${ansi.dim('OpenAPI 3.0 REST Specification')}`,
+      ],
+    });
+    console.log('');
   }
 
   return { sqlPath, dtsPath, openApiPath };

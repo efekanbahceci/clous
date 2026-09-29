@@ -2,6 +2,7 @@ import { ProjectConfigManager } from '../config/project.js';
 import { CredentialsManager } from '../config/credentials.js';
 import { logger } from '../utils/logger.js';
 import { ansi } from '../utils/ansi.js';
+import { ui } from '../utils/ui.js';
 
 export interface LinkOptions {
   projectId: string;
@@ -19,7 +20,7 @@ export async function linkCommand(options: LinkOptions): Promise<void> {
   const token = CredentialsManager.getToken();
 
   if (!token) {
-    logger.warn('You are not currently logged in. Run "npx clous login" to authenticate with the Web Panel.');
+    logger.warn('You are not currently logged in. Run "clous login" to authenticate with the Web Panel.');
   }
 
   ProjectConfigManager.save(
@@ -31,10 +32,21 @@ export async function linkCommand(options: LinkOptions): Promise<void> {
     cwd
   );
 
-  logger.success(`Linked current directory to project: ${ansi.bold(options.projectId)}`);
+  const lines = [
+    `Project ID    ${ansi.bold(options.projectId)}`,
+  ];
   if (options.name) {
-    logger.info(`Project Name: ${options.name}`);
+    lines.push(`Project Name  ${options.name}`);
   }
-  logger.plain('');
-  logger.plain(`Saved configuration to: ${ansi.dim('.clous/project.json')}`);
+  lines.push(`Config File   ${ansi.dim('.clous/project.json')}`);
+  lines.push(`Status        ${ansi.green('Linked to Web Panel workspace')}`);
+
+  console.log('');
+  ui.box({
+    title: 'Project Linked',
+    borderColor: ansi.green,
+    minWidth: 60,
+    lines,
+  });
+  console.log('');
 }

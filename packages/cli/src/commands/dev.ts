@@ -4,6 +4,7 @@ import { resolveSchemaPath } from '../config/paths.js';
 import { generateCommand } from './generate.js';
 import { logger } from '../utils/logger.js';
 import { ansi } from '../utils/ansi.js';
+import { ui } from '../utils/ui.js';
 
 export interface DevOptions {
   cwd?: string;
@@ -14,10 +15,22 @@ export interface DevOptions {
 export async function devCommand(options: DevOptions = {}): Promise<void> {
   const cwd = options.cwd || process.cwd();
   const schemaPath = resolveSchemaPath(cwd, options.schema);
+  const outDir = path.resolve(cwd, options.outDir || 'generated');
 
-  logger.info(`Starting Clous dev watcher on: ${ansi.cyan(path.relative(cwd, schemaPath) || schemaPath)}`);
-  logger.plain(ansi.dim('Press Ctrl+C to stop watching.'));
-  logger.plain('');
+  console.log('');
+  ui.box({
+    title: 'Clous Live Watcher',
+    borderColor: ansi.cyan,
+    minWidth: 64,
+    lines: [
+      `Target    ${ansi.bold(path.relative(cwd, schemaPath) || schemaPath)}`,
+      `Output    ${ansi.dim(path.relative(cwd, outDir) || outDir)}`,
+      `Status    ${ansi.green('Active')} (Automatic recompilation on save)`,
+      '',
+      ansi.dim('Press Ctrl+C to terminate session.'),
+    ],
+  });
+  console.log('');
 
   // Initial compilation
   try {
@@ -36,7 +49,7 @@ export async function devCommand(options: DevOptions = {}): Promise<void> {
 
       debounceTimer = setTimeout(async () => {
         const time = new Date().toLocaleTimeString();
-        logger.info(`[${time}] Change detected in schema. Recompiling...`);
+        console.log(`  ${ui.badge('WATCH')} ${ansi.dim(`[${time}]`)} Schema change detected. Recompiling...`);
         try {
           await generateCommand({ ...options, silent: false });
         } catch (err: any) {
@@ -48,7 +61,7 @@ export async function devCommand(options: DevOptions = {}): Promise<void> {
 
   process.on('SIGINT', () => {
     watcher.close();
-    logger.plain('');
+    console.log('');
     logger.info('Dev watcher stopped.');
     process.exit(0);
   });

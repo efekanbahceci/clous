@@ -10,6 +10,7 @@ import { linkCommand } from './commands/link.js';
 import { statusCommand } from './commands/status.js';
 import { logger } from './utils/logger.js';
 import { ansi } from './utils/ansi.js';
+import { ui } from './utils/ui.js';
 
 const VERSION = '0.1.0';
 
@@ -119,40 +120,39 @@ export async function runCli(argv: string[] = process.argv.slice(2)): Promise<vo
 }
 
 function printHelp(): void {
-  console.log(`
-${ansi.bold('Clous CLI')} - Next-Gen BaaS & Type-Safe ORM Platform (v${VERSION})
+  ui.banner(VERSION);
 
-${ansi.bold('USAGE:')}
-  $ clous <command> [options]
+  console.log(`  ${ansi.bold('USAGE:')}
+    $ clous <command> [options]
 
-${ansi.bold('LOCAL COMMANDS (Offline - No login required):')}
-  ${ansi.cyan('init')}                    Initialize a new Clous project with a starter schema
-  ${ansi.cyan('generate')}, ${ansi.cyan('gen')}         Compile schema into SQL DDL, TypeScript types (.d.ts), and OpenAPI spec
-  ${ansi.cyan('validate')}                Check schema structure, relations, and RLS policies
-  ${ansi.cyan('dev')}, ${ansi.cyan('watch')}            Watch schema file for changes and recompile automatically
+  ${ansi.bold('LOCAL COMMANDS (Offline - No login required):')}
+    ${ansi.cyan('init')}                    Initialize a new Clous project with a starter schema
+    ${ansi.cyan('generate')}, ${ansi.cyan('gen')}         Compile schema into SQL DDL, TypeScript types, and OpenAPI spec
+    ${ansi.cyan('validate')}                Check schema structure, relations, and RLS policies
+    ${ansi.cyan('dev')}, ${ansi.cyan('watch')}            Watch schema file for changes and recompile automatically
 
-${ansi.bold('CLOUD COMMANDS (Auth & Web Panel Sync):')}
-  ${ansi.cyan('login')}                   Authenticate CLI with the Clous Web Panel
-  ${ansi.cyan('logout')}                  Log out and remove local credentials
-  ${ansi.cyan('whoami')}                  Display active authenticated user and session
-  ${ansi.cyan('link')}                    Link local directory to a remote Web Panel project
-  ${ansi.cyan('status')}                  Show auth, project linking, and schema status
+  ${ansi.bold('CLOUD COMMANDS (Auth & Web Panel Sync):')}
+    ${ansi.cyan('login')}                   Authenticate CLI with the Clous Web Panel
+    ${ansi.cyan('logout')}                  Log out and remove local credentials
+    ${ansi.cyan('whoami')}                  Display active authenticated user and session
+    ${ansi.cyan('link')}                    Link local directory to a remote Web Panel project
+    ${ansi.cyan('status')}                  Show auth, project linking, and schema status
 
-${ansi.bold('OPTIONS:')}
-  -s, --schema <path>       Path to schema file (default: schema.ts)
-  -o, --out <dir>           Output directory for generated files (default: generated)
-  -t, --token <token>       Access token for headless login (CI/CD)
-  -p, --project-id <id>     Project ID for linking
-  -f, --force               Overwrite existing files without prompting
-  -h, --help                Display help information
-  -v, --version             Display CLI version
+  ${ansi.bold('OPTIONS:')}
+    -s, --schema <path>       Path to schema file (default: schema.ts)
+    -o, --out <dir>           Output directory for generated files (default: generated)
+    -t, --token <token>       Access token for headless login (CI/CD)
+    -p, --project-id <id>     Project ID for linking
+    -f, --force               Overwrite existing files without prompting
+    -h, --help                Display help information
+    -v, --version             Display CLI version
 
-${ansi.bold('EXAMPLES:')}
-  $ clous init
-  $ clous generate --out ./src/generated
-  $ clous dev
-  $ clous login --token clous_pat_...
-  $ clous link --project-id prj_123456
-  $ clous status
+  ${ansi.bold('EXAMPLES:')}
+    $ clous init
+    $ clous generate --out ./src/generated
+    $ clous dev
+    $ clous login --token clous_pat_...
+    $ clous link --project-id prj_123456
+    $ clous status
 `);
 }

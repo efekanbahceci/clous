@@ -128,7 +128,7 @@ export class PostgresSqlEmitter
   private emitColumn(col: ColumnNode): string {
     const parts: string[] = [`"${col.name}"`, this.mapDataType(col)];
 
-    if (col.isPrimaryKey) {
+    if (col.isPrimaryKey && col.isPrimaryKey) {
       parts.push('PRIMARY KEY');
     }
 

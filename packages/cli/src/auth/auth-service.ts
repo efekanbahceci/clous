@@ -4,6 +4,7 @@ import { CredentialsManager, type ClousProfile } from '../config/credentials.js'
 import { ApiClient } from './client.js';
 import { logger } from '../utils/logger.js';
 import { ansi } from '../utils/ansi.js';
+import { ui } from '../utils/ui.js';
 
 export interface LoginOptions {
   token?: string;
@@ -32,10 +33,17 @@ export class AuthService {
         profile: verification.profile,
       });
 
-      logger.success('Successfully authenticated with provided token.');
-      if (verification.profile?.email) {
-        logger.info(`Logged in as: ${verification.profile.email}`);
-      }
+      console.log('');
+      ui.box({
+        title: 'Authentication Successful',
+        borderColor: ansi.green,
+        lines: [
+          `User Account  ${ansi.bold(verification.profile?.email || 'developer@clous.local')}`,
+          `API Endpoint  ${ansi.dim(apiUrl)}`,
+          `Status        ${ansi.green('Active (Session saved safely)')}`,
+        ],
+      });
+      console.log('');
       return;
     }
 
@@ -45,12 +53,20 @@ export class AuthService {
     const callbackUrl = `http://localhost:${port}/callback`;
     const loginUrl = `${apiUrl}/cli/auth?session_id=${sessionId}&callback=${encodeURIComponent(callbackUrl)}`;
 
-    logger.info('Starting local authentication listener...');
-    logger.plain('');
-    logger.plain(`Please open the following URL in your browser to authenticate:`);
-    logger.plain(ansi.cyan(loginUrl));
-    logger.plain('');
-    logger.plain(ansi.dim(`Waiting for browser authorization on port ${port}... (Press Ctrl+C to cancel)`));
+    console.log('');
+    ui.box({
+      title: 'Clous Authentication',
+      borderColor: ansi.cyan,
+      lines: [
+        'A local authentication listener has been started.',
+        '',
+        'Open the following URL in your browser to sign in:',
+        ansi.cyan(loginUrl),
+        '',
+        ansi.dim(`Waiting for browser authorization on port ${port}...`),
+      ],
+    });
+    console.log('');
 
     const token = await this.startCallbackServer(port, sessionId);
 
@@ -66,10 +82,17 @@ export class AuthService {
       profile: verification.profile,
     });
 
-    logger.success('Authentication successful!');
-    if (verification.profile?.email) {
-      logger.info(`Logged in as: ${verification.profile.email}`);
-    }
+    console.log('');
+    ui.box({
+      title: 'Authentication Successful',
+      borderColor: ansi.green,
+      lines: [
+        `User Account  ${ansi.bold(verification.profile?.email || 'developer@clous.local')}`,
+        `API Endpoint  ${ansi.dim(apiUrl)}`,
+        `Status        ${ansi.green('Active (Session saved safely)')}`,
+      ],
+    });
+    console.log('');
   }
 
   /**

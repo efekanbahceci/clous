@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { logger } from '../utils/logger.js';
 import { ansi } from '../utils/ansi.js';
+import { ui } from '../utils/ui.js';
 
 export interface InitOptions {
   cwd?: string;
@@ -97,14 +98,23 @@ export async function initCommand(options: InitOptions = {}): Promise<void> {
     }
   }
 
-  logger.success('Initialized new Clous project successfully.');
-  logger.plain('');
-  logger.plain('Created files:');
-  logger.plain(`  ${ansi.cyan('+')} schema.ts`);
-  logger.plain(`  ${ansi.cyan('+')} .clous/`);
-  logger.plain('');
-  logger.plain('Next steps:');
-  logger.plain(`  1. Run ${ansi.bold('npx clous generate')} to compile SQL and TypeScript types.`);
-  logger.plain(`  2. Run ${ansi.bold('npx clous dev')} to watch schema changes automatically.`);
-  logger.plain(`  3. Run ${ansi.bold('npx clous login')} to connect to the Clous Web Panel.`);
+  console.log('');
+  ui.box({
+    title: 'Project Initialized',
+    borderColor: ansi.green,
+    minWidth: 64,
+    lines: [
+      'New Clous project structure created successfully.',
+      '',
+      'Created Files:',
+      `  ${ansi.cyan('•')} ${ansi.bold('schema.ts')}  Starter schema with users, posts, relations & RLS`,
+      `  ${ansi.cyan('•')} ${ansi.bold('.clous/')}    Local project configuration and cache directory`,
+      '',
+      'Next Steps:',
+      `  1. ${ansi.bold('clous generate')}  Compile SQL DDL, TypeScript types & OpenAPI spec`,
+      `  2. ${ansi.bold('clous dev')}       Watch schema.ts and recompile on save`,
+      `  3. ${ansi.bold('clous login')}     Authenticate with the Web Panel`,
+    ],
+  });
+  console.log('');
 }
