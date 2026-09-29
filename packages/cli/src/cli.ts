@@ -41,7 +41,7 @@ export async function runCli(argv: string[] = process.argv.slice(2)): Promise<vo
   const command = positionals[0]?.toLowerCase();
 
   if (values.help || !command || command === 'help') {
-    printHelp();
+    await printHelp();
     return;
   }
 
@@ -119,8 +119,8 @@ export async function runCli(argv: string[] = process.argv.slice(2)): Promise<vo
   }
 }
 
-function printHelp(): void {
-  ui.banner(VERSION);
+async function printHelp(): Promise<void> {
+  await ui.animateBanner(VERSION);
 
   console.log(`  ${ansi.bold('USAGE:')}
     $ clous <command> [options]

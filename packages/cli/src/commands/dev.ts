@@ -17,7 +17,8 @@ export async function devCommand(options: DevOptions = {}): Promise<void> {
   const schemaPath = resolveSchemaPath(cwd, options.schema);
   const outDir = path.resolve(cwd, options.outDir || 'generated');
 
-  console.log('');
+  await ui.animateBanner('0.1.0');
+
   ui.box({
     title: 'Clous Live Watcher',
     borderColor: ansi.cyan,

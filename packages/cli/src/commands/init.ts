@@ -98,7 +98,7 @@ export async function initCommand(options: InitOptions = {}): Promise<void> {
     }
   }
 
-  console.log('');
+  await ui.animateBanner('0.1.0');
   ui.box({
     title: 'Project Initialized',
     borderColor: ansi.green,
