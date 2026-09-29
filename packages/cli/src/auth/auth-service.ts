@@ -62,13 +62,20 @@ export class AuthService {
         '',
         'Open the following URL in your browser to sign in:',
         ansi.cyan(loginUrl),
-        '',
-        ansi.dim(`Waiting for browser authorization on port ${port}...`),
       ],
     });
     console.log('');
 
-    const token = await this.startCallbackServer(port, sessionId);
+    const slowMo = await ui.startSlowMotionBanner('0.1.0', {
+      statusMessage: ansi.dim(`Waiting for browser authorization on port ${port}... (Press Ctrl+C to cancel)`),
+    });
+
+    let token: string;
+    try {
+      token = await this.startCallbackServer(port, sessionId);
+    } finally {
+      slowMo.stop();
+    }
 
     // Verify token
     const verification = await client.verifyToken(token);

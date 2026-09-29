@@ -13,11 +13,43 @@ export interface AnimateBannerOptions {
   intervalMs?: number;
 }
 
-const LOGO_LINES = [
-  '  ___ _',
-  ' / __| |___ _  _ ___',
-  '| (__| / _ \\ || (_-<',
-  ' \\___|_\\___/\\_,_/__/',
+export interface SlowMotionOptions {
+  intervalMs?: number;
+  statusMessage?: string;
+}
+
+export interface SlowMotionController {
+  stop(): void;
+  updateStatus(message: string): void;
+}
+
+const YAW_FRAMES: string[][] = [
+  // 0: Face-on Frontal
+  ['  ___ _', ' / __| |___ _  _ ___', '| (__| / _ \\ || (_-<', ' \\___|_\\___/\\_,_/__/'],
+  // 1: 30 deg
+  ['   __ _', '  / _| |__ _ _ __', ' | (_| / _\\ || (_-', '  \\__|_|__/\\_,_/__'],
+  // 2: 60 deg
+  ['    _ _', '   / | |_ _ _', '  | (| / \\| |(-', '   \\_|_|_/\\_,/_'],
+  // 3: 90 deg (edge-on)
+  ['       |', '       |', '       |', '       |'],
+  // 4: 120 deg
+  ['          _ _', '    _ _ _| | \\', '  -)| |/ \\ |) |', '  _\\,_/\\_|_|_/'],
+  // 5: 150 deg
+  ['            _ __', '  __ _ _ _| |_\\ \\', ' -)| || /_ \\ |) |', ' __/_\\,_/|__|_/'],
+  // 6: 180 deg (reverse)
+  ['             _ ___', ' ___ _  ___| |__\\ \\', '>-)| || / _ \\ |) |', ' /__/_\\,_/\\___|_/'],
+  // 7: 210 deg
+  ['            _ __', '  __ _ _ _| |_\\ \\', ' -)| || /_ \\ |) |', ' __/_\\,_/|__|_/'],
+  // 8: 240 deg
+  ['          _ _', '    _ _ _| | \\', '  -)| |/ \\ |) |', '  _\\,_/\\_|_|_/'],
+  // 9: 270 deg (edge-on)
+  ['       |', '       |', '       |', '       |'],
+  // 10: 300 deg
+  ['    _ _', '   / | |_ _ _', '  | (| / \\| |(-', '   \\_|_|_/\\_,/_'],
+  // 11: 330 deg
+  ['   __ _', '  / _| |__ _ _ __', ' | (_| / _\\ || (_-', '  \\__|_|__/\\_,_/__'],
+  // 12: 360 deg (Face-on Frontal)
+  ['  ___ _', ' / __| |___ _  _ ___', '| (__| / _ \\ || (_-<', ' \\___|_\\___/\\_,_/__/'],
 ];
 
 const SPECTRUM_256 = [
@@ -56,12 +88,19 @@ function getPalette(): string[] {
   return SPECTRUM_16;
 }
 
-function renderLogoLines(offset: number, isFinal: boolean, version: string): string[] {
+function renderRotatedLogoLines(
+  yawIdx: number,
+  colorOffset: number,
+  isFinal: boolean,
+  version: string
+): string[] {
   const ver = ansi.dim(`v${version}`);
   const tag = ansi.dim('Next-Gen BaaS & Type-Safe ORM Platform');
   const palette = getPalette();
+  const safeYawIdx = ((yawIdx % YAW_FRAMES.length) + YAW_FRAMES.length) % YAW_FRAMES.length;
+  const lines = YAW_FRAMES[safeYawIdx];
 
-  return LOGO_LINES.map((line, lineIdx) => {
+  return lines.map((line, lineIdx) => {
     let colored = '';
     for (let c = 0; c < line.length; c++) {
       const ch = line[c];
@@ -70,18 +109,20 @@ function renderLogoLines(offset: number, isFinal: boolean, version: string): str
       } else if (isFinal) {
         colored += ansi.cyan(ch);
       } else {
-        const color = palette[(c + lineIdx * 2 + offset * 2) % palette.length];
+        const color = palette[(c + lineIdx * 2 + colorOffset * 2) % palette.length];
         colored += `${color}${ch}\x1b[0m`;
       }
     }
 
+    const pad = ' '.repeat(Math.max(0, 24 - line.length));
+    let side = '';
     if (lineIdx === 2) {
-      colored += `    ${ansi.bold('Clous')} ${ver}`;
+      side = `    ${ansi.bold('Clous')} ${ver}`;
     } else if (lineIdx === 3) {
-      colored += `    ${tag}`;
+      side = `    ${tag}`;
     }
 
-    return colored;
+    return colored + pad + side;
   });
 }
 
@@ -90,7 +131,7 @@ export const ui = {
    * Static ASCII logo and header for Clous.
    */
   banner(version: string = '0.1.0'): void {
-    const lines = renderLogoLines(0, true, version);
+    const lines = renderRotatedLogoLines(0, 0, true, version);
     console.log('');
     for (const line of lines) {
       console.log(line);
@@ -99,7 +140,7 @@ export const ui = {
   },
 
   /**
-   * Smoothly animates only the Clous ASCII logo with a shifting spectrum wave.
+   * Smoothly animates the Clous ASCII logo with a full 3D rotation flip and shifting spectrum wave.
    * Restores terminal state and gracefully falls back in non-TTY/CI environments.
    */
   async animateBanner(
@@ -118,8 +159,8 @@ export const ui = {
       return;
     }
 
-    const frames = options.frames ?? 14;
     const intervalMs = options.intervalMs ?? 35;
+    const totalFrames = YAW_FRAMES.length;
 
     // Temporarily hide cursor for smooth frame transitions
     process.stdout.write('\x1b[?25l');
@@ -132,9 +173,9 @@ export const ui = {
 
     try {
       process.stdout.write('\n');
-      for (let i = 0; i <= frames; i++) {
-        const isFinal = i === frames;
-        const lines = renderLogoLines(i, isFinal, version);
+      for (let i = 0; i < totalFrames; i++) {
+        const isFinal = i === totalFrames - 1;
+        const lines = renderRotatedLogoLines(i, i, isFinal, version);
 
         if (i > 0) {
           // Move cursor up 5 lines (4 logo lines + 1 trailing line) and to col 0
@@ -154,6 +195,109 @@ export const ui = {
       process.removeListener('SIGINT', cleanup);
       process.stdout.write('\x1b[?25h');
     }
+  },
+
+  /**
+   * Starts a slow-motion rotating and color-shifting logo animation during waiting operations.
+   * Plays the initial fast 3D spin, then transitions into a slow-motion loop until stopped.
+   */
+  async startSlowMotionBanner(
+    version: string = '0.1.0',
+    options: SlowMotionOptions = {}
+  ): Promise<SlowMotionController> {
+    const isTTY = Boolean(
+      process.stdout.isTTY &&
+      !process.env.CI &&
+      !process.env.NO_COLOR &&
+      process.env.TERM !== 'dumb'
+    );
+
+    if (!isTTY) {
+      ui.banner(version);
+      if (options.statusMessage) {
+        console.log(`  ${options.statusMessage}\n`);
+      }
+      return {
+        stop() {},
+        updateStatus() {},
+      };
+    }
+
+    // Step 1: Run fast 3D spin intro
+    await ui.animateBanner(version, { intervalMs: 32 });
+
+    // Step 2: Begin slow-motion loop
+    const slowInterval = options.intervalMs ?? 220;
+    let step = 0;
+    let currentStatus = options.statusMessage || '';
+    let stopped = false;
+
+    // Hide cursor
+    process.stdout.write('\x1b[?25l');
+
+    const cleanup = () => {
+      if (!stopped) {
+        stopped = true;
+        clearInterval(timer);
+        process.stdout.write('\x1b[?25h');
+      }
+    };
+
+    process.once('SIGINT', cleanup);
+
+    // Initial render of status line below the logo
+    if (currentStatus) {
+      process.stdout.write(`  ${currentStatus}\n`);
+    }
+
+    const timer = setInterval(() => {
+      if (stopped) return;
+      step++;
+      // Rotate 3D slowly (advance 1 yaw frame every 2 ticks = ~440ms)
+      const yawIdx = Math.floor(step / 2) % YAW_FRAMES.length;
+      const colorOffset = step;
+      const lines = renderRotatedLogoLines(yawIdx, colorOffset, false, version);
+
+      // Move cursor up: 4 logo lines + 1 trailing line + 1 status line (if present)
+      const linesUp = currentStatus ? 6 : 5;
+      process.stdout.write(`\x1b[${linesUp}A\r`);
+
+      for (const line of lines) {
+        process.stdout.write(`\x1b[2K${line}\n`);
+      }
+      process.stdout.write('\x1b[2K\n');
+
+      if (currentStatus) {
+        process.stdout.write(`\x1b[2K  ${currentStatus}\n`);
+      }
+    }, slowInterval);
+
+    return {
+      updateStatus(newMsg: string) {
+        currentStatus = newMsg;
+      },
+      stop() {
+        if (stopped) return;
+        stopped = true;
+        clearInterval(timer);
+        process.removeListener('SIGINT', cleanup);
+
+        // Render final static cyan logo at 0 deg, clear status line
+        const finalLines = renderRotatedLogoLines(0, 0, true, version);
+        const linesUp = currentStatus ? 6 : 5;
+        process.stdout.write(`\x1b[${linesUp}A\r`);
+
+        for (const line of finalLines) {
+          process.stdout.write(`\x1b[2K${line}\n`);
+        }
+        process.stdout.write('\x1b[2K\n');
+        if (currentStatus) {
+          process.stdout.write('\x1b[2K'); // Clear status line
+        }
+
+        process.stdout.write('\x1b[?25h'); // Restore cursor
+      },
+    };
   },
 
   /**
