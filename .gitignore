@@ -144,3 +144,4 @@ vite.config.ts.timestamp-*
 
 # Clous CLI local auth
 .clous/credentials.json
+/apps/web
