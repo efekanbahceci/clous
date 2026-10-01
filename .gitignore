@@ -146,5 +146,6 @@ vite.config.ts.timestamp-*
 
 # Clous CLI local auth
 .clous/credentials.json
+
+# Local Python scripts
 *.py
-*.yaml
