@@ -32,6 +32,23 @@ export async function linkCommand(options: LinkOptions): Promise<void> {
     cwd
   );
 
+  // Register the link with the backend so the dashboard reflects it instantly.
+  if (token) {
+    try {
+      const apiBase = CredentialsManager.getApiUrl();
+      const endpoint = `${apiBase}/api/projects/${options.projectId}/link`;
+      await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({}),
+      });
+    } catch (e) {
+      logger.error(`Failed to register link with backend: ${e}`);
+    }
+  }
   const lines = [
     `Project ID    ${ansi.bold(options.projectId)}`,
   ];
