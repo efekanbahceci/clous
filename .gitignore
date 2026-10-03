@@ -148,13 +148,3 @@ vite.config.ts.timestamp-*
 .clous/credentials.json
 *.py
 *.yaml
-/.tmp.driveupload
-docs/TEST_KILAVUZU.md
-*.py
-*.py
-migrate_ids.cjs
-*.py
-fix_buttons.cjs
-*.py
-fix_i18n.py
-/scratch_mongo
