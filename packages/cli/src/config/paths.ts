@@ -37,8 +37,20 @@ export function getCredentialsPath(): string {
 
 /**
  * Path to project-level `.clous` configuration directory.
+ * Walks up the directory tree to find an existing `.clous` folder.
+ * If none is found, returns `.clous` in the current working directory.
  */
 export function getProjectConfigDir(cwd: string = process.cwd()): string {
+  let current = cwd;
+  while (true) {
+    const p = path.join(current, '.clous');
+    if (fs.existsSync(p) && fs.statSync(p).isDirectory()) {
+      return p;
+    }
+    const parent = path.dirname(current);
+    if (parent === current) break; // Reached root
+    current = parent;
+  }
   return path.join(cwd, '.clous');
 }
 

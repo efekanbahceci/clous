@@ -110,12 +110,7 @@ export class AuthService {
    * Logs out the CLI by removing local credentials.
    */
   static async logout(): Promise<void> {
-    const cleared = CredentialsManager.clear();
-    if (cleared) {
-      logger.success('Logged out successfully. Stored credentials removed.');
-    } else {
-      logger.info('No active session found. Already logged out.');
-    }
+    CredentialsManager.clear();
   }
 
   /**

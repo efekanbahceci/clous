@@ -9,6 +9,15 @@ export interface ProjectConfig {
   schemaPath?: string;
   outDir?: string;
   linkedAt?: string;
+  permissions?: {
+    trafficWatcher: boolean;
+    envScanner: boolean;
+    dbIntrospection: boolean;
+  };
+  database?: {
+    driver: 'auto' | 'postgresql' | 'mongodb' | 'mysql';
+    envKey: string;
+  };
 }
 
 export class ProjectConfigManager {

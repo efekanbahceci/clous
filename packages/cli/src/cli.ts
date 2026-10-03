@@ -8,6 +8,7 @@ import { logoutCommand } from './commands/logout.js';
 import { whoamiCommand } from './commands/whoami.js';
 import { linkCommand } from './commands/link.js';
 import { statusCommand } from './commands/status.js';
+import { unlinkCommand } from './commands/unlink.js';
 import { logger } from './utils/logger.js';
 import { ansi } from './utils/ansi.js';
 import { ui } from './utils/ui.js';
@@ -87,6 +88,8 @@ export async function runCli(argv: string[] = process.argv.slice(2)): Promise<vo
         break;
 
       case 'logout':
+      case 'sign-out':
+      case 'signout':
         await logoutCommand();
         break;
 
@@ -95,17 +98,26 @@ export async function runCli(argv: string[] = process.argv.slice(2)): Promise<vo
         break;
 
       case 'link':
-        if (!values['project-id']) {
-          throw new Error('Option --project-id <id> is required for "clous link".');
+        const targetId = positionals[1] || (values['project-id'] as string);
+        if (!targetId) {
+          throw new Error('Project ID is required. Example: "clous link prj_123"');
         }
         await linkCommand({
-          projectId: values['project-id'] as string,
+          projectId: targetId,
           name: values.name as string | undefined,
         });
         break;
 
       case 'status':
+      case 'about':
         await statusCommand();
+        break;
+
+      case 'unlink':
+        const unlinkTargetId = positionals[1] || (values['project-id'] as string);
+        await unlinkCommand({
+          projectId: unlinkTargetId
+        });
         break;
 
       default:
