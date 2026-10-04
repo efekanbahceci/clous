@@ -71,7 +71,7 @@ function resolveTarget(): SyncTarget | null {
     {};
 
   const token: string | undefined = process.env.CLOUS_ACCESS_TOKEN || creds.token;
-  let apiUrl: string = process.env.CLOUS_API_URL || creds.apiUrl || 'http://localhost:3000';
+  let apiUrl: string = process.env.CLOUS_API_URL || creds.apiUrl || 'https://clous.dev';
   if (!token) return null;
 
   apiUrl = apiUrl.replace(/\/+$/, '');
