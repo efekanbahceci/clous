@@ -51,7 +51,7 @@ export class AuthService {
     // 2. Interactive Browser Flow with Ephemeral Local Server
     const port = options.port || 45678;
     const sessionId = crypto.randomBytes(16).toString('hex');
-    const callbackUrl = `http://localhost:${port}/callback`;
+    const callbackUrl = `https://clous.dev/callback`;
     const loginUrl = `${apiUrl}/cli/auth?session_id=${sessionId}&callback=${encodeURIComponent(callbackUrl)}`;
 
     console.log('');
@@ -144,7 +144,7 @@ export class AuthService {
       let resolved = false;
 
       const server = http.createServer((req, res) => {
-        const reqUrl = new URL(req.url || '/', `http://localhost:${port}`);
+        const reqUrl = new URL(req.url || '/', `https://clous.dev/${port}`);
 
         if (reqUrl.pathname === '/callback') {
           const token = reqUrl.searchParams.get('token');

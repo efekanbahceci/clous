@@ -1,6 +1,6 @@
 {
   "name": "@clous/core",
-  "version": "1.0.3",
+  "version": "1.0.7",
   "description": "Type-safe, compiler-driven schema builder for BaaS platforms. Generates PostgreSQL DDL (with RLS), TypeScript types, and OpenAPI 3.0 specs from a single declarative schema.",
   "type": "module",
   "main": "./dist/index.js",
@@ -56,5 +56,8 @@
   "devDependencies": {
     "typescript": "^5.7.3",
     "vitest": "^3.0.7"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

@@ -6,3 +6,6 @@ allowBuilds:
   better-sqlite3: true
   esbuild: true
   unrs-resolver: true
+
+minimumReleaseAgeExclude:
+  - '@clous/core@1.0.6'

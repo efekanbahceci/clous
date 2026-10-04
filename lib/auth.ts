@@ -7,6 +7,6 @@ const db = client.db();
 
 export const auth = betterAuth({
   database: mongodbAdapter(db),
-  baseURL: "http://localhost:3000/",
+  baseURL: "https://clous.dev",
   emailAndPassword: { enabled: true },
 });
