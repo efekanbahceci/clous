@@ -16,7 +16,7 @@ export interface Credentials {
   updatedAt?: string;
 }
 
-const DEFAULT_API_URL = process.env.CLOUS_API_URL || 'http://localhost:3000';
+const DEFAULT_API_URL = process.env.CLOUS_API_URL || 'https://clous.dev';
 
 export class CredentialsManager {
   /**
@@ -48,9 +48,7 @@ export class CredentialsManager {
     const envToken = process.env.CLOUS_ACCESS_TOKEN;
     const envApiUrl = process.env.CLOUS_API_URL;
     let resolvedApiUrl = envApiUrl || fileCreds.apiUrl || DEFAULT_API_URL;
-    if (resolvedApiUrl === 'https://api.clous.dev') {
-      resolvedApiUrl = DEFAULT_API_URL;
-    }
+
 
     return {
       token: envToken || fileCreds.token,
