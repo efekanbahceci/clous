@@ -33,7 +33,7 @@
     "url": "https://github.com/efekanbahceci/clous.git",
     "directory": "packages/cli"
   },
-  "homepage": "https://github.com/efekanbahceci/clous#readme",
+  "homepage": "https://clous.dev",
   "bugs": {
     "url": "https://github.com/efekanbahceci/clous/issues"
   },
