@@ -148,3 +148,5 @@ vite.config.ts.timestamp-*
 .clous/credentials.json
 *.py
 *.yaml
+
+baslat.sh
