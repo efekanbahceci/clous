@@ -152,3 +152,4 @@ vite.config.ts.timestamp-*
 baslat.sh
 
 test-server.ts
+*.sh
