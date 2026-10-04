@@ -99,11 +99,8 @@ export async function runCli(argv: string[] = process.argv.slice(2)): Promise<vo
 
       case 'link':
         const targetId = positionals[1] || (values['project-id'] as string);
-        if (!targetId) {
-          throw new Error('Project ID is required. Example: "clous link prj_123"');
-        }
         await linkCommand({
-          projectId: targetId,
+          projectId: targetId as string,
           name: values.name as string | undefined,
         });
         break;

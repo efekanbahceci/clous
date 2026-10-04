@@ -150,3 +150,5 @@ vite.config.ts.timestamp-*
 *.yaml
 
 baslat.sh
+
+test-server.ts

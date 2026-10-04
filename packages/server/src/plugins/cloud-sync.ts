@@ -85,6 +85,7 @@ export const cloudSyncPlugin = fp(async (fastify) => {
   const queue: TelemetryMetric[] = [];
   let flushing = false;
   let lastWarnAt = 0;
+  let lastProjectId = '';
 
   const warn = (msg: string) => {
     // Rate-limit warnings so an offline platform doesn't flood the terminal.
@@ -92,6 +93,31 @@ export const cloudSyncPlugin = fp(async (fastify) => {
       lastWarnAt = Date.now();
       console.warn(`[CloudSync] ${msg}`);
     }
+  };
+
+  const getTrafficStorePath = () => {
+    const p = findProjectDir();
+    return p ? path.join(p, 'traffic.json') : null;
+  };
+
+  const loadLocalTraffic = () => {
+    const storePath = getTrafficStorePath();
+    if (!storePath || !fs.existsSync(storePath)) return [];
+    try {
+      return JSON.parse(fs.readFileSync(storePath, 'utf8'));
+    } catch {
+      return [];
+    }
+  };
+
+  const saveLocalTraffic = (metrics: TelemetryMetric[]) => {
+    const storePath = getTrafficStorePath();
+    if (!storePath) return;
+    try {
+      // Keep only the last MAX_QUEUE items to prevent infinite growth
+      const toSave = metrics.slice(-MAX_QUEUE);
+      fs.writeFileSync(storePath, JSON.stringify(toSave), 'utf8');
+    } catch { /* ignore */ }
   };
 
   const post = async (target: SyncTarget, urlPath: string, method: string, body: unknown) => {
@@ -108,13 +134,28 @@ export const cloudSyncPlugin = fp(async (fastify) => {
   };
 
   const flush = async () => {
-    if (flushing || queue.length === 0) return;
+    if (flushing) return;
+    
     // Re-resolved each flush so `clous link` / `clous login` take effect without a restart.
     const target = resolveTarget();
     if (!target) {
       queue.length = 0;
       return;
     }
+
+    // Project changed (e.g. unlink then link to a new project) or server just started? 
+    // Migrate the historical local traffic to the current project!
+    if (target.projectId !== lastProjectId) {
+      const history = loadLocalTraffic();
+      // Only enqueue if they aren't already in the queue
+      const existingIds = new Set(queue.map(m => m.id));
+      const newItems = history.filter((m: any) => !existingIds.has(m.id));
+      queue.unshift(...newItems);
+      if (queue.length > MAX_QUEUE) queue.splice(0, queue.length - MAX_QUEUE);
+      lastProjectId = target.projectId;
+    }
+
+    if (queue.length === 0) return;
 
     flushing = true;
     const batch = queue.splice(0, MAX_BATCH);
@@ -125,7 +166,7 @@ export const cloudSyncPlugin = fp(async (fastify) => {
     } catch (e: any) {
       // Put the batch back (bounded) so a short outage doesn't lose data.
       queue.unshift(...batch);
-      if (queue.length > MAX_QUEUE) queue.splice(MAX_QUEUE);
+      if (queue.length > MAX_QUEUE) queue.splice(MAX_QUEUE); // remove from end if over limit
       warn(`Traffic sync failed: ${e.message}`);
     } finally {
       flushing = false;
@@ -135,6 +176,12 @@ export const cloudSyncPlugin = fp(async (fastify) => {
   const onMetric = (metric: TelemetryMetric) => {
     queue.push(metric);
     if (queue.length > MAX_QUEUE) queue.shift();
+    
+    // Save to local file so it persists across restarts
+    const history = loadLocalTraffic();
+    history.push(metric);
+    saveLocalTraffic(history);
+
     if (queue.length >= MAX_BATCH) void flush();
   };
 

@@ -1,0 +1,14 @@
+{
+  "projectId": "6ac24cc807fa9329e5999b6e",
+  "projectName": "test5",
+  "permissions": {
+    "trafficWatcher": true,
+    "envScanner": true,
+    "dbIntrospection": true
+  },
+  "database": {
+    "driver": "auto",
+    "envKey": "DATABASE_URL"
+  },
+  "linkedAt": "2026-10-04T12:55:57.134Z"
+}

@@ -17,15 +17,31 @@ export async function linkCommand(options: LinkOptions): Promise<void> {
   // 1. Check if already linked
   const existingConfig = ProjectConfigManager.load(cwd);
   if (existingConfig && existingConfig.projectId) {
+    if (!options.projectId || existingConfig.projectId === options.projectId) {
+      console.log('');
+      ui.box({
+        title: 'Already Linked',
+        borderColor: ansi.blue,
+        minWidth: 60,
+        lines: [
+          `This directory is already linked to: ${ansi.bold(existingConfig.projectId)}`,
+          existingConfig.projectName ? `Project Name: ${existingConfig.projectName}` : null,
+          ``,
+          `No further action is required.`
+        ].filter(line => line !== null) as string[]
+      });
+      console.log('');
+      return;
+    }
+    // If they provided a DIFFERENT ID
     console.log('');
     ui.box({
-      title: 'Already Linked',
+      title: 'Already Linked to a Different Project',
       borderColor: ansi.yellow,
       minWidth: 60,
       lines: [
-        `This directory is already linked to a project!`,
-        `Project ID    ${ansi.bold(existingConfig.projectId)}`,
-        existingConfig.projectName ? `Project Name  ${existingConfig.projectName}` : null,
+        `This directory is already linked to: ${ansi.bold(existingConfig.projectId)}`,
+        `You requested to link to: ${ansi.bold(options.projectId)}`,
         ``,
         `If you want to link a different project, please run ${ansi.cyan('clous unlink')} first.`
       ].filter(line => line !== null) as string[]
@@ -35,7 +51,7 @@ export async function linkCommand(options: LinkOptions): Promise<void> {
   }
 
   if (!options.projectId) {
-    throw new Error('Project ID is required. Example: "clous link prj_123"');
+    throw new Error('Project ID is required to link a new project. Example: "clous link prj_123"');
   }
 
   const token = CredentialsManager.getToken();
