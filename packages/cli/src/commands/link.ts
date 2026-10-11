@@ -3,6 +3,7 @@ import { CredentialsManager } from '../config/credentials.js';
 import { logger } from '../utils/logger.js';
 import { ansi } from '../utils/ansi.js';
 import { ui } from '../utils/ui.js';
+import { daemonCommand } from './daemon.js';
 
 export interface LinkOptions {
   projectId: string;

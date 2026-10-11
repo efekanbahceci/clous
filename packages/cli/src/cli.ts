@@ -9,6 +9,7 @@ import { whoamiCommand } from './commands/whoami.js';
 import { linkCommand } from './commands/link.js';
 import { statusCommand } from './commands/status.js';
 import { unlinkCommand } from './commands/unlink.js';
+import { daemonCommand } from './commands/daemon.js';
 import { logger } from './utils/logger.js';
 import { ansi } from './utils/ansi.js';
 import { ui } from './utils/ui.js';

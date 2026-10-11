@@ -70,6 +70,13 @@ export async function createClousServer(
     currentSchema = s;
   };
 
+  // Push declarative schema to cloud on startup
+  app.addHook('onReady', async () => {
+    import('./plugins/telemetry.js').then(({ telemetryEmitter }) => {
+      telemetryEmitter.emit('schema_sync', currentSchema);
+    }).catch(() => {});
+  });
+
   // 6. Register Web Panel Meta & Introspection Routes
   await app.register(metaRoutes, {
     getSchema,

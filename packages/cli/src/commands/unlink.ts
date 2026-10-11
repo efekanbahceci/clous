@@ -1,5 +1,6 @@
 import { ProjectConfigManager } from '../config/project.js';
 import { logger } from '../utils/logger.js';
+import { daemonCommand } from './daemon.js';
 import { ansi } from '../utils/ansi.js';
 import { ui } from '../utils/ui.js';
 import * as fs from 'fs';

@@ -202,8 +202,34 @@ export const cloudSyncPlugin = fp(async (fastify) => {
     }
   };
 
+  const onEnvSync = async (envs: any) => {
+    const target = resolveTarget();
+    if (!target) return;
+    try {
+      await post(target, `/api/projects/${encodeURIComponent(target.projectId)}/env/sync`, 'POST', {
+        envs: envs,
+      });
+    } catch (e: any) {
+      warn(`Env sync failed: ${e.message}`);
+    }
+  };
+
+  const onEnvAudit = async (logs: any) => {
+    const target = resolveTarget();
+    if (!target) return;
+    try {
+      await post(target, `/api/projects/${encodeURIComponent(target.projectId)}/env/audit`, 'POST', {
+        logs: logs,
+      });
+    } catch (e: any) {
+      warn(`Env audit failed: ${e.message}`);
+    }
+  };
+
   telemetryEmitter.on('metric', onMetric);
   telemetryEmitter.on('schema_sync', onSchema);
+  telemetryEmitter.on('env_sync', onEnvSync);
+  telemetryEmitter.on('env_audit', onEnvAudit);
   const timer = setInterval(() => void flush(), FLUSH_INTERVAL_MS);
   timer.unref();
 
@@ -211,6 +237,8 @@ export const cloudSyncPlugin = fp(async (fastify) => {
     clearInterval(timer);
     telemetryEmitter.off('metric', onMetric);
     telemetryEmitter.off('schema_sync', onSchema);
+    telemetryEmitter.off('env_sync', onEnvSync);
+    telemetryEmitter.off('env_audit', onEnvAudit);
     await flush();
   });
 });
