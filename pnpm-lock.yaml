@@ -170,6 +170,9 @@ importers:
         specifier: ^4.23.15
         version: 4.23.15
     devDependencies:
+      '@clous/core':
+        specifier: ^1.0.7
+        version: 1.0.7
       '@types/node':
         specifier: ^26.6.2
         version: 26.6.2
@@ -466,6 +469,10 @@ packages:
 
   '@clous/core@1.0.6':
     resolution: {integrity: sha512-k7RuZzX5cRcxwAZaWwLeyhog7v3sMPlAvSQNz99NkzrGA7W+9enyOHcNVz/Gsxa+O207PaF4xPl96VfBMlkjhg==}
+    engines: {node: '>=20.0.0'}
+
+  '@clous/core@1.0.7':
+    resolution: {integrity: sha512-el/OfSl0o9XoGmA2T+fd62apln+yFt9z01Z6PUGt0vY/T+1ZODZIGkrqZ3y1lFUQXA84nLmeaQSfhrGSlqJ9vw==}
     engines: {node: '>=20.0.0'}
 
   '@cspotcode/source-map-support@0.8.1':
@@ -3796,6 +3803,10 @@ snapshots:
   '@better-fetch/fetch@1.3.2': {}
 
   '@clous/core@1.0.6':
+    dependencies:
+      zod: 3.25.76
+
+  '@clous/core@1.0.7':
     dependencies:
       zod: 3.25.76
 
