@@ -22,16 +22,21 @@ export async function statusCommand(options: { cwd?: string } = {}): Promise<voi
     rows.push(['Auth Hint', ansi.dim('Run "clous login" to authenticate')]);
   }
 
-  // 2. Project Link Status
+  // 2. Project Link Status (strictly scoped to current working directory)
   const project = ProjectConfigManager.load(cwd);
-  if (project) {
+  const isOwnerMatch =
+    !project?.linkedUserId ||
+    !auth.profile?.id ||
+    project.linkedUserId === auth.profile.id;
+
+  if (project && project.projectId && isOwnerMatch) {
     rows.push(['Linked Project', ansi.bold(project.projectId)]);
     if (project.projectName) {
       rows.push(['Project Name', project.projectName]);
     }
   } else {
     rows.push(['Linked Project', ansi.dim('Not linked')]);
-    rows.push(['Link Hint', ansi.dim('Run "clous link --project-id <id>" to link')]);
+    rows.push(['Link Hint', ansi.dim('Run "clous link <project-id>" to link')]);
   }
 
   // 3. Schema File Status

@@ -8,20 +8,16 @@ interface TelemetryRouteOptions {
   adminConfig?: AdminConfig;
 }
 
-// Reads the linked project ID from .clous/project.json by walking up the directory tree.
+// Reads the linked project ID strictly from the current project directory's .clous/project.json.
 function getLinkedProjectId(): string | null {
-  let current = process.cwd();
-  while (true) {
-    const p = path.join(current, '.clous');
-    if (fs.existsSync(p) && fs.statSync(p).isDirectory()) {
-      try {
-        const data = JSON.parse(fs.readFileSync(path.join(p, 'project.json'), 'utf8'));
-        return data.projectId || null;
-      } catch { return null; }
+  const p = path.join(process.cwd(), '.clous', 'project.json');
+  if (fs.existsSync(p)) {
+    try {
+      const data = JSON.parse(fs.readFileSync(p, 'utf8'));
+      return data.projectId || null;
+    } catch {
+      return null;
     }
-    const parent = path.dirname(current);
-    if (parent === current) break;
-    current = parent;
   }
   return null;
 }

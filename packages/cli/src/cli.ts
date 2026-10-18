@@ -85,6 +85,7 @@ export async function runCli(argv: string[] = process.argv.slice(2)): Promise<vo
           token: values.token as string | undefined,
           apiUrl: values['api-url'] as string | undefined,
           port: values.port ? parseInt(values.port as string, 10) : undefined,
+          force: Boolean(values.force),
         });
         break;
 

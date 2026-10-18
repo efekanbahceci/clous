@@ -4,8 +4,10 @@ import { getProjectConfigDir, getProjectConfigPath } from './paths.js';
 
 export interface ProjectConfig {
   projectId: string;
+  clousId?: string;
   projectName?: string;
   orgId?: string;
+  linkedUserId?: string;
   schemaPath?: string;
   outDir?: string;
   linkedAt?: string;

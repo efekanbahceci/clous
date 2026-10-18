@@ -37,14 +37,11 @@ function readJson(file: string): any | null {
 }
 
 function findProjectDir(): string | null {
-  let current = process.cwd();
-  while (true) {
-    const p = path.join(current, '.clous');
-    if (fs.existsSync(p) && fs.statSync(p).isDirectory()) return p;
-    const parent = path.dirname(current);
-    if (parent === current) return null;
-    current = parent;
+  const p = path.join(process.cwd(), '.clous');
+  if (fs.existsSync(p) && fs.statSync(p).isDirectory()) {
+    return p;
   }
+  return null;
 }
 
 // Mirrors packages/cli/src/config/paths.ts so both resolve the same credentials file.
@@ -59,6 +56,10 @@ function globalCredentialsPath(): string {
   return path.join(dir, 'credentials.json');
 }
 
+function fallbackGlobalCredentialsPath(): string {
+  return path.join(os.homedir(), '.clous', 'credentials.json');
+}
+
 function resolveTarget(): SyncTarget | null {
   const projectDir = findProjectDir();
   const project = projectDir ? readJson(path.join(projectDir, 'project.json')) : null;
@@ -67,8 +68,16 @@ function resolveTarget(): SyncTarget | null {
 
   const creds =
     readJson(globalCredentialsPath()) ||
-    (projectDir ? readJson(path.join(projectDir, 'credentials.json')) : null) ||
+    readJson(fallbackGlobalCredentialsPath()) ||
     {};
+
+  if (creds.profile?.id === 'dev_user' || creds.profile?.email === 'developer@clous.local') {
+    return null;
+  }
+
+  if (project?.linkedUserId && creds.profile?.id && project.linkedUserId !== creds.profile.id) {
+    return null;
+  }
 
   const token: string | undefined = process.env.CLOUS_ACCESS_TOKEN || creds.token;
   let apiUrl: string = process.env.CLOUS_API_URL || creds.apiUrl || 'https://clous.dev';

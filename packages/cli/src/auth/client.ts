@@ -65,8 +65,6 @@ export class ApiClient {
 
   /**
    * Verifies an access token against the control plane API.
-   * If the control plane is offline or unreachable in local development,
-   * parses the JWT payload if formatted as a JWT or accepts dev tokens.
    */
   async verifyToken(token: string): Promise<VerifyTokenResponse> {
     try {
@@ -75,58 +73,46 @@ export class ApiClient {
           Authorization: `Bearer ${token}`,
         },
       });
+
+      if (
+        !data?.valid ||
+        data.profile?.id === 'dev_user' ||
+        data.profile?.email === 'developer@clous.local'
+      ) {
+        return {
+          valid: false,
+          error: data?.error || 'Invalid or expired authentication token.',
+        };
+      }
+
       return data;
     } catch (err: any) {
-      // If server responded with 401/403, token is strictly invalid
       if (err.status === 401 || err.status === 403) {
         return {
           valid: false,
-          error: err.message,
+          error: err.message || 'Unauthorized token.',
         };
       }
 
-      // If control plane is not yet hosted or running (e.g. connection refused / offline dev mode),
-      // we gracefully decode standard JWT structure or token format so developers can test the CLI locally!
-      const fallback = this.fallbackJwtDecode(token);
-      return fallback;
-    }
-  }
-
-  private fallbackJwtDecode(token: string): VerifyTokenResponse {
-    try {
-      const parts = token.split('.');
-      if (parts.length === 3) {
-        const payloadJson = Buffer.from(parts[1], 'base64url').toString('utf8');
-        const payload = JSON.parse(payloadJson);
+      // If the remote server is temporarily unreachable, only trust an already-verified real profile on disk
+      const saved = CredentialsManager.load();
+      if (
+        saved.token === token &&
+        saved.profile?.id &&
+        saved.profile.id !== 'dev_user' &&
+        saved.profile?.email &&
+        saved.profile.email !== 'developer@clous.local'
+      ) {
         return {
           valid: true,
-          profile: {
-            id: payload.sub || payload.id,
-            email: payload.email,
-            name: payload.name || payload.email?.split('@')[0],
-            role: payload.role,
-          },
+          profile: saved.profile,
         };
       }
-    } catch {
-      // Not a JWT
-    }
 
-    // If it's a personal access token (e.g. clous_pat_...)
-    if (token.startsWith('clous_') || token.length >= 16) {
       return {
-        valid: true,
-        profile: {
-          id: 'dev_user',
-          email: 'developer@clous.local',
-          name: 'Clous Developer',
-        },
+        valid: false,
+        error: `Could not verify token with ${this.baseUrl}: ${err.message || 'Network error'}`,
       };
     }
-
-    return {
-      valid: false,
-      error: 'Invalid token format. Token must be a valid JWT or personal access token.',
-    };
   }
 }

@@ -11,6 +11,7 @@ export interface LoginOptions {
   token?: string;
   apiUrl?: string;
   port?: number;
+  force?: boolean;
 }
 
 export class AuthService {
@@ -18,7 +19,7 @@ export class AuthService {
    * Authenticates the CLI either with a provided token or via browser OAuth flow.
    */
   static async login(options: LoginOptions = {}): Promise<void> {
-    const apiUrl = options.apiUrl || CredentialsManager.getApiUrl();
+    const apiUrl = (options.apiUrl || CredentialsManager.getApiUrl()).replace(/\/+$/, '');
     const client = new ApiClient({ baseUrl: apiUrl });
 
     // 1. Direct token login (CI/CD or headless)
@@ -39,7 +40,7 @@ export class AuthService {
         title: 'Authentication Successful',
         borderColor: ansi.green,
         lines: [
-          `User Account  ${ansi.bold(verification.profile?.email || 'developer@clous.local')}`,
+          `User Account  ${ansi.bold(verification.profile?.email || verification.profile?.id || 'Authenticated User')}`,
           `API Endpoint  ${ansi.dim(apiUrl)}`,
           `Status        ${ansi.green('Active (Session saved safely)')}`,
         ],
@@ -51,7 +52,7 @@ export class AuthService {
     // 2. Interactive Browser Flow with Ephemeral Local Server
     const port = options.port || 45678;
     const sessionId = crypto.randomBytes(16).toString('hex');
-    const callbackUrl = `https://clous.dev/${port}/callback`;
+    const callbackUrl = `http://localhost:${port}/callback`;
     const loginUrl = `${apiUrl}/cli/auth?session_id=${sessionId}&callback=${encodeURIComponent(callbackUrl)}`;
 
     console.log('');
@@ -67,6 +68,9 @@ export class AuthService {
     });
     console.log('');
 
+    // Start callback server BEFORE opening browser so localhost listener is ready immediately
+    const tokenPromise = this.startCallbackServer(port, sessionId);
+
     // Automatically open browser for seamless authentication
     openBrowser(loginUrl);
 
@@ -76,12 +80,12 @@ export class AuthService {
 
     let token: string;
     try {
-      token = await this.startCallbackServer(port, sessionId);
+      token = await tokenPromise;
     } finally {
       slowMo.stop();
     }
 
-    // Verify token
+    // Verify token against the API
     const verification = await client.verifyToken(token);
     if (!verification.valid) {
       throw new Error(verification.error || 'Received invalid token from authentication provider.');
@@ -98,7 +102,7 @@ export class AuthService {
       title: 'Authentication Successful',
       borderColor: ansi.green,
       lines: [
-        `User Account  ${ansi.bold(verification.profile?.email || 'developer@clous.local')}`,
+        `User Account  ${ansi.bold(verification.profile?.email || verification.profile?.id || 'Authenticated User')}`,
         `API Endpoint  ${ansi.dim(apiUrl)}`,
         `Status        ${ansi.green('Active (Session saved safely)')}`,
       ],
@@ -115,6 +119,7 @@ export class AuthService {
 
   /**
    * Returns current active profile and login status.
+   * Automatically clears stale/invalid tokens so the user is never stuck in a ghost session.
    */
   static async whoami(): Promise<{ loggedIn: boolean; profile?: ClousProfile; apiUrl: string }> {
     const creds = CredentialsManager.load();
@@ -124,12 +129,22 @@ export class AuthService {
       return { loggedIn: false, apiUrl };
     }
 
-    // Verify token is still valid
+    // Verify token is still valid against the server
     const client = new ApiClient({ baseUrl: apiUrl, token: creds.token });
     const verification = await client.verifyToken(creds.token);
 
     if (!verification.valid) {
+      CredentialsManager.clear();
       return { loggedIn: false, apiUrl };
+    }
+
+    // Keep cached profile up to date if the server returned fresh user info
+    if (verification.profile && (!creds.profile || creds.profile.email !== verification.profile.email || creds.profile.id !== verification.profile.id)) {
+      CredentialsManager.save({
+        token: creds.token,
+        apiUrl,
+        profile: verification.profile,
+      });
     }
 
     return {
@@ -144,6 +159,16 @@ export class AuthService {
       let resolved = false;
 
       const server = http.createServer((req, res) => {
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+
+        if (req.method === 'OPTIONS') {
+          res.writeHead(204);
+          res.end();
+          return;
+        }
+
         const reqUrl = new URL(req.url || '/', `http://localhost:${port}`);
 
         if (reqUrl.pathname === '/callback') {
@@ -151,19 +176,19 @@ export class AuthService {
           const sessionId = reqUrl.searchParams.get('session_id');
 
           if (sessionId && sessionId !== expectedSessionId) {
-            res.writeHead(400, { 'Content-Type': 'text/plain' });
+            res.writeHead(400, { 'Content-Type': 'text/plain; charset=utf-8' });
             res.end('Invalid session verification. Please retry login.');
             return;
           }
 
           if (!token) {
-            res.writeHead(400, { 'Content-Type': 'text/plain' });
+            res.writeHead(400, { 'Content-Type': 'text/plain; charset=utf-8' });
             res.end('Missing token in callback response.');
             return;
           }
 
           resolved = true;
-          res.writeHead(200, { 'Content-Type': 'text/html' });
+          res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
           res.end(`
             <!DOCTYPE html>
             <html lang="tr">

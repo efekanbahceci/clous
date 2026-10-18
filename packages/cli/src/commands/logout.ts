@@ -1,11 +1,13 @@
 import { AuthService } from '../auth/auth-service.js';
+import { CredentialsManager } from '../config/credentials.js';
 import { ui } from '../utils/ui.js';
 import { ansi } from '../utils/ansi.js';
 
 export async function logoutCommand(): Promise<void> {
+  const hadStoredToken = Boolean(CredentialsManager.getToken());
   const current = await AuthService.whoami();
   
-  if (!current.loggedIn) {
+  if (!current.loggedIn && !hadStoredToken) {
     console.log('');
     ui.box({
       title: 'Not Logged In',

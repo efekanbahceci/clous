@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import os from 'node:os';
 import { getCredentialsPath, getGlobalConfigDir } from './paths.js';
 
 export interface ClousProfile {
@@ -18,14 +19,23 @@ export interface Credentials {
 
 const DEFAULT_API_URL = process.env.CLOUS_API_URL || 'https://clous.dev';
 
+function getFallbackGlobalCredentialsPath(): string {
+  return path.join(os.homedir(), '.clous', 'credentials.json');
+}
+
 export class CredentialsManager {
   /**
-   * Loads credentials, prioritizing environment variables over stored file.
+   * Loads user-global credentials, prioritizing environment variables over stored file.
+   * Credentials are NEVER loaded from project-local `.clous/credentials.json` so that
+   * cloning a repository on another computer never reports a false logged-in state,
+   * while switching between projects on the same computer preserves the global login.
    */
   static load(): Credentials {
     let fileCreds: Credentials = {};
 
     const credsPath = getCredentialsPath();
+    const fallbackPath = getFallbackGlobalCredentialsPath();
+
     if (fs.existsSync(credsPath)) {
       try {
         const raw = fs.readFileSync(credsPath, 'utf8');
@@ -33,22 +43,30 @@ export class CredentialsManager {
       } catch {
         fileCreds = {};
       }
-    } else {
-      const localPath = path.join(process.cwd(), '.clous', 'credentials.json');
-      if (fs.existsSync(localPath)) {
-        try {
-          const raw = fs.readFileSync(localPath, 'utf8');
-          fileCreds = JSON.parse(raw);
-        } catch {
-          fileCreds = {};
-        }
+    } else if (fs.existsSync(fallbackPath)) {
+      try {
+        const raw = fs.readFileSync(fallbackPath, 'utf8');
+        fileCreds = JSON.parse(raw);
+      } catch {
+        fileCreds = {};
       }
+    }
+
+    // Invalidate legacy mock/dev_user sessions that were previously persisted by mistake
+    if (
+      fileCreds.profile?.id === 'dev_user' ||
+      fileCreds.profile?.email === 'developer@clous.local'
+    ) {
+      this.clear();
+      fileCreds = {};
     }
 
     const envToken = process.env.CLOUS_ACCESS_TOKEN;
     const envApiUrl = process.env.CLOUS_API_URL;
     let resolvedApiUrl = envApiUrl || fileCreds.apiUrl || DEFAULT_API_URL;
-
+    if (resolvedApiUrl === 'https://api.clous.dev') {
+      resolvedApiUrl = DEFAULT_API_URL;
+    }
 
     return {
       token: envToken || fileCreds.token,
@@ -59,8 +77,7 @@ export class CredentialsManager {
   }
 
   /**
-   * Saves credentials to disk with restricted permissions (0o600).
-   * If global directory is not writable (e.g. sandbox or restricted env), falls back to local .clous/credentials.json.
+   * Saves credentials to user-global disk with restricted permissions (0o600).
    */
   static save(creds: Credentials): void {
     const payload = {
@@ -82,13 +99,12 @@ export class CredentialsManager {
         mode: 0o600,
       });
     } catch {
-      // Fallback to local .clous/credentials.json if global OS directory is unwritable
-      const localDir = path.join(process.cwd(), '.clous');
-      if (!fs.existsSync(localDir)) {
-        fs.mkdirSync(localDir, { recursive: true });
+      // Fallback to ~/.clous/credentials.json (still user-global, never inside project cwd)
+      const fallbackDir = path.dirname(getFallbackGlobalCredentialsPath());
+      if (!fs.existsSync(fallbackDir)) {
+        fs.mkdirSync(fallbackDir, { recursive: true, mode: 0o700 });
       }
-      const localCredsPath = path.join(localDir, 'credentials.json');
-      fs.writeFileSync(localCredsPath, JSON.stringify(payload, null, 2), {
+      fs.writeFileSync(getFallbackGlobalCredentialsPath(), JSON.stringify(payload, null, 2), {
         encoding: 'utf8',
         mode: 0o600,
       });
@@ -101,23 +117,20 @@ export class CredentialsManager {
   static clear(): boolean {
     let cleared = false;
 
-    const credsPath = getCredentialsPath();
-    if (fs.existsSync(credsPath)) {
-      try {
-        fs.unlinkSync(credsPath);
-        cleared = true;
-      } catch {
-        // ignore
-      }
-    }
+    const candidates = [
+      getCredentialsPath(),
+      getFallbackGlobalCredentialsPath(),
+      path.join(process.cwd(), '.clous', 'credentials.json'),
+    ];
 
-    const localCredsPath = path.join(process.cwd(), '.clous', 'credentials.json');
-    if (fs.existsSync(localCredsPath)) {
-      try {
-        fs.unlinkSync(localCredsPath);
-        cleared = true;
-      } catch {
-        // ignore
+    for (const filePath of candidates) {
+      if (fs.existsSync(filePath)) {
+        try {
+          fs.unlinkSync(filePath);
+          cleared = true;
+        } catch {
+          // ignore
+        }
       }
     }
 
@@ -135,6 +148,7 @@ export class CredentialsManager {
    * Returns current active API URL.
    */
   static getApiUrl(): string {
-    return process.env.CLOUS_API_URL || DEFAULT_API_URL;
+    const loaded = this.load();
+    return process.env.CLOUS_API_URL || loaded.apiUrl || DEFAULT_API_URL;
   }
 }

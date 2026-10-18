@@ -7,19 +7,15 @@ import { MongoClient } from 'mongodb';
 export const dbInspectorPlugin = fp(async (fastify) => {
   let isInspecting = false;
 
-  // Helper to read project config
+  // Helper to read project config strictly from the current project directory
   const getProjectConfig = () => {
-    let current = process.cwd();
-    while (true) {
-      const p = path.join(current, '.clous');
-      if (fs.existsSync(p) && fs.statSync(p).isDirectory()) {
-        try {
-          return JSON.parse(fs.readFileSync(path.join(p, 'project.json'), 'utf8'));
-        } catch { return null; }
+    const p = path.join(process.cwd(), '.clous', 'project.json');
+    if (fs.existsSync(p)) {
+      try {
+        return JSON.parse(fs.readFileSync(p, 'utf8'));
+      } catch {
+        return null;
       }
-      const parent = path.dirname(current);
-      if (parent === current) break;
-      current = parent;
     }
     return null;
   };
