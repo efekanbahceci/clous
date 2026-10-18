@@ -4,6 +4,10 @@ import { exec } from 'node:child_process';
  * Attempts to open a URL in the user's default browser cross-platform (macOS, Windows, Linux).
  */
 export function openBrowser(url: string): void {
+  if (process.env.VITEST || process.env.NODE_ENV === 'test' || process.env.CI) {
+    return;
+  }
+
   const platform = process.platform;
   let command = '';
 

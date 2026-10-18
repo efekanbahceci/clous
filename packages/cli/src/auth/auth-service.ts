@@ -1,8 +1,6 @@
-import http from 'node:http';
 import crypto from 'node:crypto';
 import { CredentialsManager, type ClousProfile } from '../config/credentials.js';
 import { ApiClient } from './client.js';
-import { logger } from '../utils/logger.js';
 import { ansi } from '../utils/ansi.js';
 import { ui } from '../utils/ui.js';
 import { openBrowser } from '../utils/browser.js';
@@ -14,9 +12,16 @@ export interface LoginOptions {
   force?: boolean;
 }
 
+interface CliSessionPollResponse {
+  status: 'pending' | 'authorized' | 'expired' | 'invalid' | 'error';
+  token?: string;
+  profile?: ClousProfile;
+  error?: string;
+}
+
 export class AuthService {
   /**
-   * Authenticates the CLI either with a provided token or via browser OAuth flow.
+   * Authenticates the CLI either with a provided token or via https://clous.dev browser flow.
    */
   static async login(options: LoginOptions = {}): Promise<void> {
     const apiUrl = (options.apiUrl || CredentialsManager.getApiUrl()).replace(/\/+$/, '');
@@ -49,11 +54,9 @@ export class AuthService {
       return;
     }
 
-    // 2. Interactive Browser Flow with Ephemeral Local Server
-    const port = options.port || 45678;
+    // 2. Interactive Cloud Session Flow on https://clous.dev
     const sessionId = crypto.randomBytes(16).toString('hex');
-    const callbackUrl = `http://localhost:${port}/callback`;
-    const loginUrl = `${apiUrl}/cli/auth?session_id=${sessionId}&callback=${encodeURIComponent(callbackUrl)}`;
+    const loginUrl = `${apiUrl}/cli/auth?session_id=${sessionId}`;
 
     console.log('');
     ui.box({
@@ -68,33 +71,32 @@ export class AuthService {
     });
     console.log('');
 
-    // Start callback server BEFORE opening browser so localhost listener is ready immediately
-    const tokenPromise = this.startCallbackServer(port, sessionId);
-
-    // Automatically open browser for seamless authentication
+    // Open https://clous.dev/cli/auth?session_id=... in the user's browser
     openBrowser(loginUrl);
 
     const slowMo = await ui.startSlowMotionBanner('0.1.0', {
-      statusMessage: ansi.dim(`Waiting for browser authorization on port ${port}... (Press Ctrl+C to cancel)`),
+      statusMessage: ansi.dim(`Waiting for authorization on ${apiUrl}... (Press Ctrl+C to cancel)`),
     });
 
-    let token: string;
+    let sessionResult: { token: string; profile?: ClousProfile };
     try {
-      token = await tokenPromise;
+      sessionResult = await this.pollCloudSession(apiUrl, sessionId);
     } finally {
       slowMo.stop();
     }
 
     // Verify token against the API
-    const verification = await client.verifyToken(token);
+    const verification = await client.verifyToken(sessionResult.token);
     if (!verification.valid) {
       throw new Error(verification.error || 'Received invalid token from authentication provider.');
     }
 
+    const finalProfile = verification.profile || sessionResult.profile;
+
     CredentialsManager.save({
-      token,
+      token: sessionResult.token,
       apiUrl,
-      profile: verification.profile,
+      profile: finalProfile,
     });
 
     console.log('');
@@ -102,7 +104,7 @@ export class AuthService {
       title: 'Authentication Successful',
       borderColor: ansi.green,
       lines: [
-        `User Account  ${ansi.bold(verification.profile?.email || verification.profile?.id || 'Authenticated User')}`,
+        `User Account  ${ansi.bold(finalProfile?.email || finalProfile?.id || 'Authenticated User')}`,
         `API Endpoint  ${ansi.dim(apiUrl)}`,
         `Status        ${ansi.green('Active (Session saved safely)')}`,
       ],
@@ -139,7 +141,12 @@ export class AuthService {
     }
 
     // Keep cached profile up to date if the server returned fresh user info
-    if (verification.profile && (!creds.profile || creds.profile.email !== verification.profile.email || creds.profile.id !== verification.profile.id)) {
+    if (
+      verification.profile &&
+      (!creds.profile ||
+        creds.profile.email !== verification.profile.email ||
+        creds.profile.id !== verification.profile.id)
+    ) {
       CredentialsManager.save({
         token: creds.token,
         apiUrl,
@@ -154,185 +161,54 @@ export class AuthService {
     };
   }
 
-  private static startCallbackServer(port: number, expectedSessionId: string): Promise<string> {
-    return new Promise((resolve, reject) => {
-      let resolved = false;
+  /**
+   * Polls `https://clous.dev/api/cli/session?session_id=...` until the user clicks "Authorize" on clous.dev.
+   */
+  private static async pollCloudSession(
+    apiUrl: string,
+    sessionId: string
+  ): Promise<{ token: string; profile?: ClousProfile }> {
+    const pollIntervalMs = 1500;
+    const timeoutMs = 5 * 60 * 1000; // 5 minutes
+    const deadline = Date.now() + timeoutMs;
+    const endpoint = `${apiUrl}/api/cli/session?session_id=${encodeURIComponent(sessionId)}`;
 
-      const server = http.createServer((req, res) => {
-        res.setHeader('Access-Control-Allow-Origin', '*');
-        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    while (Date.now() < deadline) {
+      try {
+        const res = await fetch(endpoint, {
+          method: 'GET',
+          headers: {
+            Accept: 'application/json',
+            'User-Agent': '@clous/cli',
+          },
+        });
 
-        if (req.method === 'OPTIONS') {
-          res.writeHead(204);
-          res.end();
-          return;
+        if (res.status === 410) {
+          throw new Error('Authentication session expired. Please run "clous login" again.');
         }
 
-        const reqUrl = new URL(req.url || '/', `http://localhost:${port}`);
-
-        if (reqUrl.pathname === '/callback') {
-          const token = reqUrl.searchParams.get('token');
-          const sessionId = reqUrl.searchParams.get('session_id');
-
-          if (sessionId && sessionId !== expectedSessionId) {
-            res.writeHead(400, { 'Content-Type': 'text/plain; charset=utf-8' });
-            res.end('Invalid session verification. Please retry login.');
-            return;
+        if (res.ok) {
+          const data = (await res.json()) as CliSessionPollResponse;
+          if (data.status === 'authorized' && data.token) {
+            return {
+              token: data.token,
+              profile: data.profile,
+            };
           }
-
-          if (!token) {
-            res.writeHead(400, { 'Content-Type': 'text/plain; charset=utf-8' });
-            res.end('Missing token in callback response.');
-            return;
+          if (data.status === 'expired') {
+            throw new Error(data.error || 'Authentication session expired.');
           }
-
-          resolved = true;
-          res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-          res.end(`
-            <!DOCTYPE html>
-            <html lang="tr">
-              <head>
-                <meta charset="utf-8">
-                <meta name="viewport" content="width=device-width, initial-scale=1">
-                <title>Clous CLI Authentication</title>
-                <style>
-                  * { box-sizing: border-box; }
-                  body {
-                    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    min-height: 100vh;
-                    margin: 0;
-                    background-color: #111014;
-                    color: #fafafa;
-                    position: relative;
-                    overflow: hidden;
-                  }
-                  .glow {
-                    position: absolute;
-                    width: 500px;
-                    height: 350px;
-                    background: radial-gradient(circle, rgba(255, 87, 8, 0.15) 0%, rgba(17, 16, 20, 0) 70%);
-                    top: 50%;
-                    left: 50%;
-                    transform: translate(-50%, -50%);
-                    pointer-events: none;
-                  }
-                  .card {
-                    position: relative;
-                    background: rgba(24, 24, 27, 0.7);
-                    backdrop-filter: blur(16px);
-                    -webkit-backdrop-filter: blur(16px);
-                    border: 1px solid rgba(39, 39, 42, 0.8);
-                    border-radius: 16px;
-                    padding: 40px 32px;
-                    max-width: 440px;
-                    width: 90%;
-                    text-align: center;
-                    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
-                  }
-                  .badge {
-                    display: inline-flex;
-                    align-items: center;
-                    gap: 6px;
-                    padding: 4px 12px;
-                    border-radius: 9999px;
-                    background: rgba(255, 87, 8, 0.1);
-                    border: 1px solid rgba(255, 87, 8, 0.2);
-                    color: #FF5708;
-                    font-size: 12px;
-                    font-weight: 500;
-                    margin-bottom: 20px;
-                  }
-                  .icon {
-                    width: 64px;
-                    height: 64px;
-                    border-radius: 50%;
-                    background: rgba(255, 87, 8, 0.15);
-                    border: 1px solid rgba(255, 87, 8, 0.4);
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    margin: 0 auto 20px auto;
-                    box-shadow: 0 0 30px rgba(255, 87, 8, 0.25);
-                  }
-                  .icon svg {
-                    width: 32px;
-                    height: 32px;
-                    stroke: #FF5708;
-                  }
-                  h1 {
-                    font-size: 22px;
-                    font-weight: 600;
-                    margin: 0 0 10px 0;
-                    color: #ffffff;
-                    letter-spacing: -0.02em;
-                  }
-                  p {
-                    color: #a1a1aa;
-                    font-size: 14px;
-                    line-height: 1.6;
-                    margin: 0 0 16px 0;
-                  }
-                  .hint {
-                    color: #71717a;
-                    font-size: 12px;
-                    margin: 0;
-                  }
-                </style>
-              </head>
-              <body>
-                <div class="glow"></div>
-                <div class="card">
-                  <div class="badge">
-                    <span>Clous CLI</span>
-                  </div>
-                  <div class="icon">
-                    <svg viewBox="0 0 24 24" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                      <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
-                      <polyline points="22 4 12 14.01 9 11.01" />
-                    </svg>
-                  </div>
-                  <h1>Yetkilendirme Başarılı</h1>
-                  <p>Clous CLI başarıyla yetkilendirildi. Bu sekmeyi kapatıp terminalinize geri dönebilirsiniz.</p>
-                  <p class="hint">Bu pencere otomatik olarak kapatılabilir.</p>
-                </div>
-              </body>
-            </html>
-          `);
-
-          server.close(() => {
-            resolve(token);
-          });
-        } else {
-          res.writeHead(404, { 'Content-Type': 'text/plain' });
-          res.end('Not Found');
         }
-      });
-
-      server.on('error', (err) => {
-        if (!resolved) {
-          reject(new Error(`Failed to start local login listener on port ${port}: ${err.message}`));
+      } catch (err: any) {
+        if (err.message?.includes('expired')) {
+          throw err;
         }
-      });
+        // Ignore transient network errors while polling
+      }
 
-      // 5-minute timeout for interactive login
-      const timeout = setTimeout(() => {
-        if (!resolved) {
-          server.close();
-          reject(new Error('Authentication timed out after 5 minutes.'));
-        }
-      }, 5 * 60 * 1000);
+      await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+    }
 
-      server.listen(port, '127.0.0.1', () => {
-        server.unref();
-      });
-
-      server.on('close', () => {
-        clearTimeout(timeout);
-      });
-    });
+    throw new Error('Authentication timed out after 5 minutes.');
   }
 }

@@ -1,6 +1,6 @@
 {
   "name": "@clous/server",
-  "version": "0.1.7",
+  "version": "0.1.9",
   "description": "Clous Runtime Engine - Dynamic Type-Safe CRUD Server with RLS & Web Panel Integration",
   "type": "module",
   "main": "./dist/index.js",

@@ -206,4 +206,57 @@ describe('@clous/cli', () => {
       else process.env.CLOUS_CREDENTIALS_FILE = origFile;
     }
   });
+
+  it('login flow uses https://clous.dev/cli/auth and polls /api/cli/session without localhost redirect', async () => {
+    const origDir = process.env.CLOUS_CONFIG_DIR;
+    const origFile = process.env.CLOUS_CREDENTIALS_FILE;
+    const configDir = path.join(tempDir, 'cloud-login-config');
+    const credsFile = path.join(configDir, 'credentials.json');
+    process.env.CLOUS_CONFIG_DIR = configDir;
+    process.env.CLOUS_CREDENTIALS_FILE = credsFile;
+
+    try {
+      const { AuthService } = await import('../src/auth/auth-service.js');
+      let pollCount = 0;
+
+      vi.spyOn(globalThis, 'fetch').mockImplementation(async (input: any) => {
+        const url = String(input);
+        if (url.startsWith('https://clous.dev/api/cli/session?session_id=')) {
+          pollCount++;
+          return new Response(
+            JSON.stringify({
+              status: 'authorized',
+              token: 'clous_real_user_99',
+              profile: { id: 'real_user_99', email: 'user@clous.dev', name: 'Clous User' },
+            }),
+            { status: 200, headers: { 'Content-Type': 'application/json' } }
+          );
+        }
+        if (url === 'https://clous.dev/api/cli/verify') {
+          return new Response(
+            JSON.stringify({
+              valid: true,
+              profile: { id: 'real_user_99', email: 'user@clous.dev', name: 'Clous User' },
+            }),
+            { status: 200, headers: { 'Content-Type': 'application/json' } }
+          );
+        }
+        return new Response(JSON.stringify({ error: 'Not found' }), { status: 404 });
+      });
+
+      await AuthService.login({ apiUrl: 'https://clous.dev', force: true });
+
+      expect(pollCount).toBeGreaterThanOrEqual(1);
+      const saved = CredentialsManager.load();
+      expect(saved.token).toBe('clous_real_user_99');
+      expect(saved.profile?.email).toBe('user@clous.dev');
+      expect(saved.apiUrl).toBe('https://clous.dev');
+    } finally {
+      if (origDir === undefined) delete process.env.CLOUS_CONFIG_DIR;
+      else process.env.CLOUS_CONFIG_DIR = origDir;
+      if (origFile === undefined) delete process.env.CLOUS_CREDENTIALS_FILE;
+      else process.env.CLOUS_CREDENTIALS_FILE = origFile;
+    }
+  });
 });
+
