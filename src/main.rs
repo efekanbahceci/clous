@@ -59,9 +59,12 @@ fn main() -> ExitCode {
             probe,
             timeout_ms,
         } => commands::run_inspect(port, probe, timeout_ms, &parsed.global),
-        Command::Audit { filter, strict } => {
-            commands::run_audit(&filter, strict, &parsed.global)
-        }
+        Command::Audit {
+            filter,
+            strict,
+            profile,
+            deep,
+        } => commands::run_audit(&filter, strict, profile, deep, &parsed.global),
         Command::Snapshot(action) => commands::run_snapshot(&action, &parsed.global),
         Command::Free {
             host,

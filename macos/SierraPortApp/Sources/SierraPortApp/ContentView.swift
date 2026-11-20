@@ -739,32 +739,75 @@ struct ContentView: View {
         }
     }
 
-    // MARK: - 3. Security Audit Tab
+    // MARK: - 3. Security & Binary Trust Audit Tab
 
     private var auditTabView: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
-                HStack {
-                    Text("Security & Socket Health Audit")
-                        .font(.system(size: 18, weight: .semibold))
+                HStack(spacing: 12) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Security & Binary Trust Audit")
+                            .font(.system(size: 18, weight: .semibold))
+                        Text("macOS firewall posture, code-signature verification, active probing, and remediation playbooks")
+                            .font(.system(size: 12))
+                            .foregroundStyle(.secondary)
+                    }
                     Spacer()
+
+                    Picker("Profile", selection: $vm.auditProfile) {
+                        ForEach(AuditProfileOption.allCases) { opt in
+                            Text(opt.label).tag(opt)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .frame(width: 240)
+                    .onChange(of: vm.auditProfile) { _, _ in
+                        Task { await vm.refreshAudit() }
+                    }
+
+                    Toggle("Deep Probe", isOn: $vm.auditDeepScan)
+                        .toggleStyle(.switch)
+                        .controlSize(.small)
+                        .onChange(of: vm.auditDeepScan) { _, _ in
+                            Task { await vm.refreshAudit() }
+                        }
+
+                    Button {
+                        vm.exportAuditMarkdown()
+                    } label: {
+                        Label("Export MD", systemImage: "square.and.arrow.up")
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .disabled(vm.auditReport == nil)
+
                     Button {
                         Task { await vm.refreshAudit() }
                     } label: {
-                        Label("Re-run Audit", systemImage: "shield.checkerboard")
+                        if vm.isLoadingAudit {
+                            ProgressView().controlSize(.small)
+                        } else {
+                            Label("Scan", systemImage: "shield.checkerboard")
+                        }
                     }
                     .buttonStyle(.borderedProminent)
                     .controlSize(.small)
                 }
 
                 if vm.isLoadingAudit && vm.auditReport == nil {
-                    ProgressView("Analyzing sockets...")
+                    ProgressView("Verifying firewall posture & binary signatures...")
                         .frame(maxWidth: .infinity, minHeight: 200)
                 } else if let report = vm.auditReport {
-                    AuditVisualView(report: report, onInspectPort: { vm.inspectPort($0) })
-                        .padding(16)
-                        .background(SierraTheme.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(SierraTheme.border, lineWidth: 1))
+                    AuditVisualView(
+                        report: report,
+                        allowlistedKeys: vm.allowlistedKeys,
+                        onInspectPort: { vm.inspectPort($0) },
+                        onAllowlist: { vm.allowlistFinding($0) },
+                        onRestoreAllowlist: { vm.restoreAllowlistedKey($0) }
+                    )
+                    .padding(16)
+                    .background(SierraTheme.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(SierraTheme.border, lineWidth: 1))
                 }
             }
             .padding(18)

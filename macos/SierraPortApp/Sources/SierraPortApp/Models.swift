@@ -105,6 +105,54 @@ struct StreamTick: Codable {
 
 // MARK: - Audit Report
 
+enum AuditProfileOption: String, CaseIterable, Identifiable {
+    case developer = "developer"
+    case strict = "strict"
+    case zeroTrust = "zero-trust"
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .developer: return "Developer"
+        case .strict: return "Strict"
+        case .zeroTrust: return "Zero-Trust"
+        }
+    }
+}
+
+struct HostPosture: Codable {
+    let firewallEnabled: Bool?
+    let stealthMode: Bool?
+    let verifiedBinaries: Int
+    let unsignedBinaries: Int
+    let suspiciousPathBinaries: Int
+
+    enum CodingKeys: String, CodingKey {
+        case firewallEnabled = "firewall_enabled"
+        case stealthMode = "stealth_mode"
+        case verifiedBinaries = "verified_binaries"
+        case unsignedBinaries = "unsigned_binaries"
+        case suspiciousPathBinaries = "suspicious_path_binaries"
+    }
+}
+
+struct BinaryTrustInfo: Codable, Identifiable {
+    let process: String
+    let path: String
+    let trust: String
+    let authority: String?
+    let suspiciousPath: Bool
+    let ports: [Int]
+
+    var id: String { "\(process)-\(path)" }
+
+    enum CodingKeys: String, CodingKey {
+        case process, path, trust, authority, ports
+        case suspiciousPath = "suspicious_path"
+    }
+}
+
 struct AuditFinding: Codable, Identifiable, Hashable {
     let severity: String
     let code: String
@@ -113,23 +161,49 @@ struct AuditFinding: Codable, Identifiable, Hashable {
     let endpoint: String?
     let title: String
     let recommendation: String
+    let remediationCmd: String?
 
     var id: String { "\(code)-\(port ?? -1)-\(title)" }
+
+    var allowlistKey: String {
+        "\(code)|\(port.map(String.init) ?? "-")|\(process ?? "-")"
+    }
+
+    var penalty: Int {
+        switch severity {
+        case "CRITICAL": return 25
+        case "HIGH": return 15
+        case "MEDIUM": return 7
+        case "LOW": return 3
+        default: return 0
+        }
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case severity, code, port, process, endpoint, title, recommendation
+        case remediationCmd = "remediation_cmd"
+    }
 }
 
 struct AuditReport: Codable {
+    let profile: String?
+    let deepScan: Bool?
     let score: Int
     let grade: String
     let totalSockets: Int
     let listeningCount: Int
     let exposedCount: Int
+    let posture: HostPosture?
+    let binaryTrusts: [BinaryTrustInfo]?
     let findings: [AuditFinding]
 
     enum CodingKeys: String, CodingKey {
-        case score, grade, findings
+        case profile, score, grade, posture, findings
+        case deepScan = "deep_scan"
         case totalSockets = "total_sockets"
         case listeningCount = "listening_count"
         case exposedCount = "exposed_count"
+        case binaryTrusts = "binary_trusts"
     }
 }
 

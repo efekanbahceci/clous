@@ -467,14 +467,44 @@ struct PortRowView: View {
     }
 }
 
-// MARK: - Security Audit Score Card
+// MARK: - Security & Binary Trust Audit View
 
 struct AuditVisualView: View {
     let report: AuditReport
+    var allowlistedKeys: Set<String> = []
     let onInspectPort: (Int) -> Void
+    var onAllowlist: ((AuditFinding) -> Void)? = nil
+    var onRestoreAllowlist: ((String) -> Void)? = nil
+
+    @State private var showBinaryTrusts: Bool = true
+    @State private var showAcceptedRisks: Bool = false
+    @State private var copiedCmdId: String? = nil
+
+    private var activeFindings: [AuditFinding] {
+        report.findings.filter { !allowlistedKeys.contains($0.allowlistKey) }
+    }
+
+    private var suppressedFindings: [AuditFinding] {
+        report.findings.filter { allowlistedKeys.contains($0.allowlistKey) }
+    }
+
+    private var effectiveScore: Int {
+        let penalty = activeFindings.reduce(0) { $0 + $1.penalty }
+        return max(0, 100 - penalty)
+    }
+
+    private var effectiveGrade: String {
+        switch effectiveScore {
+        case 90...100: return "A"
+        case 80...89: return "B"
+        case 70...79: return "C"
+        case 55...69: return "D"
+        default: return "F"
+        }
+    }
 
     var scoreColor: Color {
-        switch report.score {
+        switch effectiveScore {
         case 90...100: return .green
         case 70...89: return .orange
         default: return .red
@@ -483,21 +513,22 @@ struct AuditVisualView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
+            // 1. Score Ring + Summary Header
             HStack(spacing: 20) {
                 ZStack {
                     Circle()
                         .stroke(scoreColor.opacity(0.18), lineWidth: 9)
                     Circle()
-                        .trim(from: 0, to: CGFloat(report.score) / 100.0)
+                        .trim(from: 0, to: CGFloat(effectiveScore) / 100.0)
                         .stroke(scoreColor, style: StrokeStyle(lineWidth: 9, lineCap: .round))
                         .rotationEffect(.degrees(-90))
-                        .animation(.spring(response: 0.6, dampingFraction: 0.8), value: report.score)
+                        .animation(.spring(response: 0.55, dampingFraction: 0.8), value: effectiveScore)
                     VStack(spacing: 0) {
-                        Text("\(report.score)")
+                        Text("\(effectiveScore)")
                             .font(.system(size: 24, weight: .bold, design: .rounded))
                             .monospacedDigit()
                             .contentTransition(.numericText())
-                        Text("Grade \(report.grade)")
+                        Text("Grade \(effectiveGrade)")
                             .font(.system(size: 10, weight: .semibold))
                             .foregroundStyle(scoreColor)
                     }
@@ -505,8 +536,27 @@ struct AuditVisualView: View {
                 .frame(width: 82, height: 82)
 
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("Security & Socket Health")
-                        .font(.system(size: 16, weight: .semibold))
+                    HStack(spacing: 8) {
+                        Text("Security & Binary Trust")
+                            .font(.system(size: 16, weight: .semibold))
+                        if let prof = report.profile {
+                            Text(prof.uppercased())
+                                .font(.system(size: 9, weight: .bold, design: .monospaced))
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(.cyan.opacity(0.14), in: Capsule())
+                                .foregroundStyle(.cyan)
+                        }
+                        if report.deepScan == true {
+                            Text("DEEP PROBE")
+                                .font(.system(size: 9, weight: .bold, design: .monospaced))
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(.purple.opacity(0.16), in: Capsule())
+                                .foregroundStyle(.purple)
+                        }
+                    }
+
                     HStack(spacing: 16) {
                         Label("\(report.totalSockets) Sockets", systemImage: "network")
                         Label("\(report.listeningCount) Listening", systemImage: "ear")
@@ -519,21 +569,63 @@ struct AuditVisualView: View {
                 Spacer()
             }
 
-            if report.findings.isEmpty {
+            // 2. Host Defense Posture Strip (Firewall, Stealth, Binary Trust, Policy)
+            if let posture = report.posture {
+                HStack(spacing: 10) {
+                    let fwOn = posture.firewallEnabled == true
+                    let fwKnown = posture.firewallEnabled != nil
+                    KpiPill(
+                        title: "macOS Firewall",
+                        value: fwKnown ? (fwOn ? "ON" : "OFF") : "N/A",
+                        tint: fwKnown ? (fwOn ? .green : .red) : .secondary,
+                        icon: fwOn ? "flame.fill" : "exclamationmark.shield"
+                    )
+
+                    let stOn = posture.stealthMode == true
+                    let stKnown = posture.stealthMode != nil
+                    KpiPill(
+                        title: "Stealth Mode",
+                        value: stKnown ? (stOn ? "ON" : "OFF") : "N/A",
+                        tint: stKnown ? (stOn ? .green : .orange) : .secondary,
+                        icon: "eye.slash.fill"
+                    )
+
+                    KpiPill(
+                        title: "Signed Binaries",
+                        value: "\(posture.verifiedBinaries) / \(posture.verifiedBinaries + posture.unsignedBinaries)",
+                        tint: posture.unsignedBinaries == 0 ? .green : .orange,
+                        icon: "checkmark.seal.fill"
+                    )
+
+                    KpiPill(
+                        title: "Allowlisted",
+                        value: "\(suppressedFindings.count)",
+                        tint: .cyan,
+                        icon: "checkmark.circle"
+                    )
+                }
+            }
+
+            // 3. Active Security Findings with Remediation Playbook & Allowlist
+            if activeFindings.isEmpty {
                 HStack(spacing: 8) {
                     Image(systemName: "checkmark.shield.fill")
                         .foregroundStyle(.green)
-                    Text("No security or socket health issues detected.")
+                    Text("No active security or binary trust issues under this profile.")
                         .font(.system(size: 13, weight: .medium))
                 }
                 .padding(12)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(.green.opacity(0.1), in: RoundedRectangle(cornerRadius: 10))
             } else {
-                VStack(spacing: 8) {
-                    ForEach(report.findings) { finding in
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("ACTIVE FINDINGS (\(activeFindings.count))")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(.secondary)
+
+                    ForEach(Array(activeFindings.enumerated()), id: \.offset) { _, finding in
                         let sevColor = severityColor(finding.severity)
-                        VStack(alignment: .leading, spacing: 6) {
+                        VStack(alignment: .leading, spacing: 8) {
                             HStack(spacing: 8) {
                                 Text(finding.severity)
                                     .font(.system(size: 10, weight: .bold, design: .monospaced))
@@ -541,16 +633,18 @@ struct AuditVisualView: View {
                                     .padding(.vertical, 2)
                                     .foregroundStyle(sevColor)
                                     .background(sevColor.opacity(0.16), in: Capsule())
+                                    .fixedSize()
 
                                 Text(finding.code)
                                     .font(.system(size: 11, design: .monospaced))
                                     .foregroundStyle(.secondary)
+                                    .fixedSize()
 
                                 Text(finding.title)
                                     .font(.system(size: 13, weight: .semibold))
-                                    .lineLimit(2)
+                                    .fixedSize(horizontal: false, vertical: true)
 
-                                Spacer()
+                                Spacer(minLength: 6)
 
                                 if let port = finding.port {
                                     Button("Inspect :\(port)") {
@@ -559,14 +653,60 @@ struct AuditVisualView: View {
                                     .buttonStyle(.bordered)
                                     .controlSize(.small)
                                 }
+
+                                if let onAllowlist {
+                                    Button {
+                                        withAnimation(.spring(response: 0.25, dampingFraction: 0.85)) {
+                                            onAllowlist(finding)
+                                        }
+                                    } label: {
+                                        Text("Accept Risk")
+                                            .font(.system(size: 10, weight: .medium))
+                                    }
+                                    .buttonStyle(.bordered)
+                                    .controlSize(.small)
+                                    .help("Allowlist this finding under your local security policy")
+                                }
                             }
 
                             Text(finding.recommendation)
                                 .font(.system(size: 12))
                                 .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+
+                            if let remCmd = finding.remediationCmd {
+                                HStack(spacing: 8) {
+                                    Text(remCmd)
+                                        .font(.system(size: 11, design: .monospaced))
+                                        .foregroundStyle(.cyan)
+                                        .lineLimit(1)
+                                        .truncationMode(.middle)
+                                        .textSelection(.enabled)
+                                    Spacer(minLength: 4)
+                                    Button {
+                                        NSPasteboard.general.clearContents()
+                                        NSPasteboard.general.setString(remCmd, forType: .string)
+                                        copiedCmdId = finding.id
+                                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                                            if copiedCmdId == finding.id { copiedCmdId = nil }
+                                        }
+                                    } label: {
+                                        Label(
+                                            copiedCmdId == finding.id ? "Copied" : "Copy Fix",
+                                            systemImage: copiedCmdId == finding.id ? "checkmark" : "doc.on.doc"
+                                        )
+                                        .font(.system(size: 10, weight: .medium))
+                                    }
+                                    .buttonStyle(.borderless)
+                                }
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 6)
+                                .background(SierraTheme.codeWell, in: RoundedRectangle(cornerRadius: 7))
+                                .overlay(RoundedRectangle(cornerRadius: 7).strokeBorder(SierraTheme.borderSubtle, lineWidth: 1))
+                            }
                         }
                         .padding(12)
-                        .background(.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 10))
+                        .background(SierraTheme.surfaceElevated.opacity(0.55), in: RoundedRectangle(cornerRadius: 10))
                         .overlay(
                             RoundedRectangle(cornerRadius: 10)
                                 .strokeBorder(sevColor.opacity(0.25), lineWidth: 1)
@@ -574,7 +714,152 @@ struct AuditVisualView: View {
                     }
                 }
             }
+
+            // 4. Collapsible Binary Code-Signature & Origin Trust Table
+            if let trusts = report.binaryTrusts, !trusts.isEmpty {
+                VStack(alignment: .leading, spacing: 0) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundStyle(.secondary)
+                            .rotationEffect(.degrees(showBinaryTrusts ? 90 : 0))
+                        Label("Listening Binary Code-Signature Trust (\(trusts.count))", systemImage: "checkmark.seal")
+                            .font(.system(size: 12, weight: .semibold))
+                        Spacer()
+                        Text("macOS codesign verification")
+                            .font(.system(size: 10, design: .monospaced))
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(12)
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        withAnimation(.spring(response: 0.25, dampingFraction: 0.85)) {
+                            showBinaryTrusts.toggle()
+                        }
+                    }
+
+                    if showBinaryTrusts {
+                        Divider().opacity(0.35)
+                        VStack(spacing: 6) {
+                            ForEach(Array(trusts.enumerated()), id: \.offset) { _, b in
+                                HStack(spacing: 10) {
+                                    trustBadge(b.trust, suspicious: b.suspiciousPath)
+                                        .frame(width: 112, alignment: .leading)
+
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        HStack(spacing: 6) {
+                                            Text(b.process)
+                                                .font(.system(size: 12, weight: .semibold))
+                                                .lineLimit(1)
+                                            if let auth = b.authority {
+                                                Text(auth)
+                                                    .font(.system(size: 10))
+                                                    .foregroundStyle(.secondary)
+                                                    .lineLimit(1)
+                                            }
+                                        }
+                                        Text(b.path)
+                                            .font(.system(size: 10, design: .monospaced))
+                                            .foregroundStyle(.secondary)
+                                            .lineLimit(1)
+                                            .truncationMode(.middle)
+                                    }
+                                    Spacer(minLength: 6)
+
+                                    Text(b.ports.map { ":\($0)" }.joined(separator: " "))
+                                        .font(.system(size: 11, design: .monospaced))
+                                        .foregroundStyle(.cyan)
+                                        .lineLimit(1)
+                                }
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 6)
+                                .background(SierraTheme.canvas.opacity(0.5), in: RoundedRectangle(cornerRadius: 7))
+                            }
+                        }
+                        .padding(10)
+                    }
+                }
+                .background(SierraTheme.surfaceElevated.opacity(0.45), in: RoundedRectangle(cornerRadius: 11))
+                .overlay(RoundedRectangle(cornerRadius: 11).strokeBorder(SierraTheme.border, lineWidth: 1))
+            }
+
+            // 5. Collapsible Accepted Risks / Allowlist
+            if !suppressedFindings.isEmpty {
+                VStack(alignment: .leading, spacing: 0) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundStyle(.secondary)
+                            .rotationEffect(.degrees(showAcceptedRisks ? 90 : 0))
+                        Text("Accepted Risks / Allowlist (\(suppressedFindings.count))")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                    }
+                    .padding(10)
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        withAnimation(.spring(response: 0.25, dampingFraction: 0.85)) {
+                            showAcceptedRisks.toggle()
+                        }
+                    }
+
+                    if showAcceptedRisks {
+                        Divider().opacity(0.35)
+                        VStack(spacing: 6) {
+                            ForEach(Array(suppressedFindings.enumerated()), id: \.offset) { _, f in
+                                HStack(spacing: 8) {
+                                    Text(f.code)
+                                        .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                                        .foregroundStyle(.secondary)
+                                    Text(f.title)
+                                        .font(.system(size: 12))
+                                        .foregroundStyle(.secondary)
+                                        .lineLimit(1)
+                                    Spacer()
+                                    if let onRestoreAllowlist {
+                                        Button("Restore") {
+                                            withAnimation(.spring(response: 0.25, dampingFraction: 0.85)) {
+                                                onRestoreAllowlist(f.allowlistKey)
+                                            }
+                                        }
+                                        .buttonStyle(.bordered)
+                                        .controlSize(.mini)
+                                    }
+                                }
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 5)
+                            }
+                        }
+                        .padding(8)
+                    }
+                }
+                .background(SierraTheme.surfaceElevated.opacity(0.3), in: RoundedRectangle(cornerRadius: 10))
+                .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(SierraTheme.borderSubtle, lineWidth: 1))
+            }
         }
+    }
+
+    @ViewBuilder
+    private func trustBadge(_ trust: String, suspicious: Bool) -> some View {
+        let (label, color): (String, Color) = suspicious
+            ? ("SUSPICIOUS", .red)
+            : {
+                switch trust {
+                case "APPLE_SIGNED": return ("APPLE SIGNED", .green)
+                case "DEVELOPER_SIGNED": return ("DEVELOPER ID", .cyan)
+                case "AD_HOC": return ("AD-HOC", .orange)
+                case "UNSIGNED": return ("UNSIGNED", .red)
+                default: return ("UNKNOWN", .secondary)
+                }
+            }()
+        Text(label)
+            .font(.system(size: 9, weight: .bold, design: .monospaced))
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .foregroundStyle(color)
+            .background(color.opacity(0.15), in: Capsule())
+            .fixedSize()
     }
 
     private func severityColor(_ sev: String) -> Color {

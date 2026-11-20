@@ -1,3 +1,4 @@
+use crate::audit::AuditProfile;
 use crate::models::{
     FilterOptions, OutputFormat, SocketState, SortField, parse_port_spec,
 };
@@ -69,6 +70,8 @@ pub enum Command {
     Audit {
         filter: FilterOptions,
         strict: bool,
+        profile: AuditProfile,
+        deep: bool,
     },
     Snapshot(SnapshotAction),
     Free {
@@ -380,10 +383,21 @@ pub fn parse_args<I: IntoIterator<Item = String>>(args: I) -> Result<CliArgs, St
         }
         "audit" | "sec" | "security" => {
             let mut strict = false;
+            let mut profile = AuditProfile::Developer;
+            let mut deep = false;
             let mut filtered_rest = Vec::new();
-            for arg in rest {
-                match arg.as_str() {
+            let mut i = 0;
+            while i < rest.len() {
+                match rest[i].as_str() {
                     "--strict" => strict = true,
+                    "--deep" | "--active" => deep = true,
+                    "--profile" => {
+                        i += 1;
+                        let val = rest
+                            .get(i)
+                            .ok_or_else(|| "Missing value for --profile".to_string())?;
+                        profile = AuditProfile::parse(val)?;
+                    }
                     "-h" | "--help" => {
                         return Ok(CliArgs {
                             command: Command::Help,
@@ -392,10 +406,16 @@ pub fn parse_args<I: IntoIterator<Item = String>>(args: I) -> Result<CliArgs, St
                     }
                     other => filtered_rest.push(other.to_string()),
                 }
+                i += 1;
             }
             let filter = parse_filter_flags(&filtered_rest, &mut global, false)?;
             Ok(CliArgs {
-                command: Command::Audit { filter, strict },
+                command: Command::Audit {
+                    filter,
+                    strict,
+                    profile,
+                    deep,
+                },
                 global,
             })
         }

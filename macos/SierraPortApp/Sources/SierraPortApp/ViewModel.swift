@@ -1,5 +1,7 @@
 import Foundation
 import SwiftUI
+import AppKit
+import UniformTypeIdentifiers
 
 @MainActor
 final class SierraPortViewModel: ObservableObject {
@@ -28,6 +30,9 @@ final class SierraPortViewModel: ObservableObject {
 
     // Dedicated tabs state
     @Published var auditReport: AuditReport? = nil
+    @Published var auditProfile: AuditProfileOption = .developer
+    @Published var auditDeepScan: Bool = false
+    @Published var allowlistedKeys: Set<String> = []
     @Published var statsReport: StatsReport? = nil
     @Published var isLoadingAudit: Bool = false
     @Published var isLoadingStats: Bool = false
@@ -47,6 +52,9 @@ final class SierraPortViewModel: ObservableObject {
     }
 
     init() {
+        if let saved = UserDefaults.standard.stringArray(forKey: "sierraport_audit_allowlist") {
+            self.allowlistedKeys = Set(saved)
+        }
         startLiveStream()
         Task {
             await refreshAudit()
@@ -395,10 +403,87 @@ final class SierraPortViewModel: ObservableObject {
     func refreshAudit() async {
         isLoadingAudit = true
         defer { isLoadingAudit = false }
-        let res = await bridge.run(arguments: ["audit", "--json"])
+        var args = ["audit", "--profile", auditProfile.rawValue, "--json"]
+        if auditDeepScan {
+            args.append("--deep")
+        }
+        let res = await bridge.run(arguments: args)
         if let data = res.stdout.data(using: .utf8),
            let report = try? JSONDecoder().decode(AuditReport.self, from: data) {
             self.auditReport = report
+        }
+    }
+
+    func allowlistFinding(_ finding: AuditFinding) {
+        allowlistedKeys.insert(finding.allowlistKey)
+        persistAllowlist()
+        showToast("Accepted risk for \(finding.code)")
+    }
+
+    func restoreAllowlistedKey(_ key: String) {
+        allowlistedKeys.remove(key)
+        persistAllowlist()
+        showToast("Restored finding to active audit")
+    }
+
+    private func persistAllowlist() {
+        UserDefaults.standard.set(Array(allowlistedKeys), forKey: "sierraport_audit_allowlist")
+    }
+
+    func exportAuditMarkdown() {
+        guard let report = auditReport else { return }
+        let panel = NSSavePanel()
+        panel.title = "Export SierraPort Security Audit Report"
+        panel.nameFieldStringValue = "sierraport-security-audit.md"
+        panel.allowedContentTypes = [.plainText]
+
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+
+        let activeFindings = report.findings.filter { !allowlistedKeys.contains($0.allowlistKey) }
+        let penalty = activeFindings.reduce(0) { $0 + $1.penalty }
+        let effectiveScore = max(0, 100 - penalty)
+
+        var md = "# SierraPort Security & Binary Trust Audit Report\n\n"
+        md += "- **Generated:** \(ISO8601DateFormatter().string(from: Date()))\n"
+        md += "- **Profile:** `\(report.profile ?? auditProfile.rawValue)`\n"
+        md += "- **Deep Active Probe:** `\(report.deepScan == true ? "Enabled" : "Disabled")`\n"
+        md += "- **Effective Score:** **\(effectiveScore)/100**\n"
+        md += "- **Sockets:** \(report.totalSockets) total · \(report.listeningCount) listening · \(report.exposedCount) exposed\n"
+
+        if let p = report.posture {
+            let fw = p.firewallEnabled == true ? "ON" : (p.firewallEnabled == false ? "OFF" : "N/A")
+            let st = p.stealthMode == true ? "ON" : (p.stealthMode == false ? "OFF" : "N/A")
+            md += "- **Host Posture:** Firewall `\(fw)` · Stealth Mode `\(st)` · Verified Binaries `\(p.verifiedBinaries)` · Unsigned `\(p.unsignedBinaries)`\n"
+        }
+
+        md += "\n## Active Findings (\(activeFindings.count))\n\n"
+        if activeFindings.isEmpty {
+            md += "No active security findings.\n"
+        } else {
+            for f in activeFindings {
+                md += "### [\(f.severity)] `\(f.code)` — \(f.title)\n"
+                md += "- **Recommendation:** \(f.recommendation)\n"
+                if let cmd = f.remediationCmd {
+                    md += "- **Remediation:** `\(cmd)`\n"
+                }
+                md += "\n"
+            }
+        }
+
+        if let trusts = report.binaryTrusts, !trusts.isEmpty {
+            md += "## Listening Binary Code-Signature Trust (\(trusts.count))\n\n"
+            md += "| Process | Trust | Authority | Ports | Path |\n|---|---|---|---|---|\n"
+            for b in trusts {
+                let portsStr = b.ports.map(String.init).joined(separator: ", ")
+                md += "| `\(b.process)` | `\(b.trust)` | \(b.authority ?? "-") | `\(portsStr)` | `\(b.path)` |\n"
+            }
+        }
+
+        do {
+            try md.write(to: url, atomically: true, encoding: .utf8)
+            showToast("Exported report to \(url.lastPathComponent)")
+        } catch {
+            showToast("Export failed: \(error.localizedDescription)")
         }
     }
 

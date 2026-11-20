@@ -7,7 +7,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-use crate::audit::run_audit_analysis;
+use crate::audit::{AuditOptions, AuditProfile, run_audit_with_options};
 use crate::cli::{GlobalOptions, KillTarget, SnapshotAction};
 use crate::display::{
     Theme, port_entry_to_json, print_audit_report, print_diff_report, print_inspect_report,
@@ -489,6 +489,8 @@ pub fn run_inspect(
 pub fn run_audit(
     filter: &FilterOptions,
     strict: bool,
+    profile: AuditProfile,
+    deep: bool,
     global: &GlobalOptions,
 ) -> Result<(), String> {
     let entries: Vec<PortEntry> = scan_ports()?
@@ -496,7 +498,14 @@ pub fn run_audit(
         .filter(|e| filter.matches(e))
         .collect();
 
-    let report = run_audit_analysis(&entries);
+    let report = run_audit_with_options(
+        &entries,
+        AuditOptions {
+            profile,
+            deep_scan: deep,
+            check_host: true,
+        },
+    );
     let theme = Theme::new(global.no_color);
     print_audit_report(&report, &theme, global.is_json());
 

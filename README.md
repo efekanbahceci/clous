@@ -26,7 +26,7 @@
 
 **SierraPort** drops right into your terminal as a single, tiny, self-contained native binary—no runtime, no external crates, no background daemon. Whether you are debugging a local port conflict, hunting down an accidentally exposed database, tracing a process ancestry tree, or enforcing port baselines in CI/CD, SierraPort gives you instant visibility in milliseconds.
 
-> Looking for Turkish documentation? See [DOCS.md](DOCS.md).
+> Looking for Turkish documentation? See [DOCS.md](DOCS.md) · Engineering & Development Log: [DEVELOPMENT_LOG.md](DEVELOPMENT_LOG.md).
 
 ---
 

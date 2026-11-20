@@ -590,17 +590,53 @@ pub fn print_stats(entries: &[PortEntry], theme: &Theme, json: bool) {
 
 pub fn print_audit_report(report: &AuditReport, theme: &Theme, json: bool) {
     if json {
+        let opt_bool = |b: Option<bool>| match b {
+            Some(true) => "true",
+            Some(false) => "false",
+            None => "null",
+        };
         println!("{{");
+        println!("  \"profile\": \"{}\",", report.profile.as_str());
+        println!("  \"deep_scan\": {},", report.deep_scan);
         println!("  \"score\": {},", report.score);
         println!("  \"grade\": \"{}\",", report.grade);
         println!("  \"total_sockets\": {},", report.total_sockets);
         println!("  \"listening_count\": {},", report.listening_count);
         println!("  \"exposed_count\": {},", report.exposed_count);
+        println!(
+            "  \"posture\": {{\"firewall_enabled\":{},\"stealth_mode\":{},\"verified_binaries\":{},\"unsigned_binaries\":{},\"suspicious_path_binaries\":{}}},",
+            opt_bool(report.posture.firewall_enabled),
+            opt_bool(report.posture.stealth_mode),
+            report.posture.verified_binaries,
+            report.posture.unsigned_binaries,
+            report.posture.suspicious_path_binaries
+        );
+        println!("  \"binary_trusts\": [");
+        for (i, b) in report.binary_trusts.iter().enumerate() {
+            let comma = if i + 1 < report.binary_trusts.len() { "," } else { "" };
+            let ports_s: String = b
+                .ports
+                .iter()
+                .map(|p| p.to_string())
+                .collect::<Vec<_>>()
+                .join(",");
+            println!(
+                "    {{\"process\":\"{}\",\"path\":\"{}\",\"trust\":\"{}\",\"authority\":{},\"suspicious_path\":{},\"ports\":[{}]}}{}",
+                json_escape(&b.process),
+                json_escape(&b.path),
+                b.trust.as_str(),
+                opt_str_json(b.authority.as_deref()),
+                b.suspicious_path,
+                ports_s,
+                comma
+            );
+        }
+        println!("  ],");
         println!("  \"findings\": [");
         for (i, f) in report.findings.iter().enumerate() {
             let comma = if i + 1 < report.findings.len() { "," } else { "" };
             println!(
-                "    {{\"severity\":\"{}\",\"code\":\"{}\",\"port\":{},\"process\":{},\"endpoint\":{},\"title\":\"{}\",\"recommendation\":\"{}\"}}{}",
+                "    {{\"severity\":\"{}\",\"code\":\"{}\",\"port\":{},\"process\":{},\"endpoint\":{},\"title\":\"{}\",\"recommendation\":\"{}\",\"remediation_cmd\":{}}}{}",
                 f.severity.as_str(),
                 f.code,
                 opt_u64_json(f.port.map(u64::from)),
@@ -608,6 +644,7 @@ pub fn print_audit_report(report: &AuditReport, theme: &Theme, json: bool) {
                 opt_str_json(f.endpoint.as_deref()),
                 json_escape(&f.title),
                 json_escape(&f.recommendation),
+                opt_str_json(f.remediation_cmd.as_deref()),
                 comma
             );
         }
@@ -623,11 +660,40 @@ pub fn print_audit_report(report: &AuditReport, theme: &Theme, json: bool) {
         _ => theme.bold_red(&score_str),
     };
 
-    println!("{}", theme.bold("SierraPort — Security & Socket Health Audit"));
-    println!("{}", theme.dim(&"─".repeat(66)));
     println!(
-        "Score: {}  |  Sockets: {}  |  Listening: {}  |  Exposed: {}\n",
+        "{} {}",
+        theme.bold("SierraPort — Security & Binary Trust Audit"),
+        theme.dim(&format!(
+            "(profile: {}{})",
+            report.profile.as_str(),
+            if report.deep_scan { " | deep" } else { "" }
+        ))
+    );
+    println!("{}", theme.dim(&"─".repeat(68)));
+    println!(
+        "Score: {}  |  Sockets: {}  |  Listening: {}  |  Exposed: {}",
         score_colored, report.total_sockets, report.listening_count, report.exposed_count
+    );
+    let fw_s = match report.posture.firewall_enabled {
+        Some(true) => theme.green("ON"),
+        Some(false) => theme.red("OFF"),
+        None => theme.dim("N/A"),
+    };
+    let stealth_s = match report.posture.stealth_mode {
+        Some(true) => theme.green("ON"),
+        Some(false) => theme.yellow("OFF"),
+        None => theme.dim("N/A"),
+    };
+    println!(
+        "Posture: Firewall {}  |  Stealth {}  |  Signed Binaries: {}  |  Unsigned: {}\n",
+        fw_s,
+        stealth_s,
+        theme.green(&report.posture.verified_binaries.to_string()),
+        if report.posture.unsigned_binaries > 0 {
+            theme.red(&report.posture.unsigned_binaries.to_string())
+        } else {
+            theme.dim("0")
+        }
     );
 
     if report.findings.is_empty() {
