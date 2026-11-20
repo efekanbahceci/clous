@@ -27,11 +27,13 @@ struct ShortcutOnboardingView: View {
     }
 
     @State private var step: SetupStep = .theme
+    @State private var isMovingForward: Bool = true
     @State private var selectedConfig: HotkeyConfig = .optionSpace
     @State private var isRecording: Bool = false
     @State private var recorderError: String? = nil
     @State private var recorderShake: CGFloat = 0
     @State private var keyMonitor: Any? = nil
+    @State private var returnMonitor: Any? = nil
     @State private var savedPulse: Bool = false
 
     // Staggered entrance motion
@@ -41,19 +43,37 @@ struct ShortcutOnboardingView: View {
         AppThemePreference(rawValue: themeRaw) ?? .dark
     }
 
+    private var isDark: Bool {
+        colorScheme == .dark
+    }
+
+    private var stepTransition: AnyTransition {
+        let insertionEdge: Edge = isMovingForward ? .trailing : .leading
+        let removalEdge: Edge = isMovingForward ? .leading : .trailing
+        return .asymmetric(
+            insertion: .move(edge: insertionEdge)
+                .combined(with: .opacity)
+                .combined(with: .scale(scale: 0.98)),
+            removal: .move(edge: removalEdge)
+                .combined(with: .opacity)
+                .combined(with: .scale(scale: 0.98))
+        )
+    }
+
     var body: some View {
         ZStack {
-            // Sweeping Slow-Motion Thermal Eclipse Arc (partial canvas sweep + fine organic grain)
-            ThermalEclipseBackground(isDark: colorScheme == .dark)
+            // Ultra-smooth Metal-backed slow-motion Thermal Eclipse Gradient
+            ThermalEclipseBackground(isDark: isDark)
                 .ignoresSafeArea()
+                .animation(.easeInOut(duration: 0.45), value: isDark)
 
             VStack(spacing: 0) {
                 Spacer(minLength: 20)
 
-                // Brand Mascot Mark (pure white/monochrome)
+                // Brand Mascot Mark (white in Dark Mode, obsidian in Light Mode)
                 SierraMascotMarkView(size: 64)
-                    .shadow(color: .black.opacity(0.35), radius: 16, y: 6)
-                    .scaleEffect(appeared ? 1.0 : 0.78)
+                    .shadow(color: isDark ? .black.opacity(0.35) : Color(red: 0x08/255, green: 0x24/255, blue: 0x52/255).opacity(0.18), radius: 14, y: 5)
+                    .scaleEffect(appeared ? 1.0 : 0.84)
                     .opacity(appeared ? 1.0 : 0.0)
                     .padding(.bottom, 16)
 
@@ -65,7 +85,7 @@ struct ShortcutOnboardingView: View {
                             let isDone = s.rawValue < step.rawValue
                             HStack(spacing: 5) {
                                 Circle()
-                                    .fill(isActive ? Color.white : (isDone ? Color.green : Color.secondary.opacity(0.35)))
+                                    .fill(isActive ? SierraTheme.accent : (isDone ? Color.green : Color.secondary.opacity(0.35)))
                                     .frame(width: 6, height: 6)
                                 Text(s.label)
                                     .font(SierraFont.ui(11, weight: isActive ? .semibold : .regular))
@@ -74,14 +94,11 @@ struct ShortcutOnboardingView: View {
                             .padding(.horizontal, 10)
                             .padding(.vertical, 4)
                             .background(
-                                isActive ? Color.primary.opacity(0.10) : Color.clear,
+                                isActive ? Color.primary.opacity(isDark ? 0.11 : 0.08) : Color.clear,
                                 in: Capsule()
                             )
                             .onTapGesture {
-                                stopRecording()
-                                withAnimation(.spring(response: 0.34, dampingFraction: 0.86)) {
-                                    step = s
-                                }
+                                navigate(to: s)
                             }
                         }
                     }
@@ -90,23 +107,23 @@ struct ShortcutOnboardingView: View {
                 }
 
                 // Dynamic Step Content
-                Group {
+                ZStack {
                     switch step {
                     case .theme:
                         themeStepView
-                            .transition(.asymmetric(insertion: .move(edge: .trailing).combined(with: .opacity),
-                                                    removal: .move(edge: .leading).combined(with: .opacity)))
+                            .id(SetupStep.theme)
+                            .transition(stepTransition)
                     case .profile:
                         profileStepView
-                            .transition(.asymmetric(insertion: .move(edge: .trailing).combined(with: .opacity),
-                                                    removal: .move(edge: .leading).combined(with: .opacity)))
+                            .id(SetupStep.profile)
+                            .transition(stepTransition)
                     case .shortcut:
                         shortcutStepView
-                            .transition(.asymmetric(insertion: .move(edge: .trailing).combined(with: .opacity),
-                                                    removal: .move(edge: .leading).combined(with: .opacity)))
+                            .id(SetupStep.shortcut)
+                            .transition(stepTransition)
                     }
                 }
-                .offset(y: appeared ? 0 : 16)
+                .offset(y: appeared ? 0 : 14)
                 .opacity(appeared ? 1.0 : 0.0)
 
                 Spacer(minLength: 28)
@@ -117,14 +134,64 @@ struct ShortcutOnboardingView: View {
             if let existing = hotkeyManager.currentHotkey {
                 selectedConfig = existing
             }
-            // If opened from sidebar to edit shortcut only, jump straight to Shortcut step
             step = isFirstLaunch ? .theme : .shortcut
-            withAnimation(.spring(response: 0.52, dampingFraction: 0.84)) {
+            withAnimation(.spring(response: 0.48, dampingFraction: 0.88)) {
                 appeared = true
             }
+            installReturnKeyMonitor()
         }
         .onDisappear {
             stopRecording()
+            removeReturnKeyMonitor()
+        }
+    }
+
+    // MARK: - Step Navigation & Enter Key Handler
+
+    private func navigate(to target: SetupStep) {
+        guard target != step else { return }
+        stopRecording()
+        isMovingForward = target.rawValue > step.rawValue
+        withAnimation(.spring(response: 0.36, dampingFraction: 0.88)) {
+            step = target
+        }
+    }
+
+    private func advanceCurrentStep() {
+        guard !isRecording, !savedPulse else { return }
+        switch step {
+        case .theme:
+            navigate(to: .profile)
+        case .profile:
+            Task { await vm.refreshAudit() }
+            navigate(to: .shortcut)
+        case .shortcut:
+            confirmAndActivate()
+        }
+    }
+
+    private func installReturnKeyMonitor() {
+        removeReturnKeyMonitor()
+        returnMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            // Ignore while custom shortcut recording is active
+            if isRecording { return event }
+            let significantMods = event.modifierFlags.intersection([.command, .option, .control, .shift])
+            guard significantMods.isEmpty else { return event }
+            // 36 = Return, 76 = Numpad Enter
+            if event.keyCode == 36 || event.keyCode == 76 {
+                DispatchQueue.main.async {
+                    advanceCurrentStep()
+                }
+                return nil
+            }
+            return event
+        }
+    }
+
+    private func removeReturnKeyMonitor() {
+        if let monitor = returnMonitor {
+            NSEvent.removeMonitor(monitor)
+            returnMonitor = nil
         }
     }
 
@@ -149,10 +216,16 @@ struct ShortcutOnboardingView: View {
             .frame(maxWidth: 580)
 
             HStack(spacing: 14) {
-                Button("Continue") {
-                    withAnimation(.spring(response: 0.36, dampingFraction: 0.86)) {
-                        step = .profile
+                Button {
+                    advanceCurrentStep()
+                } label: {
+                    HStack(spacing: 8) {
+                        Text("Continue")
+                            .font(SierraFont.ui(13.5, weight: .semibold))
+                        EnterKeyHintPill()
                     }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 6)
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(SierraTheme.accent)
@@ -164,7 +237,7 @@ struct ShortcutOnboardingView: View {
     private func themeCard(_ pref: AppThemePreference, title: String, subtitle: String, previewBg: Color, previewCard: Color, previewText: Color, isSplit: Bool = false) -> some View {
         let isSelected = themePref == pref
         return Button {
-            withAnimation(.spring(response: 0.28, dampingFraction: 0.84)) {
+            withAnimation(.spring(response: 0.30, dampingFraction: 0.86)) {
                 themeRaw = pref.rawValue
             }
         } label: {
@@ -225,12 +298,15 @@ struct ShortcutOnboardingView: View {
                 }
             }
             .padding(12)
-            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-            .background(SierraTheme.surface.opacity(0.72), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .background(
+                SierraTheme.surface.opacity(isDark ? 0.80 : 0.88),
+                in: RoundedRectangle(cornerRadius: 14, style: .continuous)
+            )
             .overlay(
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
                     .strokeBorder(isSelected ? SierraTheme.accent : SierraTheme.topSpecular, lineWidth: isSelected ? 1.8 : 1)
             )
+            .shadow(color: .black.opacity(isDark ? 0.24 : 0.08), radius: 12, y: 5)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -260,18 +336,21 @@ struct ShortcutOnboardingView: View {
 
             HStack(spacing: 14) {
                 Button("Back") {
-                    withAnimation(.spring(response: 0.34, dampingFraction: 0.86)) {
-                        step = .theme
-                    }
+                    navigate(to: .theme)
                 }
                 .buttonStyle(.borderless)
                 .foregroundStyle(.secondary)
 
-                Button("Continue to Shortcut") {
-                    Task { await vm.refreshAudit() }
-                    withAnimation(.spring(response: 0.36, dampingFraction: 0.86)) {
-                        step = .shortcut
+                Button {
+                    advanceCurrentStep()
+                } label: {
+                    HStack(spacing: 8) {
+                        Text("Continue to Shortcut")
+                            .font(SierraFont.ui(13.5, weight: .semibold))
+                        EnterKeyHintPill()
                     }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 6)
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(SierraTheme.accent)
@@ -283,7 +362,7 @@ struct ShortcutOnboardingView: View {
     private func profileRow(_ opt: AuditProfileOption, icon: String, desc: String) -> some View {
         let isSelected = vm.auditProfile == opt
         return Button {
-            withAnimation(.spring(response: 0.25, dampingFraction: 0.84)) {
+            withAnimation(.spring(response: 0.24, dampingFraction: 0.86)) {
                 vm.auditProfile = opt
             }
         } label: {
@@ -308,12 +387,15 @@ struct ShortcutOnboardingView: View {
                     .font(.system(size: 16))
             }
             .padding(14)
-            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 13, style: .continuous))
-            .background(SierraTheme.surface.opacity(0.72), in: RoundedRectangle(cornerRadius: 13, style: .continuous))
+            .background(
+                SierraTheme.surface.opacity(isDark ? 0.80 : 0.88),
+                in: RoundedRectangle(cornerRadius: 13, style: .continuous)
+            )
             .overlay(
                 RoundedRectangle(cornerRadius: 13, style: .continuous)
                     .strokeBorder(isSelected ? SierraTheme.accent : SierraTheme.topSpecular, lineWidth: isSelected ? 1.6 : 1)
             )
+            .shadow(color: .black.opacity(isDark ? 0.20 : 0.06), radius: 10, y: 4)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -334,7 +416,7 @@ struct ShortcutOnboardingView: View {
                     .frame(maxWidth: 460)
             }
 
-            // Frosted Glass Keycap Recorder Card
+            // Frosted Keycap Recorder Card
             VStack(spacing: 16) {
                 HStack(spacing: 10) {
                     if isRecording {
@@ -360,7 +442,7 @@ struct ShortcutOnboardingView: View {
                 }
                 .frame(maxWidth: .infinity, minHeight: 66)
                 .padding(.horizontal, 20)
-                .background(SierraTheme.codeWell.opacity(0.85), in: RoundedRectangle(cornerRadius: 13, style: .continuous))
+                .background(SierraTheme.codeWell.opacity(0.90), in: RoundedRectangle(cornerRadius: 13, style: .continuous))
                 .overlay(
                     RoundedRectangle(cornerRadius: 13, style: .continuous)
                         .strokeBorder(
@@ -426,21 +508,20 @@ struct ShortcutOnboardingView: View {
             }
             .padding(20)
             .frame(maxWidth: 530)
-            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-            .background(SierraTheme.surface.opacity(0.68), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .background(
+                SierraTheme.surface.opacity(isDark ? 0.80 : 0.90),
+                in: RoundedRectangle(cornerRadius: 18, style: .continuous)
+            )
             .overlay(
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
                     .strokeBorder(SierraTheme.topSpecular, lineWidth: 1)
             )
-            .shadow(color: .black.opacity(0.28), radius: 24, y: 10)
+            .shadow(color: .black.opacity(isDark ? 0.28 : 0.10), radius: 22, y: 8)
 
             HStack(spacing: 14) {
                 if isFirstLaunch {
                     Button("Back") {
-                        stopRecording()
-                        withAnimation(.spring(response: 0.34, dampingFraction: 0.86)) {
-                            step = .profile
-                        }
+                        navigate(to: .profile)
                     }
                     .buttonStyle(.borderless)
                     .foregroundStyle(.secondary)
@@ -460,9 +541,12 @@ struct ShortcutOnboardingView: View {
                         Image(systemName: savedPulse ? "checkmark.circle.fill" : "bolt.fill")
                         Text(savedPulse ? "All Set!" : (isFirstLaunch ? "Activate \(selectedConfig.displayString) & Launch" : "Save \(selectedConfig.displayString)"))
                             .font(SierraFont.ui(13.5, weight: .semibold))
+                        if !savedPulse {
+                            EnterKeyHintPill()
+                        }
                     }
-                    .padding(.horizontal, 18)
-                    .padding(.vertical, 9)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 7)
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(savedPulse ? .green : SierraTheme.accent)
@@ -517,141 +601,215 @@ struct ShortcutOnboardingView: View {
         withAnimation(.spring(response: 0.3, dampingFraction: 0.78)) {
             savedPulse = true
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.50) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
             onComplete()
         }
     }
 }
 
-// MARK: - Sweeping Slow-Motion Thermal Eclipse Gradient (Inspired by Horizon Wave + Thermal Arc)
+// MARK: - Inline Return Keycap Badge for Primary Action Buttons
+
+private struct EnterKeyHintPill: View {
+    var body: some View {
+        Text("⏎")
+            .font(SierraFont.mono(10.5, weight: .semibold))
+            .foregroundStyle(.white.opacity(0.92))
+            .padding(.horizontal, 5)
+            .padding(.vertical, 1.5)
+            .background(.white.opacity(0.20), in: RoundedRectangle(cornerRadius: 4.5, style: .continuous))
+    }
+}
+
+// MARK: - Native 60/120fps Metal Canvas Slow-Motion Thermal Eclipse Gradient
 
 struct ThermalEclipseBackground: View {
     let isDark: Bool
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 60.0)) { timeline in
-            let t = timeline.date.timeIntervalSinceReferenceDate
-            GeometryReader { geo in
-                let w = geo.size.width
-                let h = geo.size.height
-                let diag = max(w, h)
+        ZStack {
+            // Base canvas
+            (isDark
+                ? Color(red: 0x0C/255, green: 0x0D/255, blue: 0x10/255)
+                : Color(red: 0xF5/255, green: 0xF6/255, blue: 0xF8/255))
 
-                ZStack {
-                    // Clean base canvas — top-left / top-right corners remain deep & calm
-                    SierraTheme.canvas
+            // GPU-accelerated Canvas — zero Gaussian blur passes, full native refresh rate, ultra-slow motion
+            TimelineView(.animation) { timeline in
+                let t = timeline.date.timeIntervalSinceReferenceDate
+                Canvas(rendersAsynchronously: true) { ctx, size in
+                    let w = size.width
+                    let h = size.height
+                    let diag = max(w, h)
 
-                    // Sweeping diagonal thermal eclipse arc covering ~65–72% of canvas
-                    ZStack {
-                        // Layer 1: Deep Ocean Sapphire outer sweep (#082452 -> #0052D4)
-                        Ellipse()
-                            .fill(
-                                RadialGradient(
-                                    colors: [
-                                        Color(red: 0x00/255, green: 0x52/255, blue: 0xD4/255).opacity(isDark ? 0.62 : 0.28),
-                                        Color(red: 0x08/255, green: 0x24/255, blue: 0x52/255).opacity(isDark ? 0.45 : 0.16),
-                                        Color.clear
-                                    ],
-                                    center: .center,
-                                    startRadius: diag * 0.04,
-                                    endRadius: diag * 0.52
-                                )
-                            )
-                            .frame(width: diag * 1.15, height: diag * 0.62)
-                            .rotationEffect(.degrees(-24 + 5.0 * sin(t * 0.12)))
-                            .position(
-                                x: w * (0.42 + 0.08 * sin(t * 0.10)),
-                                y: h * (0.72 + 0.06 * cos(t * 0.09))
-                            )
-                            .blur(radius: 56)
-
-                        // Layer 2: Electric Cyan Horizon Ribbon (reference image 1 luminous cyan band)
-                        Ellipse()
-                            .fill(
-                                RadialGradient(
-                                    colors: [
-                                        Color(red: 0x00/255, green: 0xB4/255, blue: 0xFF/255).opacity(isDark ? 0.44 : 0.22),
-                                        Color(red: 0x00/255, green: 0x70/255, blue: 0xF3/255).opacity(isDark ? 0.22 : 0.10),
-                                        Color.clear
-                                    ],
-                                    center: .center,
-                                    startRadius: 10,
-                                    endRadius: diag * 0.36
-                                )
-                            )
-                            .frame(width: diag * 0.88, height: diag * 0.34)
-                            .rotationEffect(.degrees(-18 + 6.0 * cos(t * 0.08 + 1.0)))
-                            .position(
-                                x: w * (0.34 + 0.10 * cos(t * 0.09 + 0.6)),
-                                y: h * (0.82 + 0.05 * sin(t * 0.11))
-                            )
-                            .blur(radius: 44)
-
-                        // Layer 3: Thermal Violet-Magenta Core (reference image 2 warm thermal eclipse)
-                        Ellipse()
-                            .fill(
-                                RadialGradient(
-                                    colors: [
-                                        Color(red: 0xD9/255, green: 0x30/255, blue: 0x8A/255).opacity(isDark ? 0.36 : 0.16),
-                                        Color(red: 0x5B/255, green: 0x2C/255, blue: 0xC6/255).opacity(isDark ? 0.26 : 0.10),
-                                        Color.clear
-                                    ],
-                                    center: .center,
-                                    startRadius: 8,
-                                    endRadius: diag * 0.32
-                                )
-                            )
-                            .frame(width: diag * 0.64, height: diag * 0.42)
-                            .rotationEffect(.degrees(-32 + 4.5 * sin(t * 0.11 + 2.1)))
-                            .position(
-                                x: w * (0.24 + 0.08 * sin(t * 0.08 + 1.8)),
-                                y: h * (0.76 + 0.06 * cos(t * 0.10 + 1.2))
-                            )
-                            .blur(radius: 48)
-
-                        // Layer 4: Solar Thermal Amber Rim (reference image 2 golden-orange arc edge)
-                        Ellipse()
-                            .fill(
-                                RadialGradient(
-                                    colors: [
-                                        Color(red: 0xF5/255, green: 0x8A/255, blue: 0x29/255).opacity(isDark ? 0.32 : 0.15),
-                                        Color(red: 0xE2/255, green: 0x4E/255, blue: 0x1B/255).opacity(isDark ? 0.16 : 0.07),
-                                        Color.clear
-                                    ],
-                                    center: .center,
-                                    startRadius: 8,
-                                    endRadius: diag * 0.30
-                                )
-                            )
-                            .frame(width: diag * 0.62, height: diag * 0.28)
-                            .rotationEffect(.degrees(-28 + 5.5 * cos(t * 0.10 + 0.4)))
-                            .position(
-                                x: w * (0.58 + 0.09 * cos(t * 0.07 + 2.4)),
-                                y: h * (0.64 + 0.07 * sin(t * 0.09 + 1.7))
-                            )
-                            .blur(radius: 52)
-                    }
-
-                    // Subtle dark vignette in top-right / corners so the thermal sweep feels dramatic and partial
-                    LinearGradient(
-                        colors: [
-                            SierraTheme.canvas.opacity(isDark ? 0.82 : 0.72),
-                            SierraTheme.canvas.opacity(isDark ? 0.22 : 0.28),
-                            SierraTheme.canvas.opacity(isDark ? 0.18 : 0.22)
-                        ],
-                        startPoint: .topTrailing,
-                        endPoint: .bottomLeading
-                    )
-
-                    // Organic studio film-grain texture (cached procedural CGImage)
-                    if let grain = ProceduralGrain.sharedImage {
-                        Image(nsImage: grain)
-                            .resizable(resizingMode: .tile)
-                            .opacity(isDark ? 0.055 : 0.03)
-                            .blendMode(.overlay)
+                    if isDark {
+                        drawDarkThermalSweep(ctx: &ctx, w: w, h: h, diag: diag, t: t)
+                    } else {
+                        drawLightBlueThermalSweep(ctx: &ctx, w: w, h: h, diag: diag, t: t)
                     }
                 }
             }
+
+            // Static top-right corner calm fade (keeps ~68% partial sweep feeling without washing out colors)
+            LinearGradient(
+                colors: isDark
+                    ? [
+                        Color(red: 0x0C/255, green: 0x0D/255, blue: 0x10/255).opacity(0.72),
+                        Color(red: 0x0C/255, green: 0x0D/255, blue: 0x10/255).opacity(0.14),
+                        Color.clear
+                    ]
+                    : [
+                        Color(red: 0xF5/255, green: 0xF6/255, blue: 0xF8/255).opacity(0.55),
+                        Color.clear,
+                        Color.clear
+                    ],
+                startPoint: .topTrailing,
+                endPoint: .bottomLeading
+            )
+
+            // Static organic film-grain texture (outside TimelineView so it never redraws)
+            if let grain = ProceduralGrain.sharedImage {
+                Image(nsImage: grain)
+                    .resizable(resizingMode: .tile)
+                    .opacity(isDark ? 0.048 : 0.028)
+                    .blendMode(.overlay)
+                    .allowsHitTesting(false)
+            }
         }
+    }
+
+    // Ultra-slow-motion Dark Mode: Deep Sapphire + Electric Cyan + Thermal Magenta + Solar Amber
+    private func drawDarkThermalSweep(ctx: inout GraphicsContext, w: CGFloat, h: CGFloat, diag: CGFloat, t: TimeInterval) {
+        // Layer 1: Deep Ocean Sapphire outer sweep (#082452 -> #0052D4)
+        drawSoftEllipse(
+            ctx: &ctx,
+            center: CGPoint(x: w * (0.42 + 0.06 * sin(t * 0.045)), y: h * (0.74 + 0.05 * cos(t * 0.038))),
+            rx: diag * 0.68, ry: diag * 0.40,
+            angleDeg: -23 + 3.5 * sin(t * 0.042),
+            stops: [
+                .init(color: Color(red: 0x00/255, green: 0x52/255, blue: 0xD4/255).opacity(0.58), location: 0.0),
+                .init(color: Color(red: 0x08/255, green: 0x24/255, blue: 0x52/255).opacity(0.42), location: 0.48),
+                .init(color: Color(red: 0x08/255, green: 0x24/255, blue: 0x52/255).opacity(0.14), location: 0.78),
+                .init(color: .clear, location: 1.0)
+            ]
+        )
+
+        // Layer 2: Electric Cyan Horizon Ribbon
+        drawSoftEllipse(
+            ctx: &ctx,
+            center: CGPoint(x: w * (0.34 + 0.07 * cos(t * 0.040 + 0.6)), y: h * (0.84 + 0.04 * sin(t * 0.046))),
+            rx: diag * 0.52, ry: diag * 0.24,
+            angleDeg: -17 + 4.0 * cos(t * 0.035 + 1.0),
+            stops: [
+                .init(color: Color(red: 0x00/255, green: 0xB8/255, blue: 0xFF/255).opacity(0.42), location: 0.0),
+                .init(color: Color(red: 0x00/255, green: 0x70/255, blue: 0xF3/255).opacity(0.20), location: 0.52),
+                .init(color: .clear, location: 1.0)
+            ]
+        )
+
+        // Layer 3: Thermal Violet-Magenta Core
+        drawSoftEllipse(
+            ctx: &ctx,
+            center: CGPoint(x: w * (0.24 + 0.06 * sin(t * 0.036 + 1.8)), y: h * (0.76 + 0.05 * cos(t * 0.044 + 1.2))),
+            rx: diag * 0.42, ry: diag * 0.30,
+            angleDeg: -30 + 3.0 * sin(t * 0.048 + 2.1),
+            stops: [
+                .init(color: Color(red: 0xD9/255, green: 0x30/255, blue: 0x8A/255).opacity(0.36), location: 0.0),
+                .init(color: Color(red: 0x5B/255, green: 0x2C/255, blue: 0xC6/255).opacity(0.22), location: 0.52),
+                .init(color: .clear, location: 1.0)
+            ]
+        )
+
+        // Layer 4: Solar Thermal Amber Rim
+        drawSoftEllipse(
+            ctx: &ctx,
+            center: CGPoint(x: w * (0.58 + 0.07 * cos(t * 0.034 + 2.4)), y: h * (0.64 + 0.05 * sin(t * 0.042 + 1.7))),
+            rx: diag * 0.42, ry: diag * 0.22,
+            angleDeg: -26 + 4.0 * cos(t * 0.040 + 0.4),
+            stops: [
+                .init(color: Color(red: 0xF5/255, green: 0x8A/255, blue: 0x29/255).opacity(0.34), location: 0.0),
+                .init(color: Color(red: 0xE2/255, green: 0x4E/255, blue: 0x1B/255).opacity(0.15), location: 0.50),
+                .init(color: .clear, location: 1.0)
+            ]
+        )
+    }
+
+    // Ultra-slow-motion Light Mode: Rich, clearly visible Ocean Sapphire & Luminous Cobalt Thermal Sweep
+    private func drawLightBlueThermalSweep(ctx: inout GraphicsContext, w: CGFloat, h: CGFloat, diag: CGFloat, t: TimeInterval) {
+        // Layer 1: Deep Ocean Sapphire sweep (#082452 -> #155DFC) — unmistakably visible on porcelain canvas
+        drawSoftEllipse(
+            ctx: &ctx,
+            center: CGPoint(x: w * (0.40 + 0.06 * sin(t * 0.045)), y: h * (0.76 + 0.05 * cos(t * 0.038))),
+            rx: diag * 0.72, ry: diag * 0.44,
+            angleDeg: -22 + 3.5 * sin(t * 0.042),
+            stops: [
+                .init(color: Color(red: 0x08/255, green: 0x24/255, blue: 0x52/255).opacity(0.42), location: 0.0),
+                .init(color: Color(red: 0x0E/255, green: 0x52/255, blue: 0xD8/255).opacity(0.34), location: 0.42),
+                .init(color: Color(red: 0x3B/255, green: 0x82/255, blue: 0xF6/255).opacity(0.16), location: 0.74),
+                .init(color: .clear, location: 1.0)
+            ]
+        )
+
+        // Layer 2: Electric Sky-Cyan Luminous Band
+        drawSoftEllipse(
+            ctx: &ctx,
+            center: CGPoint(x: w * (0.32 + 0.07 * cos(t * 0.040 + 0.6)), y: h * (0.86 + 0.04 * sin(t * 0.046))),
+            rx: diag * 0.56, ry: diag * 0.28,
+            angleDeg: -16 + 4.0 * cos(t * 0.035 + 1.0),
+            stops: [
+                .init(color: Color(red: 0x00/255, green: 0xA8/255, blue: 0xFF/255).opacity(0.46), location: 0.0),
+                .init(color: Color(red: 0x38/255, green: 0xBD/255, blue: 0xF8/255).opacity(0.24), location: 0.50),
+                .init(color: .clear, location: 1.0)
+            ]
+        )
+
+        // Layer 3: Royal Cobalt-Indigo Thermal Core
+        drawSoftEllipse(
+            ctx: &ctx,
+            center: CGPoint(x: w * (0.20 + 0.06 * sin(t * 0.036 + 1.8)), y: h * (0.72 + 0.05 * cos(t * 0.044 + 1.2))),
+            rx: diag * 0.44, ry: diag * 0.32,
+            angleDeg: -28 + 3.0 * sin(t * 0.048 + 2.1),
+            stops: [
+                .init(color: Color(red: 0x1D/255, green: 0x4E/255, blue: 0xD8/255).opacity(0.36), location: 0.0),
+                .init(color: Color(red: 0x4F/255, green: 0x46/255, blue: 0xE5/255).opacity(0.18), location: 0.52),
+                .init(color: .clear, location: 1.0)
+            ]
+        )
+
+        // Layer 4: Fresh Glacier-Teal & Soft Sapphire Rim on the right arc
+        drawSoftEllipse(
+            ctx: &ctx,
+            center: CGPoint(x: w * (0.64 + 0.07 * cos(t * 0.034 + 2.4)), y: h * (0.68 + 0.05 * sin(t * 0.042 + 1.7))),
+            rx: diag * 0.44, ry: diag * 0.26,
+            angleDeg: -24 + 4.0 * cos(t * 0.040 + 0.4),
+            stops: [
+                .init(color: Color(red: 0x06/255, green: 0xB6/255, blue: 0xD4/255).opacity(0.32), location: 0.0),
+                .init(color: Color(red: 0x25/255, green: 0x63/255, blue: 0xEB/255).opacity(0.14), location: 0.54),
+                .init(color: .clear, location: 1.0)
+            ]
+        )
+    }
+
+    /// Draws an organically feathered radial gradient stretched into an angled ellipse — pure GPU, zero blur cost.
+    private func drawSoftEllipse(
+        ctx: inout GraphicsContext,
+        center: CGPoint,
+        rx: CGFloat,
+        ry: CGFloat,
+        angleDeg: Double,
+        stops: [Gradient.Stop]
+    ) {
+        var copy = ctx
+        copy.translateBy(x: center.x, y: center.y)
+        copy.rotate(by: .degrees(angleDeg))
+        copy.scaleBy(x: 1.0, y: ry / max(rx, 1.0))
+
+        let rect = CGRect(x: -rx, y: -rx, width: rx * 2, height: rx * 2)
+        let shading = GraphicsContext.Shading.radialGradient(
+            Gradient(stops: stops),
+            center: .zero,
+            startRadius: 0,
+            endRadius: rx
+        )
+        copy.fill(Path(ellipseIn: rect), with: shading)
     }
 }
 

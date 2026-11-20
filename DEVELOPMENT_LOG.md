@@ -30,6 +30,8 @@ Bu doküman, **SierraPort** projesinde yapılan tüm geliştirmeleri **gün, tar
 | Cuma, 20 Kasım 2026 | `20:30` | *(push bekliyor)* | Gerçek Inter v4.1 Font Paketi Gömülmesi, Yüzen Başlatıcı Çerçeve/Geri Dönüş Düzeltmeleri, Beyaz Maskot İkonu ve Canlı Port Önerileri |
 | Cuma, 20 Kasım 2026 | `21:21` | *(push bekliyor)* | Kısayol Ayarlama Sayfası için Slow-Motion Termal Gradyan (`ThermalGradientBackground`) ve Buzlu Cam Kart UI |
 | Cuma, 20 Kasım 2026 | `21:26` | *(push bekliyor)* | Kısmi Çapraz Termal Tutulma Gradyanı (`ThermalEclipseBackground` + Film Greni) ve Tek Seferlik 3 Adımlı İlk Kurulum Sihirbazı (Tema → Güvenlik Profili → Kısayol) |
+| Cuma, 20 Kasım 2026 | `21:28` | *(push bekliyor)* | İlk Kurulum Test Betiği (`scripts/test-onboarding.sh`) — tek komutla ilk açılış simülasyonu ve `--full` tam sıfırlama |
+| Cuma, 20 Kasım 2026 | `21:34` | *(push bekliyor)* | 60/120fps GPU `Canvas` Slow-Motion Termal Gradyan, Akıcı Yönlü Adım Geçişleri, `Enter (⏎)` İlerleme Kısayolu ve Canlı Light Mode Mavi Termal Palet |
 
 ---
 
@@ -242,6 +244,26 @@ Bu doküman, **SierraPort** projesinde yapılan tüm geliştirmeleri **gün, tar
   3. **Global Kısayol (Quick Launcher Shortcut):** İkili kısayol kaydedici (`TactileKeycapView` + hazır seçenekler).
 - **Tekrar Sormama Garantisi:** Tamamlandığında `@AppStorage("sierraport_setup_wizard_done_v2")` bayrağı kalıcı olarak kaydedilir ve sonraki açılışlarda doğrudan ana uygulama başlar; kullanıcı ileride kısayolunu değiştirmek isterse sol menüdeki **Quick Launch** düğmesi doğrudan Kısayol adımını açar.
 - **Kullanım Değeri:** Bireysel geliştiriciler ve kurumsal ekipler uygulamayı ilk kurulumda 10 saniye içinde kendi tema, güvenlik sıkılığı ve sistem geneli kısayol tercihlerine göre kişiselleştirip doğrudan kullanıma geçebilir.
+
+---
+
+## Cuma, 20 Kasım 2026 — `21:28` · Commit: *(push bekliyor)*
+### İlk Kurulum (Onboarding) Test Betiği (`scripts/test-onboarding.sh`)
+**Etkilenen Modüller:** `scripts/test-onboarding.sh`
+
+- Uygulamanın `dev.sierraport.macos` kullanıcı tercihlerindeki `sierraport_setup_wizard_done_v2` bayrağını sıfırlayıp çalışan örneği kapatarak `SierraPort.app` uygulamasını sanki ilk kez açılıyormuş gibi başlatan çalıştırılabilir test betiği eklendi.
+- `--full` parametresi verildiğinde tema, güvenlik profili, kısayol ve tüm `UserDefaults` kayıtlarını sıfırlayarak tam sıfırdan kurulum testi yapılmasını sağlar.
+
+---
+
+## Cuma, 20 Kasım 2026 — `21:34` · Commit: *(push bekliyor)*
+### 60/120fps GPU `Canvas` Slow-Motion Termal Gradyan, `Enter (⏎)` Kısayolu ve Light Mode Mavi Palet
+**Etkilenen Modüller:** `macos/SierraPortApp/Sources/SierraPortApp/ShortcutOnboardingView.swift`
+
+- **Yüksek Kare Hızı & Gerçek Slow-Motion (`Canvas(rendersAsynchronously: true)`):** Önceki kare hızını düşüren 4 katmanlı Gaussian `.blur(radius: 50)` ve her karede yeniden çizilen gren/material yükü kaldırıldı; yerine sıfır blur maliyetli, doğrudan GPU üzerinde çizilen yumuşak çok duraklı eliptik `RadialGradient` katmanları ve ağır çekim (`t * 0.034–0.048`) süzülme hareketi getirildi. Gren dokusu `TimelineView` dışına alınarak statik katman haline getirildi.
+- **Taze ve Yönlü Adım Geçişleri:** İleri/geri yön algılayan (`isMovingForward`) kayma + hafif ölçek + opaklık spring geçişleri (`.spring(response: 0.36, dampingFraction: 0.88)`) ile tema, güvenlik profili ve kısayol adımları arasında sıfır takılmalı geçiş sağlandı.
+- **Enter (`⏎`) ile İlerleme Kısayolu:** `NSEvent` yerel klavye dinleyicisi ile özel kısayol kaydı aktif değilken `Enter` / `Return` tuşuna basıldığında doğrudan bir sonraki adıma geçilmesi (son adımda kurulumu tamamlaması) ve ana butonlarda `⏎` tuş rozeti gösterilmesi eklendi.
+- **Light Mode Canlı Mavi Termal Degrade:** Açık tema seçildiğinde arka planın soluklaşmasına yol açan tam ekran örtü kaldırıldı; `#F5F6F8` porselen zemin üzerinde net ve canlı görünen derin okyanus safiri (`#082452 → #0E52D8`), elektrik gök mavisi (`#00A8FF → #38BDF8`), kraliyet kobalt-indigo (`#1D4ED8`) ve buzul camgöbeği (`#06B6D4`) termal paleti eklendi.
 
 ---
 
