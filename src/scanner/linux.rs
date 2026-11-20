@@ -1,21 +1,25 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::net::{Ipv4Addr, Ipv6Addr};
 use std::path::Path;
 
-use crate::models::{PortEntry, Protocol, SocketState};
+use crate::models::{PortEntry, ProcessAncestor, Protocol, SocketState};
 
 #[derive(Debug, Clone)]
 struct ProcessInfo {
     pid: u32,
+    ppid: Option<u32>,
+    user: Option<String>,
     name: String,
     cmdline: Option<String>,
+    memory_kb: Option<u64>,
 }
 
 /// Scan active TCP/UDP sockets directly from Linux `/proc/net/*` and correlate
 /// socket inodes with `/proc/<pid>/fd` for zero-subprocess speed.
 pub fn scan_system_ports() -> Result<Vec<PortEntry>, String> {
-    let inode_map = build_inode_process_map();
+    let uid_map = load_passwd_uid_map();
+    let inode_map = build_inode_process_map(&uid_map);
     let mut entries = Vec::with_capacity(64);
 
     let sources = [
@@ -39,6 +43,37 @@ pub fn scan_system_ports() -> Result<Vec<PortEntry>, String> {
     });
 
     Ok(entries)
+}
+
+/// Walk the process ancestry tree directly via `/proc/<pid>/status`.
+pub fn get_process_ancestry(start_pid: u32) -> Vec<ProcessAncestor> {
+    let uid_map = load_passwd_uid_map();
+    let mut chain = Vec::new();
+    let mut visited = HashSet::new();
+    let mut current = start_pid;
+
+    while current > 0 && visited.insert(current) && chain.len() < 16 {
+        let pid_path = Path::new("/proc").join(current.to_string());
+        if !pid_path.exists() {
+            break;
+        }
+        let info = read_process_info(current, &pid_path, &uid_map);
+        let next_ppid = info.ppid;
+        chain.push(ProcessAncestor {
+            pid: info.pid,
+            ppid: info.ppid,
+            user: info.user,
+            name: info.name,
+            memory_kb: info.memory_kb,
+            cmdline: info.cmdline,
+        });
+        match next_ppid {
+            Some(parent) if parent != current && parent > 0 => current = parent,
+            _ => break,
+        }
+    }
+
+    chain
 }
 
 fn parse_proc_net(
@@ -82,8 +117,11 @@ fn parse_proc_net(
             remote_port,
             state,
             pid: proc_info.map(|p| p.pid),
+            ppid: proc_info.and_then(|p| p.ppid),
+            user: proc_info.and_then(|p| p.user.clone()),
             process_name: proc_info.map(|p| p.name.clone()),
             cmdline: proc_info.and_then(|p| p.cmdline.clone()),
+            memory_kb: proc_info.and_then(|p| p.memory_kb),
         });
     }
 }
@@ -106,7 +144,6 @@ fn parse_ipv4_hex(hex: &str) -> Option<String> {
         return None;
     }
     let raw = u32::from_str_radix(hex, 16).ok()?;
-    // /proc/net/tcp stores IPv4 addresses in host byte order on little-endian Linux.
     let bytes = raw.to_le_bytes();
     Some(Ipv4Addr::from(bytes).to_string())
 }
@@ -125,7 +162,7 @@ fn parse_ipv6_hex(hex: &str) -> Option<String> {
     Some(Ipv6Addr::from(bytes).to_string())
 }
 
-fn build_inode_process_map() -> HashMap<u64, ProcessInfo> {
+fn build_inode_process_map(uid_map: &HashMap<u32, String>) -> HashMap<u64, ProcessInfo> {
     let mut map = HashMap::new();
     let Ok(proc_dir) = fs::read_dir("/proc") else {
         return map;
@@ -156,7 +193,7 @@ fn build_inode_process_map() -> HashMap<u64, ProcessInfo> {
                 continue;
             };
             if let Some(inode) = extract_socket_inode(link_str) {
-                let info = proc_info.get_or_insert_with(|| read_process_info(pid, &pid_path));
+                let info = proc_info.get_or_insert_with(|| read_process_info(pid, &pid_path, uid_map));
                 map.entry(inode).or_insert_with(|| info.clone());
             }
         }
@@ -170,7 +207,11 @@ fn extract_socket_inode(link: &str) -> Option<u64> {
     inner.parse::<u64>().ok()
 }
 
-fn read_process_info(pid: u32, pid_path: &Path) -> ProcessInfo {
+fn read_process_info(
+    pid: u32,
+    pid_path: &Path,
+    uid_map: &HashMap<u32, String>,
+) -> ProcessInfo {
     let name = fs::read_to_string(pid_path.join("comm"))
         .map(|s| s.trim().to_string())
         .unwrap_or_else(|_| "unknown".to_string());
@@ -193,5 +234,56 @@ fn read_process_info(pid: u32, pid_path: &Path) -> ProcessInfo {
         }
     });
 
-    ProcessInfo { pid, name, cmdline }
+    let mut ppid = None;
+    let mut user = None;
+    let mut memory_kb = None;
+
+    if let Ok(status) = fs::read_to_string(pid_path.join("status")) {
+        for line in status.lines() {
+            if let Some(val) = line.strip_prefix("PPid:") {
+                ppid = val.trim().parse::<u32>().ok();
+            } else if let Some(val) = line.strip_prefix("Uid:") {
+                if let Some(uid_s) = val.split_whitespace().next()
+                    && let Ok(uid) = uid_s.parse::<u32>()
+                {
+                    user = Some(
+                        uid_map
+                            .get(&uid)
+                            .cloned()
+                            .unwrap_or_else(|| uid.to_string()),
+                    );
+                }
+            } else if let Some(val) = line.strip_prefix("VmRSS:") {
+                if let Some(kb_s) = val.split_whitespace().next() {
+                    memory_kb = kb_s.parse::<u64>().ok();
+                }
+            }
+        }
+    }
+
+    ProcessInfo {
+        pid,
+        ppid,
+        user,
+        name,
+        cmdline,
+        memory_kb,
+    }
+}
+
+fn load_passwd_uid_map() -> HashMap<u32, String> {
+    let mut map = HashMap::new();
+    let Ok(content) = fs::read_to_string("/etc/passwd") else {
+        return map;
+    };
+    for line in content.lines() {
+        let mut parts = line.split(':');
+        let Some(name) = parts.next() else { continue };
+        let _pw = parts.next();
+        let Some(uid_s) = parts.next() else { continue };
+        if let Ok(uid) = uid_s.parse::<u32>() {
+            map.insert(uid, name.to_string());
+        }
+    }
+    map
 }

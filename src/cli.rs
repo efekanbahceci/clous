@@ -1,9 +1,38 @@
-use crate::models::{FilterOptions, parse_port_spec};
+use crate::models::{
+    FilterOptions, OutputFormat, SocketState, SortField, parse_port_spec,
+};
 
 #[derive(Debug, Clone)]
 pub struct GlobalOptions {
-    pub json: bool,
+    pub format: OutputFormat,
+    pub wide: bool,
     pub no_color: bool,
+}
+
+impl GlobalOptions {
+    pub fn is_json(&self) -> bool {
+        self.format == OutputFormat::Json
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum KillTarget {
+    Ports(String),
+    Pid(u32),
+    Process(String),
+}
+
+#[derive(Debug, Clone)]
+pub enum SnapshotAction {
+    Save {
+        path: String,
+        filter: FilterOptions,
+    },
+    Diff {
+        path: String,
+        filter: FilterOptions,
+        fail_on_drift: bool,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -14,19 +43,49 @@ pub enum Command {
     Watch {
         filter: FilterOptions,
         interval_ms: u64,
+        log_file: Option<String>,
+        alert_new: bool,
     },
     Check {
         host: String,
         ports_spec: String,
         timeout_ms: u64,
+        banner: bool,
+        open_only: bool,
+        concurrency: usize,
     },
     Who {
         port: u16,
     },
-    Kill {
+    Inspect {
         port: u16,
+        probe: bool,
+        timeout_ms: u64,
+    },
+    Audit {
+        filter: FilterOptions,
+        strict: bool,
+    },
+    Snapshot(SnapshotAction),
+    Free {
+        host: String,
+        range_start: u16,
+        range_end: u16,
+        count: usize,
+        plain: bool,
+    },
+    Wait {
+        host: String,
+        port: u16,
+        wait_until_open: bool,
+        timeout_ms: u64,
+        interval_ms: u64,
+    },
+    Kill {
+        target: KillTarget,
         force: bool,
         yes: bool,
+        wait_release: bool,
     },
     Stats {
         filter: FilterOptions,
@@ -45,7 +104,8 @@ pub fn parse_args<I: IntoIterator<Item = String>>(args: I) -> Result<CliArgs, St
     let raw: Vec<String> = args.into_iter().skip(1).collect();
 
     let mut global = GlobalOptions {
-        json: false,
+        format: OutputFormat::Table,
+        wide: false,
         no_color: std::env::var_os("NO_COLOR").is_some(),
     };
 
@@ -94,6 +154,8 @@ pub fn parse_args<I: IntoIterator<Item = String>>(args: I) -> Result<CliArgs, St
         }
         "watch" | "monitor" | "w" => {
             let mut interval_ms: u64 = 1000;
+            let mut log_file: Option<String> = None;
+            let mut alert_new = false;
             let mut filtered_rest = Vec::new();
             let mut i = 0;
             while i < rest.len() {
@@ -110,6 +172,14 @@ pub fn parse_args<I: IntoIterator<Item = String>>(args: I) -> Result<CliArgs, St
                             return Err("Minimum interval is 100ms".to_string());
                         }
                     }
+                    "--log" => {
+                        i += 1;
+                        let val = rest
+                            .get(i)
+                            .ok_or_else(|| "Missing file path for --log".to_string())?;
+                        log_file = Some(val.clone());
+                    }
+                    "--alert-new" | "--bell" => alert_new = true,
                     other => filtered_rest.push(other.to_string()),
                 }
                 i += 1;
@@ -119,6 +189,8 @@ pub fn parse_args<I: IntoIterator<Item = String>>(args: I) -> Result<CliArgs, St
                 command: Command::Watch {
                     filter,
                     interval_ms,
+                    log_file,
+                    alert_new,
                 },
                 global,
             })
@@ -126,6 +198,9 @@ pub fn parse_args<I: IntoIterator<Item = String>>(args: I) -> Result<CliArgs, St
         "check" | "probe" | "ping" => {
             let mut host = "127.0.0.1".to_string();
             let mut timeout_ms: u64 = 500;
+            let mut banner = false;
+            let mut open_only = false;
+            let mut concurrency: usize = 64;
             let mut positional = Vec::new();
             let mut i = 0;
             while i < rest.len() {
@@ -146,7 +221,18 @@ pub fn parse_args<I: IntoIterator<Item = String>>(args: I) -> Result<CliArgs, St
                             .parse()
                             .map_err(|_| format!("Invalid timeout (ms): '{val}'"))?;
                     }
-                    "--json" => global.json = true,
+                    "-b" | "--banner" => banner = true,
+                    "--open-only" => open_only = true,
+                    "-c" | "--concurrency" => {
+                        i += 1;
+                        let val = rest
+                            .get(i)
+                            .ok_or_else(|| "Missing value for --concurrency".to_string())?;
+                        concurrency = val
+                            .parse()
+                            .map_err(|_| format!("Invalid concurrency: '{val}'"))?;
+                    }
+                    "--json" => global.format = OutputFormat::Json,
                     "--no-color" => global.no_color = true,
                     "-h" | "--help" => {
                         return Ok(CliArgs {
@@ -173,6 +259,9 @@ pub fn parse_args<I: IntoIterator<Item = String>>(args: I) -> Result<CliArgs, St
                     host,
                     ports_spec,
                     timeout_ms,
+                    banner,
+                    open_only,
+                    concurrency,
                 },
                 global,
             })
@@ -181,7 +270,7 @@ pub fn parse_args<I: IntoIterator<Item = String>>(args: I) -> Result<CliArgs, St
             let mut port_opt: Option<u16> = None;
             for arg in rest {
                 match arg.as_str() {
-                    "--json" => global.json = true,
+                    "--json" => global.format = OutputFormat::Json,
                     "--no-color" => global.no_color = true,
                     "-h" | "--help" => {
                         return Ok(CliArgs {
@@ -206,15 +295,284 @@ pub fn parse_args<I: IntoIterator<Item = String>>(args: I) -> Result<CliArgs, St
                 global,
             })
         }
-        "kill" => {
+        "inspect" | "info" | "deep" => {
             let mut port_opt: Option<u16> = None;
-            let mut force = false;
-            let mut yes = false;
+            let mut probe = false;
+            let mut timeout_ms: u64 = 500;
+            let mut i = 0;
+            while i < rest.len() {
+                match rest[i].as_str() {
+                    "--probe" | "-b" => probe = true,
+                    "-t" | "--timeout" => {
+                        i += 1;
+                        let val = rest
+                            .get(i)
+                            .ok_or_else(|| "Missing value for --timeout".to_string())?;
+                        timeout_ms = val
+                            .parse()
+                            .map_err(|_| format!("Invalid timeout (ms): '{val}'"))?;
+                    }
+                    "--json" => global.format = OutputFormat::Json,
+                    "--no-color" => global.no_color = true,
+                    "-h" | "--help" => {
+                        return Ok(CliArgs {
+                            command: Command::Help,
+                            global,
+                        });
+                    }
+                    a if a.starts_with('-') => {
+                        return Err(format!("Unknown flag for inspect: '{a}'"));
+                    }
+                    a => {
+                        let p: u16 = a
+                            .parse()
+                            .map_err(|_| format!("Invalid port number: '{a}'"))?;
+                        port_opt = Some(p);
+                    }
+                }
+                i += 1;
+            }
+            let port = port_opt
+                .ok_or_else(|| "Usage: sierraport inspect <port> [--probe]".to_string())?;
+            Ok(CliArgs {
+                command: Command::Inspect {
+                    port,
+                    probe,
+                    timeout_ms,
+                },
+                global,
+            })
+        }
+        "audit" | "sec" | "security" => {
+            let mut strict = false;
+            let mut filtered_rest = Vec::new();
             for arg in rest {
                 match arg.as_str() {
+                    "--strict" => strict = true,
+                    "-h" | "--help" => {
+                        return Ok(CliArgs {
+                            command: Command::Help,
+                            global,
+                        });
+                    }
+                    other => filtered_rest.push(other.to_string()),
+                }
+            }
+            let filter = parse_filter_flags(&filtered_rest, &mut global, false)?;
+            Ok(CliArgs {
+                command: Command::Audit { filter, strict },
+                global,
+            })
+        }
+        "snapshot" | "snap" => {
+            let action = rest
+                .first()
+                .map(|s| s.as_str())
+                .ok_or_else(|| "Usage: sierraport snapshot <save|diff> <file>".to_string())?;
+            let tail = &rest[1..];
+            match action {
+                "save" => {
+                    let mut path: Option<String> = None;
+                    let mut flag_args = Vec::new();
+                    for arg in tail {
+                        if !arg.starts_with('-') && path.is_none() {
+                            path = Some(arg.clone());
+                        } else {
+                            flag_args.push(arg.clone());
+                        }
+                    }
+                    let path = path.ok_or_else(|| {
+                        "Usage: sierraport snapshot save <file>".to_string()
+                    })?;
+                    let filter = parse_filter_flags(&flag_args, &mut global, true)?;
+                    Ok(CliArgs {
+                        command: Command::Snapshot(SnapshotAction::Save { path, filter }),
+                        global,
+                    })
+                }
+                "diff" => parse_diff_args(tail, global),
+                other => Err(format!(
+                    "Unknown snapshot subcommand: '{other}'. Use 'save' or 'diff'."
+                )),
+            }
+        }
+        "diff" => parse_diff_args(rest, global),
+        "free" | "available" => {
+            let mut host = "127.0.0.1".to_string();
+            let mut range_start: u16 = 3000;
+            let mut range_end: u16 = 9999;
+            let mut count: usize = 1;
+            let mut plain = false;
+            let mut i = 0;
+            while i < rest.len() {
+                match rest[i].as_str() {
+                    "-H" | "--host" => {
+                        i += 1;
+                        host = rest
+                            .get(i)
+                            .ok_or_else(|| "Missing value for --host".to_string())?
+                            .clone();
+                    }
+                    "-r" | "--range" => {
+                        i += 1;
+                        let val = rest
+                            .get(i)
+                            .ok_or_else(|| "Missing value for --range".to_string())?;
+                        let ranges = parse_port_spec(val)?;
+                        if let Some(first) = ranges.first() {
+                            range_start = first.start;
+                            range_end = first.end;
+                        }
+                    }
+                    "-n" | "--count" => {
+                        i += 1;
+                        let val = rest
+                            .get(i)
+                            .ok_or_else(|| "Missing value for --count".to_string())?;
+                        count = val
+                            .parse()
+                            .map_err(|_| format!("Invalid count: '{val}'"))?;
+                        if count == 0 || count > 256 {
+                            return Err("Count must be between 1 and 256".to_string());
+                        }
+                    }
+                    "--plain" | "-q" => plain = true,
+                    "--json" => global.format = OutputFormat::Json,
+                    "--no-color" => global.no_color = true,
+                    "-h" | "--help" => {
+                        return Ok(CliArgs {
+                            command: Command::Help,
+                            global,
+                        });
+                    }
+                    other => return Err(format!("Unknown flag for free: '{other}'")),
+                }
+                i += 1;
+            }
+            Ok(CliArgs {
+                command: Command::Free {
+                    host,
+                    range_start,
+                    range_end,
+                    count,
+                    plain,
+                },
+                global,
+            })
+        }
+        "wait" => {
+            let mut host = "127.0.0.1".to_string();
+            let mut wait_until_open = true;
+            let mut timeout_ms: u64 = 30_000;
+            let mut interval_ms: u64 = 250;
+            let mut positional = Vec::new();
+            let mut i = 0;
+            while i < rest.len() {
+                match rest[i].as_str() {
+                    "-H" | "--host" => {
+                        i += 1;
+                        host = rest
+                            .get(i)
+                            .ok_or_else(|| "Missing value for --host".to_string())?
+                            .clone();
+                    }
+                    "--until" => {
+                        i += 1;
+                        let val = rest
+                            .get(i)
+                            .ok_or_else(|| "Missing value for --until".to_string())?;
+                        match val.to_ascii_lowercase().as_str() {
+                            "open" | "up" | "ready" => wait_until_open = true,
+                            "closed" | "close" | "down" => wait_until_open = false,
+                            other => {
+                                return Err(format!(
+                                    "Invalid --until value '{other}'. Expected 'open' or 'closed'."
+                                ));
+                            }
+                        }
+                    }
+                    "-t" | "--timeout" => {
+                        i += 1;
+                        let val = rest
+                            .get(i)
+                            .ok_or_else(|| "Missing value for --timeout".to_string())?;
+                        timeout_ms = val
+                            .parse()
+                            .map_err(|_| format!("Invalid timeout (ms): '{val}'"))?;
+                    }
+                    "-i" | "--interval" => {
+                        i += 1;
+                        let val = rest
+                            .get(i)
+                            .ok_or_else(|| "Missing value for --interval".to_string())?;
+                        interval_ms = val
+                            .parse()
+                            .map_err(|_| format!("Invalid interval (ms): '{val}'"))?;
+                    }
+                    "--json" => global.format = OutputFormat::Json,
+                    "--no-color" => global.no_color = true,
+                    "-h" | "--help" => {
+                        return Ok(CliArgs {
+                            command: Command::Help,
+                            global,
+                        });
+                    }
+                    a if a.starts_with('-') => {
+                        return Err(format!("Unknown flag for wait: '{a}'"));
+                    }
+                    a => positional.push(a.to_string()),
+                }
+                i += 1;
+            }
+            let port_s = positional
+                .first()
+                .ok_or_else(|| "Usage: sierraport wait <port> [host] [--until open|closed]".to_string())?;
+            let port: u16 = port_s
+                .parse()
+                .map_err(|_| format!("Invalid port number: '{port_s}'"))?;
+            if let Some(h) = positional.get(1) {
+                host = h.clone();
+            }
+            Ok(CliArgs {
+                command: Command::Wait {
+                    host,
+                    port,
+                    wait_until_open,
+                    timeout_ms,
+                    interval_ms,
+                },
+                global,
+            })
+        }
+        "kill" => {
+            let mut target: Option<KillTarget> = None;
+            let mut force = false;
+            let mut yes = false;
+            let mut wait_release = false;
+            let mut i = 0;
+            while i < rest.len() {
+                match rest[i].as_str() {
                     "-f" | "--force" => force = true,
                     "-y" | "--yes" => yes = true,
-                    "--json" => global.json = true,
+                    "--wait" => wait_release = true,
+                    "--pid" => {
+                        i += 1;
+                        let val = rest
+                            .get(i)
+                            .ok_or_else(|| "Missing value for --pid".to_string())?;
+                        let pid: u32 = val
+                            .parse()
+                            .map_err(|_| format!("Invalid PID: '{val}'"))?;
+                        target = Some(KillTarget::Pid(pid));
+                    }
+                    "--proc" | "--process" => {
+                        i += 1;
+                        let val = rest
+                            .get(i)
+                            .ok_or_else(|| "Missing value for --proc".to_string())?;
+                        target = Some(KillTarget::Process(val.clone()));
+                    }
+                    "--json" => global.format = OutputFormat::Json,
                     "--no-color" => global.no_color = true,
                     "-h" | "--help" => {
                         return Ok(CliArgs {
@@ -226,17 +584,24 @@ pub fn parse_args<I: IntoIterator<Item = String>>(args: I) -> Result<CliArgs, St
                         return Err(format!("Unknown flag for kill: '{a}'"));
                     }
                     a => {
-                        let p: u16 = a
-                            .parse()
-                            .map_err(|_| format!("Invalid port number: '{a}'"))?;
-                        port_opt = Some(p);
+                        // Validate port spec early
+                        parse_port_spec(a)?;
+                        target = Some(KillTarget::Ports(a.to_string()));
                     }
                 }
+                i += 1;
             }
-            let port =
-                port_opt.ok_or_else(|| "Usage: sierraport kill <port> [-f] [-y]".to_string())?;
+            let target = target.ok_or_else(|| {
+                "Usage: sierraport kill <port|range|list> | --pid <PID> | --proc <NAME> [-f] [-y] [--wait]"
+                    .to_string()
+            })?;
             Ok(CliArgs {
-                command: Command::Kill { port, force, yes },
+                command: Command::Kill {
+                    target,
+                    force,
+                    yes,
+                    wait_release,
+                },
                 global,
             })
         }
@@ -251,6 +616,35 @@ pub fn parse_args<I: IntoIterator<Item = String>>(args: I) -> Result<CliArgs, St
             "Unknown command: '{other}'. Run 'sierraport --help' for usage."
         )),
     }
+}
+
+fn parse_diff_args(args: &[String], mut global: GlobalOptions) -> Result<CliArgs, String> {
+    let mut path: Option<String> = None;
+    let mut fail_on_drift = false;
+    let mut flag_args = Vec::new();
+    for arg in args {
+        match arg.as_str() {
+            "--fail-on-drift" => fail_on_drift = true,
+            "-h" | "--help" => {
+                return Ok(CliArgs {
+                    command: Command::Help,
+                    global,
+                });
+            }
+            a if !a.starts_with('-') && path.is_none() => path = Some(a.to_string()),
+            other => flag_args.push(other.to_string()),
+        }
+    }
+    let path = path.ok_or_else(|| "Usage: sierraport diff <snapshot.json> [--fail-on-drift]".to_string())?;
+    let filter = parse_filter_flags(&flag_args, &mut global, true)?;
+    Ok(CliArgs {
+        command: Command::Snapshot(SnapshotAction::Diff {
+            path,
+            filter,
+            fail_on_drift,
+        }),
+        global,
+    })
 }
 
 fn parse_filter_flags(
@@ -268,6 +662,8 @@ fn parse_filter_flags(
         match args[i].as_str() {
             "--tcp" | "-t" => filter.tcp_only = true,
             "--udp" | "-u" => filter.udp_only = true,
+            "-4" | "--ipv4" => filter.ipv4_only = true,
+            "-6" | "--ipv6" => filter.ipv6_only = true,
             "--listen" | "-l" => {
                 filter.listen_only = true;
                 filter.all_states = false;
@@ -275,6 +671,23 @@ fn parse_filter_flags(
             "--all" | "-a" => {
                 filter.all_states = true;
                 filter.listen_only = false;
+            }
+            "--exposed" => filter.exposed_only = true,
+            "--state" => {
+                i += 1;
+                let val = args
+                    .get(i)
+                    .ok_or_else(|| "Missing value for --state".to_string())?;
+                filter.state_filter = Some(SocketState::from_name(val));
+                filter.all_states = true;
+                filter.listen_only = false;
+            }
+            "--user" => {
+                i += 1;
+                let val = args
+                    .get(i)
+                    .ok_or_else(|| "Missing value for --user".to_string())?;
+                filter.user_filter = Some(val.clone());
             }
             "--port" | "-p" => {
                 i += 1;
@@ -291,7 +704,25 @@ fn parse_filter_flags(
                     .ok_or_else(|| "Missing value for --proc".to_string())?;
                 filter.process_filter = Some(name.clone());
             }
-            "--json" => global.json = true,
+            "--sort" | "-s" => {
+                i += 1;
+                let val = args
+                    .get(i)
+                    .ok_or_else(|| "Missing value for --sort".to_string())?;
+                filter.sort_by = SortField::parse(val)?;
+            }
+            "--desc" | "-r" => filter.descending = true,
+            "-w" | "--wide" => global.wide = true,
+            "--format" => {
+                i += 1;
+                let val = args
+                    .get(i)
+                    .ok_or_else(|| "Missing value for --format".to_string())?;
+                global.format = OutputFormat::parse(val)?;
+            }
+            "--json" => global.format = OutputFormat::Json,
+            "--csv" => global.format = OutputFormat::Csv,
+            "--compact" => global.format = OutputFormat::Compact,
             "--no-color" => global.no_color = true,
             other => return Err(format!("Unknown option: '{other}'")),
         }
@@ -302,53 +733,68 @@ fn parse_filter_flags(
         filter.tcp_only = false;
         filter.udp_only = false;
     }
+    if filter.ipv4_only && filter.ipv6_only {
+        filter.ipv4_only = false;
+        filter.ipv6_only = false;
+    }
 
     Ok(filter)
 }
 
 pub fn help_text() -> &'static str {
-    r#"SierraPort — Fast terminal port monitoring & inspection tool
+    r#"SierraPort — Advanced terminal port monitoring, security audit & inspection system
 
 USAGE:
   sierraport [COMMAND] [OPTIONS]
 
 COMMANDS:
-  list, ls                 List active ports (default: listening ports)
+  list, ls                 List active ports with bind exposure & runtime tags
   watch, monitor, w        Live real-time port monitor with open/close diff log
-  check, probe, ping       Fast concurrent TCP port connectivity check
-  who, find, pid <port>    Show process(es) occupying a specific port
-  kill <port>              Terminate process(es) listening on a port
-  stats, summary           Show socket and protocol statistics
-  help                     Show this help message
-  version                  Show version information
+  inspect, info <port>     Deep forensic inspection (process ancestry, peers, probe)
+  audit, sec               Security & socket health audit with 0-100 score
+  snapshot save <file>     Save current port baseline snapshot to JSON
+  diff <file>              Detect port/process drift against a saved snapshot
+  check, probe <ports>     Concurrent TCP port scanner with optional banner grabbing
+  free                     Find available bindable TCP port(s) in a range
+  wait <port> [host]       Wait until a port becomes open or closed (CI/dev helper)
+  who, find, pid <port>    Quick lookup of process(es) occupying a port
+  kill <target>            Terminate process(es) by port(s), --pid, or --proc
+  stats, summary           Visual ASCII bar-chart socket & exposure statistics
+  help / version           Show help or version information
 
-LIST / WATCH / STATS OPTIONS:
+FILTER, SORT & FORMAT OPTIONS (list / watch / stats / snapshot):
   -l, --listen             Show only listening/bound ports (default for list/watch)
   -a, --all                Show all socket states (ESTABLISHED, TIME_WAIT, etc.)
-  -t, --tcp                Filter TCP sockets only
-  -u, --udp                Filter UDP sockets only
+  -t, --tcp / -u, --udp    Filter by transport protocol
+  -4, --ipv4 / -6, --ipv6  Filter by IP family
+      --exposed            Show only externally exposed sockets (0.0.0.0 / :: / public)
+      --state <STATE>      Filter by exact socket state (e.g. ESTABLISHED, CLOSE_WAIT)
+      --user <NAME>        Filter by socket owner username
   -p, --port <SPEC>        Filter by port, list, or range (e.g. 80,443 or 8000-9000)
-      --proc <NAME>        Filter by process name or command line
-  -i, --interval <MS>      Refresh interval for watch mode (default: 1000, min: 100)
-      --json               Output as JSON
+      --proc <NAME>        Filter by process name or full command line
+  -s, --sort <FIELD>       Sort by: port, pid, process, state, proto, mem
+  -r, --desc               Reverse sort order
+  -w, --wide               Wide table (adds USER, MEM, CMDLINE)
+      --format <FMT>       Output format: table, json, csv, compact (or --json/--csv/--compact)
       --no-color           Disable ANSI colors
 
-CHECK OPTIONS:
-  sierraport check <PORTS> [HOST] [-H HOST] [-t TIMEOUT_MS] [--json]
-  Examples:
-    sierraport check 80,443,8080
-    sierraport check 8000-8020 127.0.0.1 -t 300
-
-KILL OPTIONS:
-  sierraport kill <PORT> [-f|--force] [-y|--yes]
-  -f, --force              Send SIGKILL / force terminate
-  -y, --yes                Skip confirmation prompt
+COMMAND-SPECIFIC OPTIONS:
+  watch:    -i, --interval <MS>  |  --log <FILE>  |  --alert-new
+  inspect:  --probe (banner/HTTP probe)  |  -t, --timeout <MS>
+  audit:    --strict (exit non-zero on HIGH/CRITICAL findings)
+  diff:     --fail-on-drift (exit non-zero if baseline drift detected)
+  check:    -H, --host <HOST> | -t <MS> | -b, --banner | --open-only | -c <THREADS>
+  free:     -r, --range <3000-9999> | -n, --count <N> | -H <HOST> | --plain
+  wait:     --until <open|closed> | -t, --timeout <MS> | -i, --interval <MS>
+  kill:     <PORT|RANGE> | --pid <PID> | --proc <NAME> | -f, --force | -y, --yes | --wait
 
 EXAMPLES:
-  sierraport                         List all listening ports
-  sierraport list --all --tcp        List all TCP connections
-  sierraport watch -i 500            Watch port changes every 500ms
-  sierraport who 3000                Inspect what is running on port 3000
-  sierraport kill 3000 -y            Kill process on port 3000 without prompt
-  sierraport stats                   Show socket statistics overview"#
+  sierraport list --wide --sort mem --desc
+  sierraport audit --strict
+  sierraport inspect 5432 --probe
+  sierraport check 1-1024 127.0.0.1 --open-only --banner
+  sierraport snapshot save baseline.json && sierraport diff baseline.json
+  sierraport free --range 8000-8999 --count 3 --plain
+  sierraport wait 3000 --until open --timeout 15000
+  sierraport watch -i 500 --log events.log --alert-new"#
 }

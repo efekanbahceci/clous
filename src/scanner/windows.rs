@@ -1,11 +1,11 @@
 use std::collections::HashMap;
 use std::process::Command;
 
-use crate::models::{PortEntry, Protocol, SocketState};
+use crate::models::{PortEntry, ProcessAncestor, Protocol, SocketState};
 
 /// Scan active TCP/UDP sockets on Windows using `netstat -ano` and `tasklist`.
 pub fn scan_system_ports() -> Result<Vec<PortEntry>, String> {
-    let pid_names = fetch_windows_process_names();
+    let pid_info = fetch_windows_process_info();
 
     let output = Command::new("netstat")
         .args(["-ano"])
@@ -47,7 +47,7 @@ pub fn scan_system_ports() -> Result<Vec<PortEntry>, String> {
         };
 
         let pid = pid_str.parse::<u32>().ok();
-        let process_name = pid.and_then(|p| pid_names.get(&p).cloned());
+        let meta = pid.and_then(|p| pid_info.get(&p));
 
         entries.push(PortEntry {
             protocol,
@@ -57,8 +57,11 @@ pub fn scan_system_ports() -> Result<Vec<PortEntry>, String> {
             remote_port,
             state,
             pid,
-            process_name,
+            ppid: None,
+            user: None,
+            process_name: meta.map(|m| m.0.clone()),
             cmdline: None,
+            memory_kb: meta.and_then(|m| m.1),
         });
     }
 
@@ -71,7 +74,23 @@ pub fn scan_system_ports() -> Result<Vec<PortEntry>, String> {
     Ok(entries)
 }
 
-fn fetch_windows_process_names() -> HashMap<u32, String> {
+pub fn get_process_ancestry(start_pid: u32) -> Vec<ProcessAncestor> {
+    let pid_info = fetch_windows_process_info();
+    if let Some((name, mem)) = pid_info.get(&start_pid) {
+        vec![ProcessAncestor {
+            pid: start_pid,
+            ppid: None,
+            user: None,
+            name: name.clone(),
+            memory_kb: *mem,
+            cmdline: None,
+        }]
+    } else {
+        Vec::new()
+    }
+}
+
+fn fetch_windows_process_info() -> HashMap<u32, (String, Option<u64>)> {
     let mut map = HashMap::new();
     let Ok(output) = Command::new("tasklist")
         .args(["/FO", "CSV", "/NH"])
@@ -86,8 +105,12 @@ fn fetch_windows_process_names() -> HashMap<u32, String> {
         if parts.len() >= 2 {
             let name = parts[0].trim_matches('"').to_string();
             let pid_s = parts[1].trim_matches('"');
+            let mem_kb = parts.get(4).and_then(|m| {
+                let digits: String = m.chars().filter(|c| c.is_ascii_digit()).collect();
+                digits.parse::<u64>().ok()
+            });
             if let Ok(pid) = pid_s.parse::<u32>() {
-                map.insert(pid, name);
+                map.insert(pid, (name, mem_kb));
             }
         }
     }
