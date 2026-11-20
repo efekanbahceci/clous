@@ -9,6 +9,8 @@ final class SierraPortViewModel: ObservableObject {
     @Published var commandInput: String = ""
     @Published var blocks: [CommandBlock] = []
     @Published var isExecuting: Bool = false
+    @Published var activeChipCommand: String? = nil
+    @Published var highlightedBlockId: UUID? = nil
 
     // Command history
     @Published var history: [String] = []
@@ -19,6 +21,7 @@ final class SierraPortViewModel: ObservableObject {
     @Published var streamIntervalMs: Int = 1000
     @Published var streamAllStates: Bool = false
     @Published var latestTick: StreamTick? = nil
+    @Published var tickHistory: [TickHistoryPoint] = []
     @Published var recentEvents: [StreamEvent] = []
     @Published var watchSearch: String = ""
     private var streamProcess: Process? = nil
@@ -28,8 +31,10 @@ final class SierraPortViewModel: ObservableObject {
     @Published var statsReport: StatsReport? = nil
     @Published var isLoadingAudit: Bool = false
     @Published var isLoadingStats: Bool = false
+    @Published var liveAnalyticsEnabled: Bool = true
 
     // Slide-over Forensic Inspector
+    @Published var selectedPort: Int? = nil
     @Published var inspectedReport: InspectReport? = nil
     @Published var isInspecting: Bool = false
     @Published var showingInspector: Bool = false
@@ -44,7 +49,6 @@ final class SierraPortViewModel: ObservableObject {
     init() {
         startLiveStream()
         Task {
-            await executeCommand("list")
             await refreshAudit()
             await refreshStats()
         }
@@ -267,17 +271,46 @@ final class SierraPortViewModel: ObservableObject {
         }
     }
 
+    func runSuggestion(_ cmd: String) {
+        activeChipCommand = cmd
+        commandInput = ""
+        historyIndex = nil
+        if history.last != cmd {
+            history.append(cmd)
+        }
+        Task {
+            await executeCommand(cmd)
+            if activeChipCommand == cmd {
+                activeChipCommand = nil
+            }
+        }
+    }
+
     private func appendBlock(cmd: String, durationMs: Int, payload: BlockPayload, raw: String) {
+        // Collapse older blocks so the newly executed command opens cleanly with zero collision
+        for idx in blocks.indices {
+            blocks[idx].isExpanded = false
+        }
         let block = CommandBlock(
             command: cmd,
             timestamp: Date(),
             durationMs: durationMs,
             payload: payload,
-            rawOutput: raw
+            rawOutput: raw,
+            showRaw: false,
+            isExpanded: true
         )
         blocks.insert(block, at: 0)
+        highlightedBlockId = block.id
         if blocks.count > 40 {
             blocks.removeLast()
+        }
+        let targetId = block.id
+        Task {
+            try? await Task.sleep(nanoseconds: 1_600_000_000)
+            if highlightedBlockId == targetId {
+                highlightedBlockId = nil
+            }
         }
     }
 
@@ -285,6 +318,28 @@ final class SierraPortViewModel: ObservableObject {
         if let idx = blocks.firstIndex(where: { $0.id == blockId }) {
             blocks[idx].showRaw.toggle()
         }
+    }
+
+    func toggleExpand(for blockId: UUID) {
+        if let idx = blocks.firstIndex(where: { $0.id == blockId }) {
+            blocks[idx].isExpanded.toggle()
+        }
+    }
+
+    func collapseAllBlocks() {
+        for idx in blocks.indices {
+            blocks[idx].isExpanded = false
+        }
+    }
+
+    func expandAllBlocks() {
+        for idx in blocks.indices {
+            blocks[idx].isExpanded = true
+        }
+    }
+
+    func removeBlock(for blockId: UUID) {
+        blocks.removeAll { $0.id == blockId }
     }
 
     // MARK: - Live Stream
@@ -296,11 +351,27 @@ final class SierraPortViewModel: ObservableObject {
             Task { @MainActor [weak self] in
                 guard let self else { return }
                 self.latestTick = tick
+                self.tickHistory.append(
+                    TickHistoryPoint(
+                        tick: tick.tick,
+                        time: tick.timestampUtc,
+                        active: tick.active,
+                        exposed: tick.exposed,
+                        scanMs: tick.scanMs
+                    )
+                )
+                if self.tickHistory.count > 36 {
+                    self.tickHistory.removeFirst(self.tickHistory.count - 36)
+                }
                 if !tick.events.isEmpty {
                     self.recentEvents.insert(contentsOf: tick.events.reversed(), at: 0)
                     if self.recentEvents.count > 60 {
                         self.recentEvents.removeLast(self.recentEvents.count - 60)
                     }
+                }
+                // Periodically refresh full Analytics when user is viewing Analytics tab
+                if self.selectedTab == .stats && self.liveAnalyticsEnabled && tick.tick % 3 == 0 {
+                    Task { await self.refreshStats() }
                 }
             }
         }
@@ -342,6 +413,7 @@ final class SierraPortViewModel: ObservableObject {
     }
 
     func inspectPort(_ port: Int, probe: Bool = true) {
+        selectedPort = port
         showingInspector = true
         isInspecting = true
         Task {

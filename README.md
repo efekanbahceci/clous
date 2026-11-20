@@ -12,9 +12,14 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/Rust-Edition%202024-orange?style=flat-square&logo=rust" alt="Rust Edition 2024" />
+  <img src="https://img.shields.io/badge/macOS%20App-SwiftUI%20Native-0071E3?style=flat-square&logo=apple" alt="macOS SwiftUI App" />
   <img src="https://img.shields.io/badge/Dependencies-Zero-brightgreen?style=flat-square" alt="Zero Dependencies" />
   <img src="https://img.shields.io/badge/Platforms-Linux%20%7C%20macOS%20%7C%20Windows-blue?style=flat-square" alt="Cross-Platform" />
   <img src="https://img.shields.io/badge/License-MIT-lightgrey?style=flat-square" alt="MIT License" />
+</p>
+
+<p align="center">
+  <img src="assets/sierraport-preview.png" alt="SierraPort macOS Terminal Deck Preview" width="880" />
 </p>
 
 ---
@@ -45,6 +50,14 @@ sierraport                           # List all listening ports with exposure sc
 sierraport watch -i 500              # Live flicker-free terminal dashboard
 sierraport audit                     # Security & socket health audit (0-100 score)
 sierraport inspect 5432 --probe      # Deep forensic view + live protocol/banner probe
+```
+
+### Build the Native macOS App (`SierraPort.app`)
+SierraPort also ships with a lightweight (~2.6 MB) **native macOS SwiftUI application** (`macos/SierraPortApp`) powered directly by the Rust core—featuring a Ghostty-inspired Command Deck, collapsible visual output blocks, live Swift Charts analytics, a Forensic Inspector drawer, Dark (`#111110`) / Light / System themes, and a macOS Menu Bar quick monitor:
+
+```bash
+./scripts/build-macos-app.sh
+open dist/SierraPort.app
 ```
 
 ---

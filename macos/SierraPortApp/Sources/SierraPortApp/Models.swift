@@ -147,7 +147,18 @@ struct InspectSocket: Codable, Identifiable {
     let process: String?
     let cmdline: String?
 
-    var id: String { "\(protocolName)-\(local)-\(pid ?? -1)-\(state)" }
+    var id: String { "\(protocolName)-\(local)-\(remote)-\(pid ?? -1)-\(state)" }
+
+    var memoryHuman: String {
+        guard let kb = memoryKb else { return "-" }
+        if kb >= 1024 * 1024 {
+            return String(format: "%.1fG", Double(kb) / (1024.0 * 1024.0))
+        } else if kb >= 1024 {
+            return String(format: "%.1fM", Double(kb) / 1024.0)
+        } else {
+            return "\(kb)K"
+        }
+    }
 
     enum CodingKeys: String, CodingKey {
         case protocolName = "protocol"
@@ -322,6 +333,15 @@ enum BlockPayload {
     case error(String)
 }
 
+struct TickHistoryPoint: Identifiable {
+    let id = UUID()
+    let tick: Int
+    let time: String
+    let active: Int
+    let exposed: Int
+    let scanMs: Int
+}
+
 struct CommandBlock: Identifiable {
     let id = UUID()
     let command: String
@@ -330,6 +350,31 @@ struct CommandBlock: Identifiable {
     let payload: BlockPayload
     let rawOutput: String
     var showRaw: Bool = false
+    var isExpanded: Bool = true
+
+    var summaryLabel: String {
+        switch payload {
+        case .ports(let entries):
+            return "\(entries.count) socket\(entries.count == 1 ? "" : "s")"
+        case .audit(let report):
+            return "Score \(report.score)/100 (\(report.grade))"
+        case .inspect(let report):
+            return "Port \(report.port) · \(report.sockets.count) bind"
+        case .probe(let results):
+            let open = results.filter(\.open).count
+            return "\(open)/\(results.count) open"
+        case .stats(let stats):
+            return "\(stats.total) total sockets"
+        case .diff(let diff):
+            return diff.hasDrift ? "+\(diff.added.count) -\(diff.removed.count) ~\(diff.changed.count)" : "No drift"
+        case .freePorts(let free):
+            return "\(free.freePorts.count) free port\(free.freePorts.count == 1 ? "" : "s")"
+        case .text:
+            return "Output"
+        case .error:
+            return "Error"
+        }
+    }
 }
 
 enum AppTab: String, CaseIterable, Identifiable {

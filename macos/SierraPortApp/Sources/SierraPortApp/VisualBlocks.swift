@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 import Charts
 
 // MARK: - Badges
@@ -19,6 +20,8 @@ struct ScopeBadge: View {
     var body: some View {
         Text(scope)
             .font(.system(size: 10, weight: .semibold, design: .monospaced))
+            .lineLimit(1)
+            .fixedSize()
             .padding(.horizontal, 6)
             .padding(.vertical, 2)
             .foregroundStyle(color)
@@ -46,6 +49,8 @@ struct StateBadge: View {
             Text(state)
                 .font(.system(size: 11, weight: .medium, design: .monospaced))
                 .foregroundStyle(.primary.opacity(0.88))
+                .lineLimit(1)
+                .truncationMode(.tail)
         }
     }
 }
@@ -54,40 +59,163 @@ struct KpiPill: View {
     let title: String
     let value: String
     let tint: Color
+    var icon: String? = nil
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Text(title.uppercased())
-                .font(.system(size: 10, weight: .semibold))
-                .foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 4) {
+                if let icon {
+                    Image(systemName: icon)
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(tint.opacity(0.85))
+                }
+                Text(title.uppercased())
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
             Text(value)
                 .font(.system(size: 20, weight: .semibold, design: .rounded))
                 .foregroundStyle(tint)
                 .monospacedDigit()
+                .contentTransition(.numericText())
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 14)
+        .padding(.horizontal, 13)
         .padding(.vertical, 10)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .background(SierraTheme.surface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .strokeBorder(.primary.opacity(0.06), lineWidth: 1)
+                .strokeBorder(SierraTheme.border, lineWidth: 1)
         )
     }
 }
 
-// MARK: - Interactive Port Table
+// MARK: - Live Real-Time Activity Sparkline
+
+struct LiveSparklineView: View {
+    let history: [TickHistoryPoint]
+    var height: CGFloat = 115
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Label("Live Socket Activity", systemImage: "waveform.path.ecg")
+                    .font(.system(size: 12, weight: .semibold))
+                Spacer()
+                if let last = history.last {
+                    HStack(spacing: 12) {
+                        HStack(spacing: 4) {
+                            Circle().fill(.cyan).frame(width: 6, height: 6)
+                            Text("Active: \(last.active)")
+                        }
+                        HStack(spacing: 4) {
+                            Circle().fill(.orange).frame(width: 6, height: 6)
+                            Text("Exposed: \(last.exposed)")
+                        }
+                        Text("\(last.scanMs)ms")
+                            .foregroundStyle(.secondary)
+                    }
+                    .font(.system(size: 11, design: .monospaced))
+                    .contentTransition(.numericText())
+                }
+            }
+
+            if history.count < 2 {
+                HStack {
+                    ProgressView().controlSize(.small)
+                    Text("Collecting live telemetry...")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, minHeight: height)
+            } else {
+                let minTick = history.first?.tick ?? 0
+                let maxTick = max((history.last?.tick ?? 1), minTick + 1)
+                let maxVal = max(history.map(\.active).max() ?? 10, 5)
+                let yTop = maxVal + max(2, maxVal / 5)
+
+                Chart {
+                    ForEach(history) { pt in
+                        AreaMark(
+                            x: .value("Tick", pt.tick),
+                            yStart: .value("Zero", 0),
+                            yEnd: .value("Active", pt.active),
+                            series: .value("Series", "ActiveArea")
+                        )
+                        .interpolationMethod(.monotone)
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: [Color.cyan.opacity(0.24), Color.cyan.opacity(0.01)],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+
+                        LineMark(
+                            x: .value("Tick", pt.tick),
+                            y: .value("Active", pt.active),
+                            series: .value("Series", "Active")
+                        )
+                        .interpolationMethod(.monotone)
+                        .foregroundStyle(.cyan)
+                        .lineStyle(StrokeStyle(lineWidth: 2))
+
+                        LineMark(
+                            x: .value("Tick", pt.tick),
+                            y: .value("Exposed", pt.exposed),
+                            series: .value("Series", "Exposed")
+                        )
+                        .interpolationMethod(.monotone)
+                        .foregroundStyle(.orange)
+                        .lineStyle(StrokeStyle(lineWidth: 1.75, dash: [4, 3]))
+                    }
+                }
+                .chartXScale(domain: minTick...maxTick)
+                .chartYScale(domain: 0...yTop)
+                .chartLegend(.hidden)
+                .chartXAxis(.hidden)
+                .chartYAxis {
+                    AxisMarks(position: .leading, values: .automatic(desiredCount: 4)) {
+                        AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5, dash: [2, 3]))
+                            .foregroundStyle(.primary.opacity(0.08))
+                        AxisValueLabel()
+                            .font(.system(size: 9, design: .monospaced))
+                    }
+                }
+                .frame(height: height)
+            }
+        }
+        .padding(14)
+        .background(SierraTheme.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .strokeBorder(SierraTheme.border, lineWidth: 1)
+        )
+    }
+}
+
+// MARK: - Interactive Port Table (Zero Overlap, Sortable, Horizontally Safe)
+
+enum TableSortColumn: String {
+    case proto, port, state, pid, mem, process
+}
 
 struct PortTableView: View {
     let entries: [PortEntry]
+    var selectedPort: Int? = nil
     let onInspect: (Int) -> Void
     let onKill: (Int) -> Void
-    @State private var filterText: String = ""
 
-    var filtered: [PortEntry] {
+    @State private var filterText: String = ""
+    @State private var sortCol: TableSortColumn = .port
+    @State private var sortAsc: Bool = true
+
+    private var displayed: [PortEntry] {
         let q = filterText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        if q.isEmpty { return entries }
-        return entries.filter { e in
+        let base = q.isEmpty ? entries : entries.filter { e in
             "\(e.localPort)".contains(q)
                 || e.protocolName.lowercased().contains(q)
                 || e.bindScope.lowercased().contains(q)
@@ -96,16 +224,35 @@ struct PortTableView: View {
                 || (e.user?.lowercased().contains(q) ?? false)
                 || (e.cmdline?.lowercased().contains(q) ?? false)
         }
+
+        return base.sorted { a, b in
+            let less: Bool
+            switch sortCol {
+            case .proto:
+                less = a.protocolName == b.protocolName ? a.localPort < b.localPort : a.protocolName < b.protocolName
+            case .port:
+                less = a.localPort == b.localPort ? a.protocolName < b.protocolName : a.localPort < b.localPort
+            case .state:
+                less = a.state == b.state ? a.localPort < b.localPort : a.state < b.state
+            case .pid:
+                less = (a.pid ?? Int.max) < (b.pid ?? Int.max)
+            case .mem:
+                less = (a.memoryKb ?? 0) < (b.memoryKb ?? 0)
+            case .process:
+                less = (a.process ?? "~").lowercased() < (b.process ?? "~").lowercased()
+            }
+            return sortAsc ? less : !less
+        }
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            if entries.count > 8 {
+            if entries.count > 6 {
                 HStack(spacing: 6) {
                     Image(systemName: "magnifyingglass")
                         .foregroundStyle(.secondary)
                         .font(.system(size: 12))
-                    TextField("Filter ports, processes, users...", text: $filterText)
+                    TextField("Filter ports, processes, users, scopes...", text: $filterText)
                         .textFieldStyle(.plain)
                         .font(.system(size: 12))
                     if !filterText.isEmpty {
@@ -116,51 +263,91 @@ struct PortTableView: View {
                         .buttonStyle(.plain)
                     }
                     Spacer()
-                    Text("\(filtered.count) / \(entries.count)")
+                    Text("\(displayed.count) / \(entries.count)")
                         .font(.system(size: 11, design: .monospaced))
                         .foregroundStyle(.secondary)
+                        .contentTransition(.numericText())
                 }
                 .padding(.horizontal, 10)
                 .padding(.vertical, 6)
                 .background(.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 8))
             }
 
-            if filtered.isEmpty {
+            if displayed.isEmpty {
                 Text("No matching sockets.")
                     .font(.system(size: 12))
                     .foregroundStyle(.secondary)
                     .padding(.vertical, 8)
             } else {
-                // Header
-                HStack(spacing: 10) {
-                    Text("PROTO").frame(width: 44, alignment: .leading)
-                    Text("PORT").frame(width: 56, alignment: .leading)
-                    Text("SCOPE").frame(width: 64, alignment: .leading)
-                    Text("LOCAL").frame(width: 148, alignment: .leading)
-                    Text("STATE").frame(width: 98, alignment: .leading)
-                    Text("PID").frame(width: 54, alignment: .leading)
-                    Text("MEM").frame(width: 56, alignment: .trailing)
-                    Text("PROCESS").frame(maxWidth: .infinity, alignment: .leading)
-                    Text("ACTIONS").frame(width: 64, alignment: .trailing)
-                }
-                .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, 8)
+                // Horizontal scroll safety prevents columns from ever overlapping when Inspector opens
+                ScrollView(.horizontal, showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack(spacing: 10) {
+                            sortHeader("PROTO", col: .proto, width: 46, alignment: .leading)
+                            sortHeader("PORT", col: .port, width: 58, alignment: .leading)
+                            Text("SCOPE")
+                                .frame(width: 64, alignment: .leading)
+                            Text("LOCAL")
+                                .frame(width: 146, alignment: .leading)
+                            sortHeader("STATE", col: .state, width: 102, alignment: .leading)
+                            sortHeader("PID", col: .pid, width: 56, alignment: .leading)
+                            sortHeader("MEM", col: .mem, width: 56, alignment: .trailing)
+                            sortHeader("PROCESS", col: .process, width: 170, alignment: .leading)
+                            Text("ACTIONS")
+                                .frame(width: 60, alignment: .trailing)
+                        }
+                        .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 8)
 
-                Divider().opacity(0.4)
+                        Divider().opacity(0.4)
 
-                LazyVStack(spacing: 2) {
-                    ForEach(filtered.prefix(200)) { entry in
-                        PortRowView(entry: entry, onInspect: onInspect, onKill: onKill)
+                        LazyVStack(spacing: 2) {
+                            ForEach(Array(displayed.prefix(200).enumerated()), id: \.offset) { _, entry in
+                                PortRowView(
+                                    entry: entry,
+                                    isSelected: selectedPort == entry.localPort,
+                                    onInspect: onInspect,
+                                    onKill: onKill
+                                )
+                            }
+                        }
                     }
+                    .frame(minWidth: 838, alignment: .leading)
                 }
             }
         }
+    }
+
+    private func sortHeader(_ title: String, col: TableSortColumn, width: CGFloat, alignment: Alignment) -> some View {
+        Button {
+            withAnimation(.easeInOut(duration: 0.15)) {
+                if sortCol == col {
+                    sortAsc.toggle()
+                } else {
+                    sortCol = col
+                    sortAsc = col != .mem
+                }
+            }
+        } label: {
+            HStack(spacing: 2) {
+                Text(title)
+                if sortCol == col {
+                    Image(systemName: sortAsc ? "chevron.up" : "chevron.down")
+                        .font(.system(size: 8, weight: .bold))
+                        .foregroundStyle(.cyan)
+                }
+            }
+            .frame(width: width, alignment: alignment)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 }
 
 struct PortRowView: View {
     let entry: PortEntry
+    let isSelected: Bool
     let onInspect: (Int) -> Void
     let onKill: (Int) -> Void
     @State private var isHovered = false
@@ -170,61 +357,78 @@ struct PortRowView: View {
             Text(entry.protocolName)
                 .font(.system(size: 11, weight: .medium, design: .monospaced))
                 .foregroundStyle(.secondary)
-                .frame(width: 44, alignment: .leading)
+                .lineLimit(1)
+                .frame(width: 46, alignment: .leading)
+                .clipped()
 
             Text("\(entry.localPort)")
                 .font(.system(size: 12, weight: .semibold, design: .monospaced))
                 .foregroundStyle(.cyan)
-                .frame(width: 56, alignment: .leading)
+                .lineLimit(1)
+                .frame(width: 58, alignment: .leading)
+                .clipped()
 
             ScopeBadge(scope: entry.bindScope)
                 .frame(width: 64, alignment: .leading)
+                .clipped()
 
             Text(entry.localEndpoint)
                 .font(.system(size: 11, design: .monospaced))
                 .lineLimit(1)
                 .truncationMode(.middle)
-                .frame(width: 148, alignment: .leading)
+                .frame(width: 146, alignment: .leading)
+                .clipped()
 
             StateBadge(state: entry.state)
-                .frame(width: 98, alignment: .leading)
+                .frame(width: 102, alignment: .leading)
+                .clipped()
 
             Text(entry.pid.map(String.init) ?? "-")
                 .font(.system(size: 11, design: .monospaced))
                 .foregroundStyle(.secondary)
-                .frame(width: 54, alignment: .leading)
+                .lineLimit(1)
+                .frame(width: 56, alignment: .leading)
+                .clipped()
 
             Text(entry.memoryHuman)
                 .font(.system(size: 11, design: .monospaced))
                 .foregroundStyle(.secondary)
+                .lineLimit(1)
                 .frame(width: 56, alignment: .trailing)
+                .clipped()
 
-            HStack(spacing: 6) {
+            HStack(spacing: 5) {
                 Text(entry.process ?? "-")
                     .font(.system(size: 12, weight: .medium))
                     .lineLimit(1)
+                    .truncationMode(.tail)
                 if let svc = entry.service {
                     Text(svc)
                         .font(.system(size: 10, design: .monospaced))
                         .foregroundStyle(.secondary)
+                        .lineLimit(1)
                 }
                 if let tag = entry.runtime {
                     Text(tag)
                         .font(.system(size: 9, weight: .semibold))
+                        .lineLimit(1)
+                        .fixedSize()
                         .padding(.horizontal, 5)
                         .padding(.vertical, 1)
                         .foregroundStyle(.purple)
                         .background(.purple.opacity(0.14), in: Capsule())
                 }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(width: 170, alignment: .leading)
+            .clipped()
 
-            HStack(spacing: 6) {
+            HStack(spacing: 8) {
                 Button {
                     onInspect(entry.localPort)
                 } label: {
                     Image(systemName: "sparkle.magnifyingglass")
                         .font(.system(size: 12))
+                        .foregroundStyle(isSelected ? .cyan : .secondary)
                 }
                 .buttonStyle(.borderless)
                 .help("Deep Inspect & Probe Port \(entry.localPort)")
@@ -241,13 +445,22 @@ struct PortRowView: View {
                     .help("Terminate Process on Port \(entry.localPort)")
                 }
             }
-            .frame(width: 64, alignment: .trailing)
+            .frame(width: 60, alignment: .trailing)
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 5)
+        .contentShape(Rectangle())
         .background(
             RoundedRectangle(cornerRadius: 7, style: .continuous)
-                .fill(isHovered ? Color.primary.opacity(0.06) : Color.clear)
+                .fill(
+                    isSelected
+                        ? Color.cyan.opacity(0.14)
+                        : (isHovered ? SierraTheme.rowHover : Color.clear)
+                )
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                .strokeBorder(isSelected ? Color.cyan.opacity(0.35) : Color.clear, lineWidth: 1)
         )
         .onHover { isHovered = $0 }
         .onTapGesture { onInspect(entry.localPort) }
@@ -271,7 +484,6 @@ struct AuditVisualView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack(spacing: 20) {
-                // Apple-style Score Ring
                 ZStack {
                     Circle()
                         .stroke(scoreColor.opacity(0.18), lineWidth: 9)
@@ -279,10 +491,12 @@ struct AuditVisualView: View {
                         .trim(from: 0, to: CGFloat(report.score) / 100.0)
                         .stroke(scoreColor, style: StrokeStyle(lineWidth: 9, lineCap: .round))
                         .rotationEffect(.degrees(-90))
+                        .animation(.spring(response: 0.6, dampingFraction: 0.8), value: report.score)
                     VStack(spacing: 0) {
                         Text("\(report.score)")
                             .font(.system(size: 24, weight: .bold, design: .rounded))
                             .monospacedDigit()
+                            .contentTransition(.numericText())
                         Text("Grade \(report.grade)")
                             .font(.system(size: 10, weight: .semibold))
                             .foregroundStyle(scoreColor)
@@ -334,6 +548,7 @@ struct AuditVisualView: View {
 
                                 Text(finding.title)
                                     .font(.system(size: 13, weight: .semibold))
+                                    .lineLimit(2)
 
                                 Spacer()
 
@@ -410,7 +625,6 @@ struct InspectVisualView: View {
                 }
             }
 
-            // Live Probe Card
             if let probe = report.probe {
                 VStack(alignment: .leading, spacing: 6) {
                     HStack(spacing: 10) {
@@ -441,7 +655,6 @@ struct InspectVisualView: View {
                 .background(.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 10))
             }
 
-            // Process Ancestry Chain
             if !report.ancestry.isEmpty {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("PROCESS ANCESTRY")
@@ -449,12 +662,13 @@ struct InspectVisualView: View {
                         .foregroundStyle(.secondary)
 
                     VStack(alignment: .leading, spacing: 6) {
-                        ForEach(Array(report.ancestry.enumerated()), id: \.element.id) { idx, node in
-                            HStack(spacing: 8) {
+                        ForEach(Array(report.ancestry.enumerated()), id: \.offset) { idx, node in
+                            HStack(spacing: 6) {
                                 if idx > 0 {
-                                    Text(String(repeating: "  ", count: idx) + "└─")
-                                        .font(.system(size: 12, design: .monospaced))
+                                    Text(String(repeating: "  ", count: min(idx, 5)) + "└─")
+                                        .font(.system(size: 11, design: .monospaced))
                                         .foregroundStyle(.secondary)
+                                        .fixedSize()
                                 } else {
                                     Circle()
                                         .fill(.cyan)
@@ -462,14 +676,19 @@ struct InspectVisualView: View {
                                 }
                                 Text(node.name)
                                     .font(.system(size: 12, weight: .semibold))
+                                    .lineLimit(1)
+                                    .truncationMode(.tail)
                                 Text("PID \(node.pid)")
                                     .font(.system(size: 11, design: .monospaced))
                                     .foregroundStyle(.secondary)
+                                    .fixedSize()
                                 if let user = node.user {
                                     Text("(\(user))")
                                         .font(.system(size: 11))
                                         .foregroundStyle(.secondary)
+                                        .lineLimit(1)
                                 }
+                                Spacer(minLength: 0)
                             }
                         }
                     }
@@ -479,41 +698,173 @@ struct InspectVisualView: View {
                 }
             }
 
-            // Socket Bindings
             if !report.sockets.isEmpty {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("BINDINGS")
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(.secondary)
-                    ForEach(report.sockets) { sock in
-                        VStack(alignment: .leading, spacing: 4) {
-                            HStack(spacing: 8) {
-                                Text(sock.protocolName)
-                                    .font(.system(size: 11, weight: .bold, design: .monospaced))
-                                Text(sock.local)
-                                    .font(.system(size: 12, design: .monospaced))
-                                ScopeBadge(scope: sock.scope)
-                                StateBadge(state: sock.state)
-                                Spacer()
-                                if let user = sock.user {
-                                    Text(user)
-                                        .font(.system(size: 11))
-                                        .foregroundStyle(.secondary)
-                                }
-                            }
-                            if let cmd = sock.cmdline {
-                                Text(cmd)
-                                    .font(.system(size: 11, design: .monospaced))
-                                    .foregroundStyle(.secondary)
-                                    .lineLimit(2)
-                                    .textSelection(.enabled)
-                            }
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Text("BINDINGS (\(report.sockets.count))")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Text("Click to expand")
+                            .font(.system(size: 10))
+                            .foregroundStyle(.secondary)
+                    }
+                    VStack(spacing: 8) {
+                        ForEach(Array(report.sockets.enumerated()), id: \.offset) { _, sock in
+                            BindingCardView(sock: sock)
                         }
-                        .padding(10)
-                        .background(.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 8))
                     }
                 }
             }
+        }
+    }
+}
+
+struct BindingCardView: View {
+    let sock: InspectSocket
+    @State private var isExpanded: Bool = false
+    @State private var copied: Bool = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            // Clickable Header
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 6) {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(.secondary)
+                        .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                        .frame(width: 12)
+
+                    Text(sock.protocolName)
+                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 2)
+                        .background(.primary.opacity(0.08), in: RoundedRectangle(cornerRadius: 4))
+                        .fixedSize()
+
+                    Text(sock.local)
+                        .font(.system(size: 12, weight: .medium, design: .monospaced))
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+
+                    Spacer(minLength: 4)
+
+                    ScopeBadge(scope: sock.scope)
+                }
+
+                HStack(spacing: 8) {
+                    StateBadge(state: sock.state)
+                    if let pid = sock.pid {
+                        Text("PID \(pid)")
+                            .font(.system(size: 11, design: .monospaced))
+                            .foregroundStyle(.secondary)
+                            .fixedSize()
+                    }
+                    Spacer(minLength: 4)
+                    if let user = sock.user {
+                        Text(user)
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                    if sock.memoryKb != nil {
+                        Text(sock.memoryHuman)
+                            .font(.system(size: 11, design: .monospaced))
+                            .foregroundStyle(.secondary)
+                            .fixedSize()
+                    }
+                }
+
+                if !isExpanded, let cmd = sock.cmdline {
+                    Text(cmd)
+                        .font(.system(size: 11, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
+            }
+            .padding(10)
+            .contentShape(Rectangle())
+            .onTapGesture {
+                withAnimation(.spring(response: 0.25, dampingFraction: 0.85)) {
+                    isExpanded.toggle()
+                }
+            }
+
+            if isExpanded {
+                Divider().opacity(0.35)
+
+                VStack(alignment: .leading, spacing: 8) {
+                    detailRow("Local", sock.local)
+                    detailRow("Remote", sock.remote)
+                    if let proc = sock.process {
+                        detailRow("Process", proc)
+                    }
+                    if let pid = sock.pid {
+                        detailRow("PID", "\(pid)")
+                    }
+                    if let user = sock.user {
+                        detailRow("User", user)
+                    }
+                    if sock.memoryKb != nil {
+                        detailRow("Memory", sock.memoryHuman)
+                    }
+
+                    if let cmd = sock.cmdline {
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack {
+                                Text("COMMAND")
+                                    .font(.system(size: 9, weight: .semibold))
+                                    .foregroundStyle(.secondary)
+                                Spacer()
+                                Button {
+                                    NSPasteboard.general.clearContents()
+                                    NSPasteboard.general.setString(cmd, forType: .string)
+                                    copied = true
+                                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                                        copied = false
+                                    }
+                                } label: {
+                                    Label(copied ? "Copied" : "Copy", systemImage: copied ? "checkmark" : "doc.on.doc")
+                                        .font(.system(size: 10))
+                                }
+                                .buttonStyle(.borderless)
+                            }
+                            Text(cmd)
+                                .font(.system(size: 11, design: .monospaced))
+                                .foregroundStyle(.primary.opacity(0.9))
+                                .fixedSize(horizontal: false, vertical: true)
+                                .textSelection(.enabled)
+                                .padding(8)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .background(SierraTheme.codeWell, in: RoundedRectangle(cornerRadius: 6))
+                                .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(SierraTheme.borderSubtle, lineWidth: 1))
+                        }
+                    }
+                }
+                .padding(10)
+                .transition(.opacity)
+            }
+        }
+        .background(.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 9, style: .continuous)
+                .strokeBorder(isExpanded ? Color.cyan.opacity(0.4) : Color.primary.opacity(0.06), lineWidth: 1)
+        )
+    }
+
+    private func detailRow(_ label: String, _ value: String) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            Text(label)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(.secondary)
+                .frame(width: 58, alignment: .leading)
+            Text(value)
+                .font(.system(size: 11, design: .monospaced))
+                .fixedSize(horizontal: false, vertical: true)
+                .textSelection(.enabled)
+            Spacer(minLength: 0)
         }
     }
 }
@@ -575,7 +926,7 @@ struct ProbeResultsVisualView: View {
     }
 }
 
-// MARK: - Native Swift Charts Stats View
+// MARK: - Dynamic Native Swift Charts Analytics View
 
 struct ChartDatum: Identifiable {
     let label: String
@@ -585,68 +936,321 @@ struct ChartDatum: Identifiable {
 
 struct StatsVisualView: View {
     let stats: StatsReport
+    var history: [TickHistoryPoint] = []
+    var onSelectProcess: ((String) -> Void)? = nil
 
-    var protoData: [ChartDatum] {
+    @State private var hoveredProc: String? = nil
+
+    private var protoData: [ChartDatum] {
         stats.byProtocol.map { ChartDatum(label: $0.key, value: $0.value) }.sorted { $0.value > $1.value }
     }
 
-    var stateData: [ChartDatum] {
+    private var stateData: [ChartDatum] {
         stats.byState.map { ChartDatum(label: $0.key, value: $0.value) }.sorted { $0.value > $1.value }
     }
 
-    var scopeData: [ChartDatum] {
+    private var scopeData: [ChartDatum] {
         stats.listeningByScope.map { ChartDatum(label: $0.key, value: $0.value) }.sorted { $0.value > $1.value }
     }
 
+    private var totalListening: Int {
+        scopeData.reduce(0) { $0 + $1.value }
+    }
+
+    private var exposedCount: Int {
+        (stats.listeningByScope["ALL(*)"] ?? 0) + (stats.listeningByScope["PUBLIC"] ?? 0)
+    }
+
+    private var exposurePercent: Int {
+        guard totalListening > 0 else { return 0 }
+        return Int((Double(exposedCount) / Double(totalListening)) * 100.0)
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 14) {
-                chartCard(title: "By Protocol", data: protoData, tint: .cyan)
-                chartCard(title: "By Socket State", data: stateData, tint: .green)
-                chartCard(title: "Listening Bind Exposure", data: scopeData, tint: .orange)
-                chartCard(
-                    title: "Top Processes",
-                    data: stats.topProcesses.prefix(8).map { ChartDatum(label: $0.name, value: $0.count) },
-                    tint: .purple
-                )
+        VStack(alignment: .leading, spacing: 14) {
+            // Top Dynamic KPI Strip
+            HStack(spacing: 10) {
+                KpiPill(title: "Total Sockets", value: "\(stats.total)", tint: .primary, icon: "network")
+                KpiPill(title: "Listening", value: "\(totalListening)", tint: .green, icon: "ear")
+                KpiPill(title: "Exposure Ratio", value: "\(exposurePercent)%", tint: exposurePercent > 50 ? .orange : .cyan, icon: "globe")
+                KpiPill(title: "Top Processes", value: "\(stats.topProcesses.count)", tint: .purple, icon: "cpu")
+            }
+
+            // Live Activity Sparkline (if stream history is provided)
+            if !history.isEmpty {
+                LiveSparklineView(history: history, height: 110)
+            }
+
+            // Two-Column Rich Dynamic Charts
+            LazyVGrid(columns: [GridItem(.flexible(), spacing: 14), GridItem(.flexible(), spacing: 14)], spacing: 14) {
+                // 1. Donut Chart for Bind Exposure
+                exposureDonutCard
+
+                // 2. Protocol Breakdown with Animated Ratio Bars
+                protocolBreakdownCard
+
+                // 3. Socket State Bar Chart
+                stateChartCard
+
+                // 4. Interactive Top Processes Leaderboard
+                topProcessesCard
             }
         }
     }
 
-    @ViewBuilder
-    private func chartCard(title: String, data: [ChartDatum], tint: Color) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text(title)
-                .font(.system(size: 13, weight: .semibold))
-            if data.isEmpty {
-                Text("No data")
+    private var exposureDonutCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Label("Listening Bind Exposure", systemImage: "shield.lefthalf.filled")
+                    .font(.system(size: 13, weight: .semibold))
+                Spacer()
+                Text("\(totalListening) total")
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundStyle(.secondary)
+            }
+
+            if scopeData.isEmpty {
+                Text("No listening sockets.")
                     .font(.system(size: 12))
                     .foregroundStyle(.secondary)
-                    .frame(height: 140)
+                    .frame(height: 150)
             } else {
-                Chart(data) { item in
-                    BarMark(
-                        x: .value("Count", item.value),
-                        y: .value("Category", item.label)
-                    )
-                    .foregroundStyle(tint.gradient)
-                    .cornerRadius(4)
-                    .annotation(position: .trailing) {
-                        Text("\(item.value)")
-                            .font(.system(size: 10, design: .monospaced))
-                            .foregroundStyle(.secondary)
+                HStack(spacing: 18) {
+                    ZStack {
+                        Chart(scopeData) { item in
+                            SectorMark(
+                                angle: .value("Count", item.value),
+                                innerRadius: .ratio(0.62),
+                                angularInset: 2
+                            )
+                            .cornerRadius(4)
+                            .foregroundStyle(scopeColor(item.label).gradient)
+                        }
+                        .chartLegend(.hidden)
+                        .frame(width: 130, height: 130)
+
+                        VStack(spacing: 1) {
+                            Text("\(exposedCount)")
+                                .font(.system(size: 20, weight: .bold, design: .rounded))
+                                .foregroundStyle(exposedCount > 0 ? .orange : .green)
+                                .contentTransition(.numericText())
+                            Text("EXPOSED")
+                                .font(.system(size: 8, weight: .bold))
+                                .foregroundStyle(.secondary)
+                        }
                     }
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        ForEach(scopeData) { item in
+                            let pct = totalListening > 0 ? Int(round(Double(item.value) / Double(totalListening) * 100)) : 0
+                            HStack(spacing: 8) {
+                                Circle()
+                                    .fill(scopeColor(item.label))
+                                    .frame(width: 8, height: 8)
+                                Text(item.label)
+                                    .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                                Spacer()
+                                Text("\(item.value)")
+                                    .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                                Text("(\(pct)%)")
+                                    .font(.system(size: 10, design: .monospaced))
+                                    .foregroundStyle(.secondary)
+                                    .frame(width: 36, alignment: .trailing)
+                            }
+                        }
+                    }
+                    .frame(maxWidth: .infinity)
                 }
-                .chartXAxis(.hidden)
-                .frame(height: max(120, CGFloat(data.count) * 26))
             }
         }
         .padding(14)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .frame(maxHeight: .infinity, alignment: .top)
+        .background(SierraTheme.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .strokeBorder(.primary.opacity(0.06), lineWidth: 1)
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .strokeBorder(SierraTheme.border, lineWidth: 1)
         )
+    }
+
+    private var protocolBreakdownCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Label("Protocol Distribution", systemImage: "point.3.connected.trianglepath.dotted")
+                    .font(.system(size: 13, weight: .semibold))
+                Spacer()
+                Text("\(protoData.count) types")
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundStyle(.secondary)
+            }
+
+            let maxVal = max(protoData.first?.value ?? 1, 1)
+            VStack(spacing: 10) {
+                ForEach(protoData) { item in
+                    let pct = stats.total > 0 ? Int(round(Double(item.value) / Double(stats.total) * 100)) : 0
+                    let ratio = CGFloat(item.value) / CGFloat(maxVal)
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack {
+                            Text(item.label)
+                                .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                            Spacer()
+                            Text("\(item.value) sockets · \(pct)%")
+                                .font(.system(size: 11, design: .monospaced))
+                                .foregroundStyle(.secondary)
+                        }
+                        GeometryReader { geo in
+                            ZStack(alignment: .leading) {
+                                Capsule().fill(.primary.opacity(0.08))
+                                Capsule()
+                                    .fill(protoColor(item.label).gradient)
+                                    .frame(width: max(6, geo.size.width * ratio))
+                                    .animation(.spring(response: 0.45, dampingFraction: 0.8), value: item.value)
+                            }
+                        }
+                        .frame(height: 8)
+                    }
+                }
+            }
+        }
+        .padding(14)
+        .frame(maxHeight: .infinity, alignment: .top)
+        .background(SierraTheme.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .strokeBorder(SierraTheme.border, lineWidth: 1)
+        )
+    }
+
+    private var stateChartCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label("Socket Lifecycle States", systemImage: "arrow.triangle.2.circlepath")
+                .font(.system(size: 13, weight: .semibold))
+
+            if stateData.isEmpty {
+                Text("No state data").font(.system(size: 12)).foregroundStyle(.secondary)
+            } else {
+                let maxStateVal = max(stateData.map(\.value).max() ?? 1, 1)
+                let xUpper = maxStateVal + max(2, maxStateVal / 4)
+
+                Chart(stateData) { item in
+                    BarMark(
+                        x: .value("Count", item.value),
+                        y: .value("State", item.label)
+                    )
+                    .foregroundStyle(stateColor(item.label).gradient)
+                    .cornerRadius(5)
+                    .annotation(position: .trailing) {
+                        Text("\(item.value)")
+                            .font(.system(size: 10, weight: .medium, design: .monospaced))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .chartXScale(domain: 0...xUpper)
+                .chartLegend(.hidden)
+                .chartXAxis(.hidden)
+                .frame(height: max(120, CGFloat(stateData.count) * 28))
+            }
+        }
+        .padding(14)
+        .frame(maxHeight: .infinity, alignment: .top)
+        .background(SierraTheme.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .strokeBorder(SierraTheme.border, lineWidth: 1)
+        )
+    }
+
+    private var topProcessesCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Label("Top Processes by Sockets", systemImage: "bolt.horizontal.fill")
+                    .font(.system(size: 13, weight: .semibold))
+                Spacer()
+                if onSelectProcess != nil {
+                    Text("Click to filter")
+                        .font(.system(size: 10))
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            let maxProc = max(stats.topProcesses.first?.count ?? 1, 1)
+            VStack(spacing: 6) {
+                ForEach(stats.topProcesses.prefix(8)) { proc in
+                    let ratio = CGFloat(proc.count) / CGFloat(maxProc)
+                    let isHov = hoveredProc == proc.name
+                    Button {
+                        onSelectProcess?(proc.name)
+                    } label: {
+                        HStack(spacing: 10) {
+                            Text(proc.name)
+                                .font(.system(size: 11, weight: .medium, design: .monospaced))
+                                .lineLimit(1)
+                                .truncationMode(.tail)
+                                .frame(width: 110, alignment: .leading)
+
+                            GeometryReader { geo in
+                                ZStack(alignment: .leading) {
+                                    Capsule().fill(.primary.opacity(0.07))
+                                    Capsule()
+                                        .fill(Color.purple.gradient)
+                                        .frame(width: max(6, geo.size.width * ratio))
+                                }
+                            }
+                            .frame(height: 8)
+
+                            Text("\(proc.count)")
+                                .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                                .foregroundStyle(.secondary)
+                                .frame(width: 28, alignment: .trailing)
+                        }
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 4)
+                        .background(
+                            RoundedRectangle(cornerRadius: 6)
+                                .fill(isHov ? Color.purple.opacity(0.12) : Color.clear)
+                        )
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .onHover { hoveredProc = $0 ? proc.name : nil }
+                }
+            }
+        }
+        .padding(14)
+        .frame(maxHeight: .infinity, alignment: .top)
+        .background(SierraTheme.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .strokeBorder(SierraTheme.border, lineWidth: 1)
+        )
+    }
+
+    private func scopeColor(_ s: String) -> Color {
+        switch s {
+        case "LOCAL": return .green
+        case "LAN": return .cyan
+        case "ALL(*)": return .orange
+        case "PUBLIC": return .red
+        default: return .secondary
+        }
+    }
+
+    private func protoColor(_ p: String) -> Color {
+        switch p {
+        case "TCP": return .cyan
+        case "TCP6": return .blue
+        case "UDP": return .teal
+        case "UDP6": return .indigo
+        default: return .secondary
+        }
+    }
+
+    private func stateColor(_ s: String) -> Color {
+        switch s {
+        case "LISTEN": return .green
+        case "ESTABLISHED": return .cyan
+        case "TIME_WAIT", "CLOSE_WAIT": return .orange
+        default: return .secondary
+        }
     }
 }
 

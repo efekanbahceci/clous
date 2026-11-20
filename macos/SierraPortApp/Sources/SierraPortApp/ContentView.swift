@@ -2,39 +2,41 @@ import SwiftUI
 
 struct ContentView: View {
     @ObservedObject var vm: SierraPortViewModel
+    @Binding var themeRaw: String
     @FocusState private var isCommandFocused: Bool
+
+    private var themePref: AppThemePreference {
+        AppThemePreference(rawValue: themeRaw) ?? .dark
+    }
 
     var body: some View {
         NavigationSplitView {
             sidebar
+                .background(SierraTheme.sidebar)
         } detail: {
             ZStack(alignment: .bottom) {
-                HStack(spacing: 0) {
-                    mainDetail
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-
-                    if vm.showingInspector {
-                        Divider()
-                        inspectorDrawer
-                            .frame(width: 370)
-                            .background(.ultraThinMaterial)
-                            .transition(.move(edge: .trailing))
-                    }
-                }
+                mainDetail
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(SierraTheme.canvas)
 
                 if let msg = vm.statusMessage {
                     Text(msg)
                         .font(.system(size: 12, weight: .medium))
                         .padding(.horizontal, 14)
                         .padding(.vertical, 8)
-                        .background(.regularMaterial, in: Capsule())
-                        .shadow(radius: 6)
+                        .background(SierraTheme.surfaceElevated, in: Capsule())
+                        .overlay(Capsule().strokeBorder(SierraTheme.border, lineWidth: 1))
+                        .shadow(color: .black.opacity(0.25), radius: 8, y: 4)
                         .padding(.bottom, 16)
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
             }
-            .animation(.easeInOut(duration: 0.18), value: vm.showingInspector)
-            .animation(.easeInOut(duration: 0.2), value: vm.statusMessage)
+            .background(SierraTheme.canvas)
+            .animation(.spring(response: 0.3, dampingFraction: 0.85), value: vm.statusMessage)
+            .inspector(isPresented: $vm.showingInspector) {
+                inspectorDrawer
+                    .inspectorColumnWidth(min: 320, ideal: 360, max: 440)
+            }
         }
         .navigationSplitViewStyle(.balanced)
         .toolbar {
@@ -47,15 +49,18 @@ struct ContentView: View {
                                 .frame(width: 7, height: 7)
                             Text("\(tick.active) active")
                                 .font(.system(size: 11, weight: .medium, design: .monospaced))
+                                .contentTransition(.numericText())
                         }
                         if tick.exposed > 0 {
                             Text("\(tick.exposed) exposed")
                                 .font(.system(size: 11, weight: .medium, design: .monospaced))
                                 .foregroundStyle(.orange)
+                                .contentTransition(.numericText())
                         }
                         Text("\(tick.scanMs)ms")
                             .font(.system(size: 11, design: .monospaced))
                             .foregroundStyle(.secondary)
+                            .contentTransition(.numericText())
                     }
                     .padding(.horizontal, 10)
                     .padding(.vertical, 4)
@@ -81,6 +86,16 @@ struct ContentView: View {
                 }
                 .keyboardShortcut("r", modifiers: .command)
                 .help("Refresh Metrics (⌘R)")
+
+                Button {
+                    withAnimation(.spring(response: 0.28, dampingFraction: 0.85)) {
+                        vm.showingInspector.toggle()
+                    }
+                } label: {
+                    Label("Inspector", systemImage: "sidebar.right")
+                }
+                .keyboardShortcut("i", modifiers: [.command, .option])
+                .help("Toggle Forensic Inspector (⌥⌘I)")
             }
         }
         .onAppear {
@@ -114,10 +129,44 @@ struct ContentView: View {
                     .tag(tab)
             }
             .listStyle(.sidebar)
+            .scrollContentBackground(.hidden)
 
-            Divider()
+            Divider().opacity(0.4)
 
-            VStack(alignment: .leading, spacing: 4) {
+            // Theme Switcher (Dark #111110 / Light / System)
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 4) {
+                    ForEach(AppThemePreference.allCases) { pref in
+                        let isSelected = themePref == pref
+                        Button {
+                            withAnimation(.easeInOut(duration: 0.18)) {
+                                themeRaw = pref.rawValue
+                            }
+                        } label: {
+                            HStack(spacing: 3) {
+                                Image(systemName: pref.icon)
+                                    .font(.system(size: 9))
+                                Text(pref.rawValue)
+                                    .font(.system(size: 10, weight: isSelected ? .semibold : .regular))
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 5)
+                            .background(
+                                isSelected ? SierraTheme.surfaceElevated : Color.clear,
+                                in: RoundedRectangle(cornerRadius: 6, style: .continuous)
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                    .strokeBorder(isSelected ? SierraTheme.border : Color.clear, lineWidth: 1)
+                            )
+                            .foregroundStyle(isSelected ? .primary : .secondary)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(3)
+                .background(SierraTheme.canvas.opacity(0.6), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+
                 HStack(spacing: 6) {
                     Circle()
                         .fill(vm.bridge.binaryPath != nil ? Color.green : Color.red)
@@ -131,7 +180,8 @@ struct ContentView: View {
             }
             .padding(12)
         }
-        .navigationSplitViewColumnWidth(min: 190, ideal: 210, max: 240)
+        .background(SierraTheme.sidebar)
+        .navigationSplitViewColumnWidth(min: 195, ideal: 215, max: 245)
     }
 
     // MARK: - Main Detail Switcher
@@ -150,108 +200,303 @@ struct ContentView: View {
         }
     }
 
-    // MARK: - 1. Ghostty-Inspired Terminal Deck
+    // MARK: - 1. Ghostty-Inspired Collapsible Terminal Deck
 
     private var terminalDeckView: some View {
+        Group {
+            if vm.blocks.isEmpty {
+                emptyTerminalHeroView
+            } else {
+                activeTerminalDeckView
+            }
+        }
+        .animation(.spring(response: 0.35, dampingFraction: 0.86), value: vm.blocks.isEmpty)
+    }
+
+    private var emptyTerminalHeroView: some View {
         VStack(spacing: 0) {
-            // Command Prompt Header (Ghostty + Apple Minimalist)
-            VStack(alignment: .leading, spacing: 8) {
-                HStack(spacing: 10) {
-                    Text("❯")
-                        .font(.system(size: 16, weight: .bold, design: .monospaced))
-                        .foregroundStyle(.cyan)
+            Spacer(minLength: 36)
 
-                    TextField("Enter SierraPort command (e.g. list --exposed, inspect 5000 --probe, audit, check 80,443)...", text: $vm.commandInput)
-                        .textFieldStyle(.plain)
-                        .font(.system(size: 14, design: .monospaced))
-                        .focused($isCommandFocused)
-                        .onSubmit {
-                            vm.submitCommand()
-                        }
-                        .onKeyPress(.upArrow) {
-                            vm.historyUp()
-                            return .handled
-                        }
-                        .onKeyPress(.downArrow) {
-                            vm.historyDown()
-                            return .handled
-                        }
-
-                    if vm.isExecuting {
-                        ProgressView()
-                            .controlSize(.small)
-                    }
-
-                    Button("Run") {
-                        vm.submitCommand()
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.small)
-                    .disabled(vm.commandInput.trimmingCharacters(in: .whitespaces).isEmpty)
+            // Minimalist Apple-Style Brand Header & Info
+            VStack(spacing: 14) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .fill(
+                            LinearGradient(
+                                colors: [Color.cyan.opacity(0.18), Color.blue.opacity(0.08)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .frame(width: 60, height: 60)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                .strokeBorder(Color.cyan.opacity(0.32), lineWidth: 1)
+                        )
+                    Image(systemName: "terminal.fill")
+                        .font(.system(size: 26, weight: .medium))
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: [.cyan, .primary],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
                 }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
-                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .strokeBorder(isCommandFocused ? Color.cyan.opacity(0.55) : Color.primary.opacity(0.08), lineWidth: 1)
-                )
 
-                // Quick Autocomplete / Suggestion Chips
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 6) {
-                        ForEach(vm.autocompleteSuggestions, id: \.self) { suggestion in
-                            Button {
-                                vm.commandInput = suggestion
-                                vm.submitCommand()
-                            } label: {
-                                Text(suggestion)
-                                    .font(.system(size: 11, design: .monospaced))
-                                    .padding(.horizontal, 9)
-                                    .padding(.vertical, 4)
-                                    .background(.primary.opacity(0.05), in: Capsule())
+                VStack(spacing: 4) {
+                    HStack(spacing: 0) {
+                        Text("Sierra")
+                            .font(.system(size: 36, weight: .semibold, design: .default))
+                            .tracking(-1.0)
+                        Text("Port")
+                            .font(.system(size: 36, weight: .light, design: .default))
+                            .tracking(-1.0)
+                            .foregroundStyle(.secondary)
+                    }
+                    Text("COMMAND DECK")
+                        .font(.system(size: 11, weight: .semibold))
+                        .tracking(2.2)
+                        .foregroundStyle(.secondary)
+                }
+
+                Text("Run any SierraPort CLI command to inspect listening ports, audit external exposure, trace process ancestry, or grab live protocol banners — rendered as clean, collapsible visual cards.")
+                    .font(.system(size: 13))
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .lineSpacing(3)
+                    .frame(maxWidth: 500)
+            }
+            .padding(.bottom, 34)
+
+            // Centered, Narrower Command Input Box (Positioned Lower)
+            commandInputField
+                .frame(maxWidth: 600)
+                .shadow(color: .black.opacity(0.12), radius: 14, y: 6)
+
+            // Quick Command Chips Below Input
+            VStack(alignment: .leading, spacing: 8) {
+                Text("QUICK COMMANDS")
+                    .font(.system(size: 10, weight: .semibold))
+                    .tracking(1.1)
+                    .foregroundStyle(.secondary)
+                    .padding(.leading, 4)
+
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 240), spacing: 8)], spacing: 8) {
+                    ForEach(vm.autocompleteSuggestions, id: \.self) { suggestion in
+                        suggestionChipButton(suggestion, fullWidth: true)
+                    }
+                }
+            }
+            .frame(maxWidth: 600)
+            .padding(.top, 20)
+
+            Spacer(minLength: 48)
+        }
+        .padding(.horizontal, 28)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var activeTerminalDeckView: some View {
+        VStack(spacing: 0) {
+            VStack(alignment: .leading, spacing: 8) {
+                commandInputField
+
+                HStack(spacing: 8) {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 6) {
+                            ForEach(vm.autocompleteSuggestions, id: \.self) { suggestion in
+                                suggestionChipButton(suggestion, fullWidth: false)
                             }
-                            .buttonStyle(.plain)
                         }
                     }
+
+                    HStack(spacing: 6) {
+                        Button {
+                            withAnimation(.spring(response: 0.28, dampingFraction: 0.85)) {
+                                vm.expandAllBlocks()
+                            }
+                        } label: {
+                            Image(systemName: "rectangle.expand.vertical")
+                                .font(.system(size: 11))
+                        }
+                        .buttonStyle(.borderless)
+                        .help("Expand All Command Blocks")
+
+                        Button {
+                            withAnimation(.spring(response: 0.28, dampingFraction: 0.85)) {
+                                vm.collapseAllBlocks()
+                            }
+                        } label: {
+                            Image(systemName: "rectangle.compress.vertical")
+                                .font(.system(size: 11))
+                        }
+                        .buttonStyle(.borderless)
+                        .help("Collapse All Command Blocks")
+
+                        Button {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                                vm.blocks.removeAll()
+                            }
+                        } label: {
+                            Image(systemName: "trash")
+                                .font(.system(size: 11))
+                        }
+                        .buttonStyle(.borderless)
+                        .help("Clear Terminal Deck")
+                    }
+                    .foregroundStyle(.secondary)
                 }
             }
             .padding(16)
 
             Divider().opacity(0.4)
 
-            // Rich Command Output Blocks
-            if vm.blocks.isEmpty {
-                ContentUnavailableView(
-                    "SierraPort Command Deck",
-                    systemImage: "terminal",
-                    description: Text("Type any SierraPort CLI command above to inspect ports visually.")
-                )
-            } else {
+            ScrollViewReader { proxy in
                 ScrollView {
-                    LazyVStack(spacing: 14) {
+                    LazyVStack(spacing: 10) {
                         ForEach(vm.blocks) { block in
                             commandBlockCard(block)
+                                .id(block.id)
                         }
                     }
                     .padding(16)
+                }
+                .onChange(of: vm.blocks.first?.id) { _, newId in
+                    if let newId {
+                        withAnimation(.easeOut(duration: 0.25)) {
+                            proxy.scrollTo(newId, anchor: .top)
+                        }
+                    }
                 }
             }
         }
     }
 
+    private var commandInputField: some View {
+        HStack(spacing: 10) {
+            Text("❯")
+                .font(.system(size: 16, weight: .bold, design: .monospaced))
+                .foregroundStyle(.cyan)
+
+            TextField("Type a SierraPort command (e.g. list --exposed, audit, inspect 5000 --probe)...", text: $vm.commandInput)
+                .textFieldStyle(.plain)
+                .font(.system(size: 14, design: .monospaced))
+                .focused($isCommandFocused)
+                .onSubmit {
+                    vm.submitCommand()
+                }
+                .onKeyPress(.upArrow) {
+                    vm.historyUp()
+                    return .handled
+                }
+                .onKeyPress(.downArrow) {
+                    vm.historyDown()
+                    return .handled
+                }
+
+            if vm.isExecuting {
+                ProgressView()
+                    .controlSize(.small)
+            }
+
+            Button("Run") {
+                vm.submitCommand()
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.small)
+            .disabled(vm.commandInput.trimmingCharacters(in: .whitespaces).isEmpty)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 11)
+        .background(SierraTheme.surfaceElevated, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .strokeBorder(isCommandFocused ? Color.cyan.opacity(0.55) : SierraTheme.border, lineWidth: 1)
+        )
+    }
+
+    private func suggestionChipButton(_ suggestion: String, fullWidth: Bool) -> some View {
+        let isRunningThis = vm.activeChipCommand == suggestion
+        return Button {
+            withAnimation(.spring(response: 0.25, dampingFraction: 0.85)) {
+                vm.runSuggestion(suggestion)
+            }
+        } label: {
+            HStack(spacing: 6) {
+                if isRunningThis {
+                    ProgressView()
+                        .controlSize(.mini)
+                        .scaleEffect(0.75)
+                } else {
+                    Image(systemName: "play.fill")
+                        .font(.system(size: 8))
+                        .foregroundStyle(.cyan.opacity(0.85))
+                }
+                Text(suggestion)
+                    .font(.system(size: 11, weight: isRunningThis ? .semibold : .regular, design: .monospaced))
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                if fullWidth {
+                    Spacer(minLength: 0)
+                }
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, fullWidth ? 8 : 5)
+            .frame(maxWidth: fullWidth ? .infinity : nil, alignment: .leading)
+            .background(
+                (isRunningThis ? Color.cyan.opacity(0.18) : SierraTheme.surface),
+                in: RoundedRectangle(cornerRadius: fullWidth ? 9 : 14, style: .continuous)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: fullWidth ? 9 : 14, style: .continuous)
+                    .strokeBorder(isRunningThis ? Color.cyan.opacity(0.6) : SierraTheme.border, lineWidth: 1)
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
     private func commandBlockCard(_ block: CommandBlock) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            // Block Header
+        let isNewlyOpened = vm.highlightedBlockId == block.id
+        return VStack(alignment: .leading, spacing: 0) {
+            // Clickable Collapsible Header Bar
             HStack(spacing: 8) {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(isNewlyOpened ? .cyan : .secondary)
+                    .rotationEffect(.degrees(block.isExpanded ? 90 : 0))
+                    .animation(.spring(response: 0.25, dampingFraction: 0.8), value: block.isExpanded)
+                    .frame(width: 14)
+
                 Text("❯")
                     .font(.system(size: 12, weight: .bold, design: .monospaced))
                     .foregroundStyle(.cyan)
+
                 Text("sierraport \(block.command)")
                     .font(.system(size: 13, weight: .semibold, design: .monospaced))
-                    .textSelection(.enabled)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
 
-                Spacer()
+                Text(block.summaryLabel)
+                    .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 2)
+                    .foregroundStyle(.cyan)
+                    .background(.cyan.opacity(0.12), in: Capsule())
+                    .lineLimit(1)
+
+                if isNewlyOpened {
+                    Text("NEW")
+                        .font(.system(size: 9, weight: .bold, design: .monospaced))
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 1)
+                        .foregroundStyle(.green)
+                        .background(.green.opacity(0.15), in: Capsule())
+                        .transition(.scale.combined(with: .opacity))
+                }
+
+                Spacer(minLength: 8)
 
                 Text("\(block.durationMs)ms")
                     .font(.system(size: 11, design: .monospaced))
@@ -261,71 +506,124 @@ struct ContentView: View {
                     .font(.system(size: 11, design: .monospaced))
                     .foregroundStyle(.secondary)
 
-                Button {
-                    vm.toggleRaw(for: block.id)
-                } label: {
-                    Text(block.showRaw ? "Visual" : "Raw")
-                        .font(.system(size: 10, weight: .semibold))
+                if block.isExpanded {
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.15)) {
+                            vm.toggleRaw(for: block.id)
+                        }
+                    } label: {
+                        Text(block.showRaw ? "Visual" : "Raw")
+                            .font(.system(size: 10, weight: .semibold))
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.mini)
                 }
-                .buttonStyle(.bordered)
-                .controlSize(.mini)
+
+                Button {
+                    Task { await vm.executeCommand(block.command) }
+                } label: {
+                    Image(systemName: "arrow.clockwise")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.borderless)
+                .help("Re-run command")
+
+                Button {
+                    withAnimation(.easeOut(duration: 0.18)) {
+                        vm.removeBlock(for: block.id)
+                    }
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.borderless)
+                .help("Dismiss block")
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 11)
+            .contentShape(Rectangle())
+            .onTapGesture {
+                withAnimation(.spring(response: 0.28, dampingFraction: 0.85)) {
+                    vm.toggleExpand(for: block.id)
+                }
             }
 
-            Divider().opacity(0.35)
+            if block.isExpanded {
+                Divider().opacity(0.35)
 
-            if block.showRaw {
-                ScrollView(.horizontal, showsIndicators: true) {
-                    Text(block.rawOutput)
-                        .font(.system(size: 11.5, design: .monospaced))
-                        .textSelection(.enabled)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                Group {
+                    if block.showRaw {
+                        ScrollView(.horizontal, showsIndicators: true) {
+                            Text(block.rawOutput)
+                                .font(.system(size: 11.5, design: .monospaced))
+                                .textSelection(.enabled)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .padding(10)
+                        .background(SierraTheme.codeWell, in: RoundedRectangle(cornerRadius: 8))
+                        .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(SierraTheme.borderSubtle, lineWidth: 1))
+                    } else {
+                        switch block.payload {
+                        case .ports(let entries):
+                            PortTableView(
+                                entries: entries,
+                                selectedPort: vm.selectedPort,
+                                onInspect: { vm.inspectPort($0) },
+                                onKill: { vm.killPort($0) }
+                            )
+                        case .audit(let report):
+                            AuditVisualView(report: report, onInspectPort: { vm.inspectPort($0) })
+                        case .inspect(let report):
+                            InspectVisualView(report: report, onKill: { vm.killPort($0) })
+                        case .probe(let results):
+                            ProbeResultsVisualView(results: results)
+                        case .stats(let stats):
+                            StatsVisualView(
+                                stats: stats,
+                                history: vm.tickHistory,
+                                onSelectProcess: { proc in
+                                    vm.selectedTab = .terminal
+                                    Task { await vm.executeCommand("list --all --proc \(proc)") }
+                                }
+                            )
+                        case .diff(let diff):
+                            DiffVisualView(diff: diff)
+                        case .freePorts(let free):
+                            FreePortsVisualView(result: free)
+                        case .text(let str):
+                            Text(str)
+                                .font(.system(size: 12, design: .monospaced))
+                                .textSelection(.enabled)
+                        case .error(let err):
+                            Label(err, systemImage: "exclamationmark.triangle.fill")
+                                .font(.system(size: 12, design: .monospaced))
+                                .foregroundStyle(.red)
+                        }
+                    }
                 }
-                .padding(10)
-                .background(Color.black.opacity(0.25), in: RoundedRectangle(cornerRadius: 8))
-            } else {
-                switch block.payload {
-                case .ports(let entries):
-                    PortTableView(
-                        entries: entries,
-                        onInspect: { vm.inspectPort($0) },
-                        onKill: { vm.killPort($0) }
-                    )
-                case .audit(let report):
-                    AuditVisualView(report: report, onInspectPort: { vm.inspectPort($0) })
-                case .inspect(let report):
-                    InspectVisualView(report: report, onKill: { vm.killPort($0) })
-                case .probe(let results):
-                    ProbeResultsVisualView(results: results)
-                case .stats(let stats):
-                    StatsVisualView(stats: stats)
-                case .diff(let diff):
-                    DiffVisualView(diff: diff)
-                case .freePorts(let free):
-                    FreePortsVisualView(result: free)
-                case .text(let str):
-                    Text(str)
-                        .font(.system(size: 12, design: .monospaced))
-                        .textSelection(.enabled)
-                case .error(let err):
-                    Label(err, systemImage: "exclamationmark.triangle.fill")
-                        .font(.system(size: 12, design: .monospaced))
-                        .foregroundStyle(.red)
-                }
+                .padding(14)
+                .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
-        .padding(14)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .background(SierraTheme.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .strokeBorder(.primary.opacity(0.07), lineWidth: 1)
+                .strokeBorder(
+                    isNewlyOpened
+                        ? Color.cyan.opacity(0.65)
+                        : (block.isExpanded ? SierraTheme.border : SierraTheme.borderSubtle),
+                    lineWidth: isNewlyOpened ? 1.5 : 1
+                )
         )
+        .animation(.easeInOut(duration: 0.25), value: isNewlyOpened)
     }
 
     // MARK: - 2. Live Watch Dashboard
 
     private var liveWatchView: some View {
-        VStack(spacing: 14) {
-            // Controls Bar
+        VStack(spacing: 12) {
             HStack(spacing: 12) {
                 Button {
                     if vm.isStreaming { vm.stopLiveStream() } else { vm.startLiveStream() }
@@ -360,34 +658,38 @@ struct ContentView: View {
                     Text("Tick #\(tick.tick) · UTC \(tick.timestampUtc)")
                         .font(.system(size: 11, design: .monospaced))
                         .foregroundStyle(.secondary)
+                        .contentTransition(.numericText())
                 }
             }
             .padding(.horizontal, 16)
             .padding(.top, 14)
 
-            // KPI Strip
             if let tick = vm.latestTick {
                 HStack(spacing: 10) {
-                    KpiPill(title: "Active", value: "\(tick.active)", tint: .primary)
-                    KpiPill(title: "TCP / UDP", value: "\(tick.tcp) / \(tick.udp)", tint: .cyan)
-                    KpiPill(title: "Exposed", value: "\(tick.exposed)", tint: tick.exposed > 0 ? .orange : .green)
-                    KpiPill(title: "Opened", value: "+\(tick.openedTotal)", tint: .green)
-                    KpiPill(title: "Closed", value: "-\(tick.closedTotal)", tint: .red)
-                    KpiPill(title: "Scan Latency", value: "\(tick.scanMs)ms", tint: .secondary)
+                    KpiPill(title: "Active", value: "\(tick.active)", tint: .primary, icon: "network")
+                    KpiPill(title: "TCP / UDP", value: "\(tick.tcp) / \(tick.udp)", tint: .cyan, icon: "arrow.left.arrow.right")
+                    KpiPill(title: "Exposed", value: "\(tick.exposed)", tint: tick.exposed > 0 ? .orange : .green, icon: "globe")
+                    KpiPill(title: "Opened", value: "+\(tick.openedTotal)", tint: .green, icon: "plus.circle")
+                    KpiPill(title: "Closed", value: "-\(tick.closedTotal)", tint: .red, icon: "minus.circle")
+                    KpiPill(title: "Scan", value: "\(tick.scanMs)ms", tint: .secondary, icon: "speedometer")
                 }
                 .padding(.horizontal, 16)
             }
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
+                    LiveSparklineView(history: vm.tickHistory, height: 95)
+
                     if let tick = vm.latestTick {
                         PortTableView(
                             entries: tick.entries,
+                            selectedPort: vm.selectedPort,
                             onInspect: { vm.inspectPort($0) },
                             onKill: { vm.killPort($0) }
                         )
                         .padding(14)
-                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .background(SierraTheme.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(SierraTheme.border, lineWidth: 1))
                     } else {
                         ProgressView("Starting live port stream...")
                             .frame(maxWidth: .infinity, minHeight: 200)
@@ -415,17 +717,20 @@ struct ContentView: View {
                                         .frame(width: 68, alignment: .leading)
                                     Text("\(ev.protocolName) \(ev.endpoint)")
                                         .font(.system(size: 12, design: .monospaced))
+                                        .lineLimit(1)
                                     ScopeBadge(scope: ev.scope)
                                     Spacer()
                                     Text(ev.process)
                                         .font(.system(size: 12))
                                         .foregroundStyle(.secondary)
+                                        .lineLimit(1)
                                 }
                                 .padding(.vertical, 3)
                             }
                         }
                         .padding(14)
-                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .background(SierraTheme.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(SierraTheme.border, lineWidth: 1))
                     }
                 }
                 .padding(.horizontal, 16)
@@ -458,22 +763,33 @@ struct ContentView: View {
                 } else if let report = vm.auditReport {
                     AuditVisualView(report: report, onInspectPort: { vm.inspectPort($0) })
                         .padding(16)
-                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .background(SierraTheme.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(SierraTheme.border, lineWidth: 1))
                 }
             }
             .padding(18)
         }
     }
 
-    // MARK: - 4. Analytics Tab
+    // MARK: - 4. Dynamic Analytics Tab
 
     private var statsTabView: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
-                HStack {
-                    Text("Socket & Exposure Analytics")
-                        .font(.system(size: 18, weight: .semibold))
+                HStack(spacing: 12) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Socket & Exposure Analytics")
+                            .font(.system(size: 18, weight: .semibold))
+                        Text("Real-time telemetry, bind exposure breakdown, and process activity")
+                            .font(.system(size: 12))
+                            .foregroundStyle(.secondary)
+                    }
                     Spacer()
+
+                    Toggle("Live Sync", isOn: $vm.liveAnalyticsEnabled)
+                        .toggleStyle(.switch)
+                        .controlSize(.small)
+
                     Button {
                         Task { await vm.refreshStats() }
                     } label: {
@@ -487,14 +803,21 @@ struct ContentView: View {
                     ProgressView("Loading analytics...")
                         .frame(maxWidth: .infinity, minHeight: 200)
                 } else if let stats = vm.statsReport {
-                    StatsVisualView(stats: stats)
+                    StatsVisualView(
+                        stats: stats,
+                        history: vm.tickHistory,
+                        onSelectProcess: { proc in
+                            vm.selectedTab = .terminal
+                            Task { await vm.executeCommand("list --all --proc \(proc)") }
+                        }
+                    )
                 }
             }
             .padding(18)
         }
     }
 
-    // MARK: - Right-Side Forensic Inspector Drawer
+    // MARK: - Native Right-Side Forensic Inspector
 
     private var inspectorDrawer: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -503,7 +826,10 @@ struct ContentView: View {
                     .font(.system(size: 13, weight: .semibold))
                 Spacer()
                 Button {
-                    vm.showingInspector = false
+                    withAnimation(.spring(response: 0.25, dampingFraction: 0.85)) {
+                        vm.showingInspector = false
+                        vm.selectedPort = nil
+                    }
                 } label: {
                     Image(systemName: "xmark.circle.fill")
                         .foregroundStyle(.secondary)
@@ -521,9 +847,17 @@ struct ContentView: View {
                 } else if let report = vm.inspectedReport {
                     InspectVisualView(report: report, onKill: { vm.killPort($0) })
                         .padding(14)
+                } else {
+                    ContentUnavailableView(
+                        "No Port Selected",
+                        systemImage: "sparkle.magnifyingglass",
+                        description: Text("Click any row in a port table to inspect its process ancestry and live banner.")
+                    )
+                    .padding(.top, 40)
                 }
             }
         }
+        .background(SierraTheme.sidebar)
     }
 }
 
