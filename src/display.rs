@@ -317,38 +317,41 @@ pub fn print_ports_csv(entries: &[PortEntry]) {
     }
 }
 
+pub fn port_entry_to_json(e: &PortEntry) -> String {
+    let pid_json = opt_u64_json(e.pid.map(u64::from));
+    let ppid_json = opt_u64_json(e.ppid.map(u64::from));
+    let mem_json = opt_u64_json(e.memory_kb);
+    let user_json = opt_str_json(e.user.as_deref());
+    let proc_json = opt_str_json(e.process_name.as_deref());
+    let cmd_json = opt_str_json(e.cmdline.as_deref());
+    let svc_json = opt_str_json(well_known_service(e.local_port));
+    let tag_json = opt_str_json(e.runtime_tag());
+
+    format!(
+        "{{\"protocol\":\"{}\",\"local_addr\":\"{}\",\"local_port\":{},\"remote_addr\":\"{}\",\"remote_port\":{},\"state\":\"{}\",\"bind_scope\":\"{}\",\"pid\":{},\"ppid\":{},\"user\":{},\"memory_kb\":{},\"process\":{},\"runtime\":{},\"service\":{},\"cmdline\":{}}}",
+        e.protocol.as_str(),
+        json_escape(&e.local_addr),
+        e.local_port,
+        json_escape(&e.remote_addr),
+        e.remote_port,
+        json_escape(e.state.as_str()),
+        e.bind_scope().as_str(),
+        pid_json,
+        ppid_json,
+        user_json,
+        mem_json,
+        proc_json,
+        tag_json,
+        svc_json,
+        cmd_json
+    )
+}
+
 pub fn print_ports_json(entries: &[PortEntry]) {
     println!("[");
     for (idx, e) in entries.iter().enumerate() {
         let comma = if idx + 1 < entries.len() { "," } else { "" };
-        let pid_json = opt_u64_json(e.pid.map(u64::from));
-        let ppid_json = opt_u64_json(e.ppid.map(u64::from));
-        let mem_json = opt_u64_json(e.memory_kb);
-        let user_json = opt_str_json(e.user.as_deref());
-        let proc_json = opt_str_json(e.process_name.as_deref());
-        let cmd_json = opt_str_json(e.cmdline.as_deref());
-        let svc_json = opt_str_json(well_known_service(e.local_port));
-        let tag_json = opt_str_json(e.runtime_tag());
-
-        println!(
-            "  {{\"protocol\":\"{}\",\"local_addr\":\"{}\",\"local_port\":{},\"remote_addr\":\"{}\",\"remote_port\":{},\"state\":\"{}\",\"bind_scope\":\"{}\",\"pid\":{},\"ppid\":{},\"user\":{},\"memory_kb\":{},\"process\":{},\"runtime\":{},\"service\":{},\"cmdline\":{}}}{}",
-            e.protocol.as_str(),
-            json_escape(&e.local_addr),
-            e.local_port,
-            json_escape(&e.remote_addr),
-            e.remote_port,
-            json_escape(e.state.as_str()),
-            e.bind_scope().as_str(),
-            pid_json,
-            ppid_json,
-            user_json,
-            mem_json,
-            proc_json,
-            tag_json,
-            svc_json,
-            cmd_json,
-            comma
-        );
+        println!("  {}{}", port_entry_to_json(e), comma);
     }
     println!("]");
 }

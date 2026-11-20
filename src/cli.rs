@@ -46,6 +46,10 @@ pub enum Command {
         log_file: Option<String>,
         alert_new: bool,
     },
+    Stream {
+        filter: FilterOptions,
+        interval_ms: u64,
+    },
     Check {
         host: String,
         ports_spec: String,
@@ -191,6 +195,37 @@ pub fn parse_args<I: IntoIterator<Item = String>>(args: I) -> Result<CliArgs, St
                     interval_ms,
                     log_file,
                     alert_new,
+                },
+                global,
+            })
+        }
+        "stream" => {
+            let mut interval_ms: u64 = 1000;
+            let mut filtered_rest = Vec::new();
+            let mut i = 0;
+            while i < rest.len() {
+                match rest[i].as_str() {
+                    "-i" | "--interval" => {
+                        i += 1;
+                        let val = rest
+                            .get(i)
+                            .ok_or_else(|| "Missing value for --interval".to_string())?;
+                        interval_ms = val
+                            .parse()
+                            .map_err(|_| format!("Invalid interval (ms): '{val}'"))?;
+                        if interval_ms < 200 {
+                            return Err("Minimum stream interval is 200ms".to_string());
+                        }
+                    }
+                    other => filtered_rest.push(other.to_string()),
+                }
+                i += 1;
+            }
+            let filter = parse_filter_flags(&filtered_rest, &mut global, true)?;
+            Ok(CliArgs {
+                command: Command::Stream {
+                    filter,
+                    interval_ms,
                 },
                 global,
             })

@@ -33,6 +33,10 @@ fn main() -> ExitCode {
             alert_new,
             &parsed.global,
         ),
+        Command::Stream {
+            filter,
+            interval_ms,
+        } => commands::run_stream(&filter, interval_ms),
         Command::Check {
             host,
             ports_spec,

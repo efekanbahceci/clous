@@ -1,4 +1,6 @@
 /target
+/dist
+macos/SierraPortApp/.build
 Cargo.lock
 **/*.rs.bk
 *.pdb

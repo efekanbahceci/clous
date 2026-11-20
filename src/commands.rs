@@ -10,9 +10,9 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use crate::audit::run_audit_analysis;
 use crate::cli::{GlobalOptions, KillTarget, SnapshotAction};
 use crate::display::{
-    Theme, print_audit_report, print_diff_report, print_inspect_report, print_ports_compact,
-    print_ports_csv, print_ports_json, print_ports_table, print_probe_results, print_stats,
-    render_ports_compact, render_ports_table,
+    Theme, port_entry_to_json, print_audit_report, print_diff_report, print_inspect_report,
+    print_ports_compact, print_ports_csv, print_ports_json, print_ports_table, print_probe_results,
+    print_stats, render_ports_compact, render_ports_table,
 };
 use crate::models::{
     FilterOptions, OutputFormat, PortEntry, expand_port_ranges, parse_port_spec, well_known_service,
@@ -252,6 +252,113 @@ pub fn run_watch(
         first_run = false;
 
         // Sleep in short slices so Ctrl+C exits immediately
+        let wake_at = Instant::now() + interval;
+        while Instant::now() < wake_at && !WATCH_STOP.load(Ordering::SeqCst) {
+            let rem = wake_at.saturating_duration_since(Instant::now());
+            thread::sleep(rem.min(Duration::from_millis(50)));
+        }
+    }
+
+    Ok(())
+}
+
+pub fn run_stream(filter: &FilterOptions, interval_ms: u64) -> Result<(), String> {
+    install_watch_signal_handler();
+    let interval = Duration::from_millis(interval_ms);
+    let mut previous: HashMap<_, PortEntry> = HashMap::new();
+    let mut first_run = true;
+    let mut total_opened = 0usize;
+    let mut total_closed = 0usize;
+    let mut tick: u64 = 0;
+
+    while !WATCH_STOP.load(Ordering::SeqCst) {
+        tick += 1;
+        let scan_start = Instant::now();
+        let mut entries: Vec<PortEntry> = scan_ports()?
+            .into_iter()
+            .filter(|e| filter.matches(e))
+            .collect();
+        filter.sort_entries(&mut entries);
+        let scan_ms = scan_start.elapsed().as_millis();
+
+        let current: HashMap<_, PortEntry> = entries
+            .iter()
+            .map(|e| (e.identity_key(), e.clone()))
+            .collect();
+
+        let ts = format_hms_utc();
+        let mut tick_events: Vec<String> = Vec::new();
+
+        if !first_run {
+            for (k, entry) in &current {
+                if !previous.contains_key(k) {
+                    total_opened += 1;
+                    let proc_str = entry.process_name.as_deref().unwrap_or("-");
+                    let pid_json = entry
+                        .pid
+                        .map(|p| p.to_string())
+                        .unwrap_or_else(|| "null".to_string());
+                    tick_events.push(format!(
+                        "{{\"time\":\"{ts}\",\"kind\":\"OPEN\",\"protocol\":\"{}\",\"port\":{},\"endpoint\":\"{}\",\"scope\":\"{}\",\"pid\":{},\"process\":\"{}\"}}",
+                        entry.protocol.as_str(),
+                        entry.local_port,
+                        entry.local_endpoint(),
+                        entry.bind_scope().as_str(),
+                        pid_json,
+                        proc_str.replace('"', "\\\"")
+                    ));
+                }
+            }
+            for (k, entry) in &previous {
+                if !current.contains_key(k) {
+                    total_closed += 1;
+                    let proc_str = entry.process_name.as_deref().unwrap_or("-");
+                    let pid_json = entry
+                        .pid
+                        .map(|p| p.to_string())
+                        .unwrap_or_else(|| "null".to_string());
+                    tick_events.push(format!(
+                        "{{\"time\":\"{ts}\",\"kind\":\"CLOSED\",\"protocol\":\"{}\",\"port\":{},\"endpoint\":\"{}\",\"scope\":\"{}\",\"pid\":{},\"process\":\"{}\"}}",
+                        entry.protocol.as_str(),
+                        entry.local_port,
+                        entry.local_endpoint(),
+                        entry.bind_scope().as_str(),
+                        pid_json,
+                        proc_str.replace('"', "\\\"")
+                    ));
+                }
+            }
+        }
+
+        let tcp_cnt = entries.iter().filter(|e| e.protocol.is_tcp()).count();
+        let udp_cnt = entries.iter().filter(|e| e.protocol.is_udp()).count();
+        let exposed_cnt = entries
+            .iter()
+            .filter(|e| e.state.is_listening() && e.bind_scope().is_exposed())
+            .count();
+
+        let entries_json: String = entries
+            .iter()
+            .map(port_entry_to_json)
+            .collect::<Vec<_>>()
+            .join(",");
+        let events_json = tick_events.join(",");
+
+        let line = format!(
+            "{{\"tick\":{tick},\"timestamp_utc\":\"{ts}\",\"scan_ms\":{scan_ms},\"active\":{},\"tcp\":{tcp_cnt},\"udp\":{udp_cnt},\"exposed\":{exposed_cnt},\"opened_total\":{total_opened},\"closed_total\":{total_closed},\"events\":[{events_json}],\"entries\":[{entries_json}]}}\n",
+            entries.len()
+        );
+
+        {
+            let mut out = io::stdout().lock();
+            if out.write_all(line.as_bytes()).is_err() || out.flush().is_err() {
+                break;
+            }
+        }
+
+        previous = current;
+        first_run = false;
+
         let wake_at = Instant::now() + interval;
         while Instant::now() < wake_at && !WATCH_STOP.load(Ordering::SeqCst) {
             let rem = wake_at.saturating_duration_since(Instant::now());
