@@ -101,6 +101,21 @@ struct ContentView: View {
         .onAppear {
             isCommandFocused = true
         }
+        .background {
+            // Hidden global keyboard shortcuts for mouse-free tab switching (⌘1–⌘4)
+            Group {
+                Button("") { vm.selectedTab = .terminal; isCommandFocused = true }
+                    .keyboardShortcut("1", modifiers: .command)
+                Button("") { vm.selectedTab = .watch }
+                    .keyboardShortcut("2", modifiers: .command)
+                Button("") { vm.selectedTab = .audit }
+                    .keyboardShortcut("3", modifiers: .command)
+                Button("") { vm.selectedTab = .stats }
+                    .keyboardShortcut("4", modifiers: .command)
+            }
+            .opacity(0)
+            .frame(width: 0, height: 0)
+        }
     }
 
     // MARK: - Sidebar
@@ -276,20 +291,30 @@ struct ContentView: View {
 
             // Quick Command Chips Below Input
             VStack(alignment: .leading, spacing: 8) {
-                Text("QUICK COMMANDS")
-                    .font(.system(size: 10, weight: .semibold))
-                    .tracking(1.1)
-                    .foregroundStyle(.secondary)
-                    .padding(.leading, 4)
+                HStack {
+                    Text(vm.inputError != nil ? "DID YOU MEAN?" : "QUICK COMMANDS")
+                        .font(.system(size: 10, weight: .semibold))
+                        .tracking(1.1)
+                        .foregroundStyle(vm.inputError != nil ? .orange : .secondary)
+                    Spacer()
+                    Text("Tab / ↑↓ select · ⏎ run · Esc clear")
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundStyle(.secondary.opacity(0.8))
+                }
+                .padding(.horizontal, 4)
 
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 240), spacing: 8)], spacing: 8) {
-                    ForEach(vm.autocompleteSuggestions, id: \.self) { suggestion in
-                        suggestionChipButton(suggestion, fullWidth: true)
+                    ForEach(Array(vm.autocompleteSuggestions.enumerated()), id: \.offset) { idx, suggestion in
+                        suggestionChipButton(
+                            suggestion,
+                            isKeyboardFocused: vm.selectedSuggestionIndex == idx,
+                            fullWidth: true
+                        )
                     }
                 }
             }
             .frame(maxWidth: 600)
-            .padding(.top, 20)
+            .padding(.top, 16)
 
             Spacer(minLength: 48)
         }
@@ -305,13 +330,29 @@ struct ContentView: View {
                 HStack(spacing: 8) {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 6) {
-                            ForEach(vm.autocompleteSuggestions, id: \.self) { suggestion in
-                                suggestionChipButton(suggestion, fullWidth: false)
+                            ForEach(Array(vm.autocompleteSuggestions.enumerated()), id: \.offset) { idx, suggestion in
+                                suggestionChipButton(
+                                    suggestion,
+                                    isKeyboardFocused: vm.selectedSuggestionIndex == idx,
+                                    fullWidth: false
+                                )
                             }
                         }
                     }
 
-                    HStack(spacing: 6) {
+                    HStack(spacing: 8) {
+                        if vm.activeResultCount > 0 && vm.commandInput.isEmpty && vm.inputError == nil {
+                            Text(vm.focusedResultIndex != nil ? "⏎ inspect · Tab/↑↓ row · Esc back" : "Tab / ↓ browse rows")
+                                .font(.system(size: 10, design: .monospaced))
+                                .foregroundStyle(vm.focusedResultIndex != nil ? .cyan : .secondary)
+                                .padding(.horizontal, 7)
+                                .padding(.vertical, 3)
+                                .background(
+                                    vm.focusedResultIndex != nil ? Color.cyan.opacity(0.12) : SierraTheme.surface,
+                                    in: Capsule()
+                                )
+                        }
+
                         Button {
                             withAnimation(.spring(response: 0.28, dampingFraction: 0.85)) {
                                 vm.expandAllBlocks()
@@ -369,55 +410,111 @@ struct ContentView: View {
                         }
                     }
                 }
+                .onChange(of: vm.focusedResultIndex) { _, rowIdx in
+                    if let rowIdx {
+                        withAnimation(.easeOut(duration: 0.15)) {
+                            proxy.scrollTo("port-row-\(rowIdx)", anchor: .center)
+                        }
+                    }
+                }
             }
         }
     }
 
     private var commandInputField: some View {
-        HStack(spacing: 10) {
-            Text("❯")
-                .font(.system(size: 16, weight: .bold, design: .monospaced))
-                .foregroundStyle(.cyan)
+        let hasError = vm.inputError != nil
+        return VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 10) {
+                Text("❯")
+                    .font(.system(size: 16, weight: .bold, design: .monospaced))
+                    .foregroundStyle(hasError ? .red : .cyan)
 
-            TextField("Type a SierraPort command (e.g. list --exposed, audit, inspect 5000 --probe)...", text: $vm.commandInput)
-                .textFieldStyle(.plain)
-                .font(.system(size: 14, design: .monospaced))
-                .focused($isCommandFocused)
-                .onSubmit {
+                TextField("Type a command or plain English (e.g. 5000, close 3000, exposed, security scan, free port)...", text: $vm.commandInput)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 14, design: .monospaced))
+                    .focused($isCommandFocused)
+                    .onChange(of: vm.commandInput) { _, _ in
+                        vm.clearInputError()
+                    }
+                    .onSubmit {
+                        vm.submitCommand()
+                    }
+                    .onKeyPress(keys: [.tab]) { press in
+                        withAnimation(.easeOut(duration: 0.12)) {
+                            if press.modifiers.contains(.shift) {
+                                vm.selectPreviousTarget()
+                            } else {
+                                vm.selectNextTarget()
+                            }
+                        }
+                        return .handled
+                    }
+                    .onKeyPress(.upArrow) {
+                        withAnimation(.easeOut(duration: 0.12)) {
+                            vm.handleUpArrow()
+                        }
+                        return .handled
+                    }
+                    .onKeyPress(.downArrow) {
+                        withAnimation(.easeOut(duration: 0.12)) {
+                            vm.handleDownArrow()
+                        }
+                        return .handled
+                    }
+                    .onKeyPress(.escape) {
+                        withAnimation(.easeOut(duration: 0.12)) {
+                            vm.handleEscape()
+                        }
+                        return .handled
+                    }
+
+                if vm.isExecuting {
+                    ProgressView()
+                        .controlSize(.small)
+                }
+
+                Button("Run") {
                     vm.submitCommand()
                 }
-                .onKeyPress(.upArrow) {
-                    vm.historyUp()
-                    return .handled
-                }
-                .onKeyPress(.downArrow) {
-                    vm.historyDown()
-                    return .handled
-                }
-
-            if vm.isExecuting {
-                ProgressView()
-                    .controlSize(.small)
+                .buttonStyle(.borderedProminent)
+                .tint(hasError ? .red : .accentColor)
+                .controlSize(.small)
+                .disabled(vm.commandInput.trimmingCharacters(in: .whitespaces).isEmpty)
             }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 11)
+            .background(SierraTheme.surfaceElevated, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .strokeBorder(
+                        hasError
+                            ? Color.red.opacity(0.75)
+                            : (isCommandFocused ? Color.cyan.opacity(0.55) : SierraTheme.border),
+                        lineWidth: hasError ? 1.5 : 1
+                    )
+            )
+            .modifier(ShakeEffect(animatableData: vm.inputShakeTrigger))
 
-            Button("Run") {
-                vm.submitCommand()
+            if let err = vm.inputError {
+                HStack(spacing: 6) {
+                    Image(systemName: "exclamationmark.circle.fill")
+                        .font(.system(size: 11))
+                    Text(err)
+                        .font(.system(size: 11.5, weight: .medium))
+                        .lineLimit(2)
+                    Spacer()
+                }
+                .foregroundStyle(.red)
+                .padding(.horizontal, 6)
+                .transition(.opacity.combined(with: .move(edge: .top)))
             }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.small)
-            .disabled(vm.commandInput.trimmingCharacters(in: .whitespaces).isEmpty)
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 11)
-        .background(SierraTheme.surfaceElevated, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .strokeBorder(isCommandFocused ? Color.cyan.opacity(0.55) : SierraTheme.border, lineWidth: 1)
-        )
+        .animation(.easeInOut(duration: 0.18), value: hasError)
     }
 
-    private func suggestionChipButton(_ suggestion: String, fullWidth: Bool) -> some View {
+    private func suggestionChipButton(_ suggestion: String, isKeyboardFocused: Bool, fullWidth: Bool) -> some View {
         let isRunningThis = vm.activeChipCommand == suggestion
+        let isHighlighted = isRunningThis || isKeyboardFocused
         return Button {
             withAnimation(.spring(response: 0.25, dampingFraction: 0.85)) {
                 vm.runSuggestion(suggestion)
@@ -429,28 +526,37 @@ struct ContentView: View {
                         .controlSize(.mini)
                         .scaleEffect(0.75)
                 } else {
-                    Image(systemName: "play.fill")
-                        .font(.system(size: 8))
-                        .foregroundStyle(.cyan.opacity(0.85))
+                    Image(systemName: isKeyboardFocused ? "return" : "play.fill")
+                        .font(.system(size: isKeyboardFocused ? 9 : 8, weight: .bold))
+                        .foregroundStyle(isKeyboardFocused ? .cyan : .cyan.opacity(0.8))
                 }
                 Text(suggestion)
-                    .font(.system(size: 11, weight: isRunningThis ? .semibold : .regular, design: .monospaced))
+                    .font(.system(size: 11, weight: isHighlighted ? .semibold : .regular, design: .monospaced))
+                    .foregroundStyle(isHighlighted ? Color.primary : Color.primary.opacity(0.9))
                     .lineLimit(1)
                     .truncationMode(.tail)
                 if fullWidth {
-                    Spacer(minLength: 0)
+                    Spacer(minLength: 4)
+                }
+                if isKeyboardFocused && !isRunningThis {
+                    Text("⏎")
+                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                        .foregroundStyle(.cyan)
                 }
             }
             .padding(.horizontal, 10)
             .padding(.vertical, fullWidth ? 8 : 5)
             .frame(maxWidth: fullWidth ? .infinity : nil, alignment: .leading)
             .background(
-                (isRunningThis ? Color.cyan.opacity(0.18) : SierraTheme.surface),
+                (isHighlighted ? Color.cyan.opacity(0.18) : SierraTheme.surface),
                 in: RoundedRectangle(cornerRadius: fullWidth ? 9 : 14, style: .continuous)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: fullWidth ? 9 : 14, style: .continuous)
-                    .strokeBorder(isRunningThis ? Color.cyan.opacity(0.6) : SierraTheme.border, lineWidth: 1)
+                    .strokeBorder(
+                        isHighlighted ? Color.cyan.opacity(0.75) : SierraTheme.border,
+                        lineWidth: isKeyboardFocused ? 1.5 : 1
+                    )
             )
             .contentShape(Rectangle())
         }
@@ -473,10 +579,21 @@ struct ContentView: View {
                     .font(.system(size: 12, weight: .bold, design: .monospaced))
                     .foregroundStyle(.cyan)
 
-                Text("sierraport \(block.command)")
-                    .font(.system(size: 13, weight: .semibold, design: .monospaced))
-                    .lineLimit(1)
-                    .truncationMode(.tail)
+                if let origin = block.originalInput {
+                    Text(origin)
+                        .font(.system(size: 13, weight: .semibold))
+                        .lineLimit(1)
+                    Text("→ \(block.command)")
+                        .font(.system(size: 11, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                } else {
+                    Text(block.command)
+                        .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
 
                 Text(block.summaryLabel)
                     .font(.system(size: 10, weight: .semibold, design: .monospaced))
@@ -569,8 +686,10 @@ struct ContentView: View {
                         case .ports(let entries):
                             PortTableView(
                                 entries: entries,
-                                selectedPort: vm.selectedPort,
-                                onInspect: { vm.inspectPort($0) },
+                                tableId: block.id.uuidString,
+                                selectedRowKey: vm.selectedRowKey,
+                                focusedRowIndex: vm.focusedResultBlockId == block.id ? vm.focusedResultIndex : nil,
+                                onInspect: { port, rowKey in vm.inspectPort(port, rowKey: rowKey) },
                                 onKill: { vm.killPort($0) }
                             )
                         case .audit(let report):
@@ -683,8 +802,9 @@ struct ContentView: View {
                     if let tick = vm.latestTick {
                         PortTableView(
                             entries: tick.entries,
-                            selectedPort: vm.selectedPort,
-                            onInspect: { vm.inspectPort($0) },
+                            tableId: "live-watch",
+                            selectedRowKey: vm.selectedRowKey,
+                            onInspect: { port, rowKey in vm.inspectPort(port, rowKey: rowKey) },
                             onKill: { vm.killPort($0) }
                         )
                         .padding(14)
@@ -872,6 +992,7 @@ struct ContentView: View {
                     withAnimation(.spring(response: 0.25, dampingFraction: 0.85)) {
                         vm.showingInspector = false
                         vm.selectedPort = nil
+                        vm.selectedRowKey = nil
                     }
                 } label: {
                     Image(systemName: "xmark.circle.fill")
@@ -901,6 +1022,23 @@ struct ContentView: View {
             }
         }
         .background(SierraTheme.sidebar)
+    }
+}
+
+// MARK: - Apple-Style Horizontal Shake Effect for Invalid Commands
+
+struct ShakeEffect: GeometryEffect {
+    var amount: CGFloat = 7
+    var shakesPerUnit: CGFloat = 3
+    var animatableData: CGFloat
+
+    func effectValue(size: CGSize) -> ProjectionTransform {
+        ProjectionTransform(
+            CGAffineTransform(
+                translationX: amount * sin(animatableData * .pi * shakesPerUnit * 2),
+                y: 0
+            )
+        )
     }
 }
 

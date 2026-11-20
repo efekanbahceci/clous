@@ -16,6 +16,11 @@ Bu doküman, **SierraPort** projesinin ilk sürümünden itibaren geçirdiği t�
 | **Faz 4** | Cuma, 20 Kasım 2026 | `14:32` | `87104ac` | Native macOS `SierraPort.app` (SwiftUI + Rust `stream` NDJSON + Menu Bar Extra) |
 | **Faz 5** | Cuma, 20 Kasım 2026 | `15:20` | `cca4b1a` | Katlanabilir Terminal Deck, dinamik Swift Charts, `#111110` Dark/Light tema, `sierraport-preview.png` |
 | **Faz 6** | Cuma, 20 Kasım 2026 | `15:33` | `8143ede` | Yeni Nesil Güvenlik & Binary Güven Denetim Motoru (`codesign`, Firewall Posture, Deep Probe, Allowlist, Export MD) |
+| **Faz 7** | Cuma, 20 Kasım 2026 | `15:42` | *(pending push)* | Terminal Deck Doğal Dil & Öneksiz Akıllı Komut Çözümleyici (`sierraport` yazmadan doğal Türkçe/İngilizce metin, port numarası veya süreç adı çalıştırma) |
+| **Faz 8** | Cuma, 20 Kasım 2026 | `15:50` | *(pending push)* | Katı Komut Doğrulama, Apple Shake Hata Animasyonu ve Türkçe/İngilizce İlişkili Komut Öneri Motoru |
+| **Faz 9** | Cuma, 20 Kasım 2026 | `15:54` | *(pending push)* | Klavye-Öncelikli (`Tab` / `Shift+Tab` / `↑↓` / `⏎` / `Esc` / `⌘1–4`) Mouse'suz Hızlı Gezinme Optimizasyonu |
+| **Faz 10** | Cuma, 20 Kasım 2026 | `15:59` | *(pending push)* | Sonuç Satırları İçi `Tab` / `↑↓` Gezinme, Otomatik Kaydırma ve Tek `Enter` ile Forensic Inspector Açma |
+| **Faz 11** | Cuma, 20 Kasım 2026 | `16:03` | *(pending push)* | Tekil Satır Seçim Düzeltmesi (`selectedRowKey`) ve `inspect` Duplicate UDP Soket Tekilleştirmesi |
 
 ---
 
@@ -27,6 +32,11 @@ Bu doküman, **SierraPort** projesinin ilk sürümünden itibaren geçirdiği t�
 4. [Faz 4 — Native macOS Masaüstü Uygulaması (`SierraPort.app`: SwiftUI + Rust Core)](#faz-4--native-macos-masaüstü-uygulaması-sierraportapp-swiftui--rust-core)
 5. [Faz 5 — Dinamik UI/UX, Katlanabilir Terminal Deck ve `#111110` Adaptif Tema Sistemi](#faz-5--dinamik-uiux-katlanabilir-terminal-deck-ve-111110-adaptif-tema-sistemi)
 6. [Faz 6 — Yeni Nesil Güvenlik & Binary Güven Denetim Motoru (Code-Signature, Firewall Posture, Deep Probe, Policy & Raporlama)](#faz-6--yeni-nesil-güvenlik--binary-güven-denetim-motoru)
+7. [Faz 7 — Terminal Deck Doğal Dil & Öneksiz Akıllı Komut Çözümleyici](#faz-7--terminal-deck-doğal-dil--öneksiz-akıllı-komut-çözümleyici)
+8. [Faz 8 — Katı Komut Doğrulama, Apple Shake Hata Animasyonu ve Akıllı Öneri Motoru](#faz-8--katı-komut-doğrulama-apple-shake-hata-animasyonu-ve-akıllı-öneri-motoru)
+9. [Faz 9 — Klavye-Öncelikli (`Tab` / `↑↓` / `⌘1–4`) Mouse'suz Gezinme Optimizasyonu](#faz-9--klavye-öncelikli-tab---14-mousesuz-gezinme-optimizasyonu)
+10. [Faz 10 — Sonuç Tablosu İçi `Tab` / `↑↓` Gezinme ve Tek `Enter` ile Derin İnceleme](#faz-10--sonuç-tablosu-içi-tab---gezinme-ve-tek-enter-ile-derin-inceleme)
+11. [Faz 11 — Tekil Satır Seçim Düzeltmesi ve Duplicate UDP Soket Tekilleştirmesi](#faz-11--tekil-satır-seçim-düzeltmesi-ve-duplicate-udp-soket-tekilleştirmesi)
 
 ---
 
@@ -159,6 +169,88 @@ Standart port monitörleri (`lsof`, `netstat`, Activity Monitor vb.) yalnızca *
 | **Olay Müdahalesi ve Tehdit Avcılığı (Incident Response / Threat Hunting)** | Şüpheli bir ağ aktivitesinde SOC analisti `Zero-Trust + Deep Probe` çalıştırarak imzasız/ad-hoc çalışan tüm dinleyicileri, çalıştıkları dosya yollarını ve dışarıya verdikleri banner bilgilerini saniyeler içinde toplar ve raporlar. |
 | **Tedarik Zinciri Saldırı Tespiti (Supply-Chain Defense)** | Geliştirici makinelerinde bir bağımlılık güncellemesi sonrası `/tmp` veya kullanıcı dizininden sessizce port dinlemeye başlayan zararlı binary'leri **Code-Signature & Origin Trust** katmanıyla ilk anda fark eder. |
 | **Hızlı Müdahale Standartlaştırması (Playbook Automation)** | Her bulgunun yanında hazır `pfctl` / `socketfilterfw` / `sierraport kill` müdahale komutlarının bulunması, genç mühendislerin veya IT destek ekiplerinin hatasız ve hızlı aksiyon almasını sağlar. |
+
+---
+
+## Faz 7 — Terminal Deck Doğal Dil & Öneksiz Akıllı Komut Çözümleyici
+**Zaman:** Cuma, 20 Kasım 2026 — `15:42` (TRT / UTC+3)  
+**Git Commit:** *(henüz push'lanmadı)*  
+**Etkilenen Modüller:** `macos/SierraPortApp/Sources/SierraPortApp/{Models,ViewModel,ContentView}.swift`
+
+### Ne Yapıldı?
+- **Öneksiz Çalıştırma:** Terminal Deck komut satırında artık başına `sierraport` yazmaya gerek yok; blok başlıklarında da gereksiz `sierraport ` öneki kaldırıldı.
+- **Doğal Metin & Akıllı Niyet Çözümleyici (`resolveNaturalInput`):** Temel olarak **İngilizce** doğal ifadeler ve tam CLI komutları desteklenir; alternatif olarak **Türkçe** karşılıklar da aynı şekilde çalışır:
+  - `5000` / `port 5432` → `inspect <port> --probe`
+  - `close 3000` / `stop 3000` / `kill 3000 -y --wait` *(TR: `3000 kapat`)* → `kill 3000 -y --wait`
+  - `who 3000` / `owner 3000` *(TR: `3000 kimde`)* → `who 3000`
+  - `security scan` / `firewall` / `strict audit` / `zero trust` *(TR: `güvenlik tara`)* → `audit --deep` (veya ilgili profil)
+  - `exposed` / `external` / `public` *(TR: `dışa açık`)* → `list --exposed`
+  - `memory` / `ram` *(TR: `bellek`)* → `list --wide --sort mem --desc`
+  - `free port` / `available` *(TR: `boş port`)* → `free --range 8000-8999 --count 3`
+  - `live` / `stream` *(TR: `canlı izle`)* → Live Watch sekmesine geçiş
+  - `analytics` / `overview` *(TR: `istatistik`)* → `stats`
+  - `node` / `postgres` / `google` *(herhangi bir süreç adı)* → `list --all --proc <ad>`
+- Doğal metinden çevrilen blokların başlığında kullanıcının yazdığı metin ve çalıştırılan komut (`güvenlik tara → audit --deep`) şeffaf biçimde gösterilir.
+
+### Neden Yapıldı & Kullanım Değeri
+- **Bireysel Kullanıcılar:** CLI sözdizimi öğrenme eşiği sıfıra iner; Spotlight araması yapar gibi tek kelimeyle port inceleme, süreç bulma ve güvenlik taraması yapılabilir.
+- **Kurumlar & Destek Ekipleri (IT / Helpdesk / Junior SRE):** Karmaşık `lsof` / `netstat` parametrelerini bilmeyen ekip üyeleri bile doğal dille hızlı teşhis ve güvenlik kontrolü yapabilir; ayrıca şeffaf `→ komut` gösterimi sayesinde gerçek CLI kullanımını da zamanla öğrenir.
+
+---
+
+## Faz 8 — Katı Komut Doğrulama, Apple Shake Hata Animasyonu ve Akıllı Öneri Motoru
+**Zaman:** Cuma, 20 Kasım 2026 — `15:50` (TRT / UTC+3)  
+**Git Commit:** *(henüz push'lanmadı)*  
+**Etkilenen Modüller:** `macos/SierraPortApp/Sources/SierraPortApp/{ViewModel,ContentView}.swift`
+
+### Ne Yapıldı?
+- **Boş "No Matching Socket" Kartları Kaldırıldı:** Geçersiz bir komut, yazım hatası veya Türkçe bir ifade girildiğinde sistem artık bunu süreç filtresi gibi çalıştırıp boş kart açmaz.
+- **Apple-Stili Shake Animasyonu (`ShakeEffect`) & Kırmızı Hata Göstergesi:** Bilinmeyen komutlarda metin kutusu yatay olarak hafifçe sallanır, kenarlığı kırmızıya döner ve altında `"Unknown command: ... — select a related command below"` uyarısı belirir.
+- **Çift Dilli (İngilizce + Türkçe) & Yazım Hatasına Dayanıklı (Levenshtein) Öneri Motoru:**
+  - Türkçe ifadeler (`3000 kapat`, `güvenlik tara`, `dışa açık`, `bellek`, `boş port`, `canlı izle`) doğrudan çalıştırılmak yerine geçersiz komut uyarısı verir ve altta ilgili **İngilizce CLI komutlarını** (`kill 3000 -y --wait`, `audit --deep`, `list --exposed` vb.) tek tıkla seçilebilecek şekilde listeler.
+  - İngilizce yazım hatalarında (`audt`, `lsit`, `stts` vb.) Levenshtein mesafesi ile en yakın geçerli komutlar önerilir.
+
+### Neden Yapıldı & Kullanım Değeri
+- **Bireysel Kullanıcılar:** Hatalı komutlarda kafa karıştıran boş tablolar yerine anlık görsel geri bildirim (macOS parola kutusu gibi sallanma) ve 1 tıkla doğru komutu seçme kolaylığı sunar.
+- **Kurumlar & Ekipler:** Komut disiplinini (standart İngilizce CLI sözdizimi) korurken yeni kullanıcıların veya farklı dil konuşan ekip üyelerinin doğru komutu zahmetsizce keşfetmesini sağlar.
+
+---
+
+## Faz 9 — Klavye-Öncelikli (`Tab` / `↑↓` / `⌘1–4`) Mouse'suz Gezinme Optimizasyonu
+**Zaman:** Cuma, 20 Kasım 2026 — `15:54` (TRT / UTC+3)  
+**Git Commit:** *(henüz push'lanmadı)*  
+**Etkilenen Modüller:** `macos/SierraPortApp/Sources/SierraPortApp/{ViewModel,ContentView}.swift`
+
+### Ne Yapıldı?
+- **`Tab` / `Shift+Tab` & Yön Tuşları (`↓` / `↑`) ile Öneri Seçimi:** Komut satırındayken `Tab` veya `↓` tuşuna basıldığında alttaki `QUICK COMMANDS` / `DID YOU MEAN?` komutları arasında camgöbeği odak halkası ve `⏎` göstergesiyle anında gezinilebilir (`Shift+Tab` veya `↑` ile geri dönülür).
+- **Tek Tuşla Çalıştırma (`Enter`) & Temizleme (`Esc`):** Odaklanılan öneri `Enter` ile doğrudan çalıştırılır; `Esc` tuşu sırasıyla öneri odağını, hata uyarısını, açık Inspector çekmecesini veya metin kutusunu temizler.
+- **Global Mouse'suz Sekme Kısayolları:** `⌘1` (Terminal Deck + komut satırına otomatik odak), `⌘2` (Live Watch), `⌘3` (Security Audit), `⌘4` (Analytics), `⌘K` (Komut satırı), `⌘R` (Yenile), `⌥⌘I` (Inspector).
+
+### Neden Yapıldı & Kullanım Değeri
+- **Geliştiriciler & Güç Kullanıcıları:** Ghostty ve Raycast felsefesine uygun olarak elini klavyeden kaldırmadan saniyeler içinde port inceleme, güvenlik taraması ve sekmeler arası geçiş yapabilme hızı kazandırır.
+
+---
+
+## Faz 10 — Sonuç Tablosu İçi `Tab` / `↑↓` Gezinme ve Tek `Enter` ile Derin İnceleme
+**Zaman:** Cuma, 20 Kasım 2026 — `15:59` (TRT / UTC+3)  
+**Git Commit:** *(henüz push'lanmadı)*  
+**Etkilenen Modüller:** `macos/SierraPortApp/Sources/SierraPortApp/{ViewModel,VisualBlocks,ContentView}.swift`
+
+### Ne Yapıldı?
+- **Bağlam Duyarlı `Tab` / `↓` Akışı:** Bir komut çalıştırıldıktan sonra (ör. `list --exposed`, `list`, `audit`) metin kutusu boşken `Tab` veya `↓` tuşuna basıldığında odak doğrudan açık sonucun **satırlarına** iner (`focusedResultIndex`).
+- **Görsel Satır Odağı & Otomatik Kaydırma:** Odaklanılan port satırı camgöbeği çerçeve ve `⏎` göstergesiyle belirginleştirilir; `ScrollViewReader` satır değiştikçe ekranı otomatik kaydırır.
+- **Sıfır Mouse Akışı:** `Tab` / `↓` ile satır seç → `Enter` ile sağdan **Forensic Inspector**'ı aç → `Esc` ile Inspector'ı kapat (satır odağı korunur!) → `Tab` ile bir sonraki porta geç → yazı yazmaya başladığında odak anında komut satırına döner.
+
+---
+
+## Faz 11 — Tekil Satır Seçim Düzeltmesi ve Duplicate UDP Soket Tekilleştirmesi
+**Zaman:** Cuma, 20 Kasım 2026 — `16:03` (TRT / UTC+3)  
+**Git Commit:** *(henüz push'lanmadı)*  
+**Etkilenen Modüller:** `src/commands.rs`, `macos/SierraPortApp/Sources/SierraPortApp/{ViewModel,VisualBlocks,ContentView}.swift`
+
+### Ne Yapıldı?
+- **Tekil Satır Vurgulama (`selectedRowKey`):** Daha önce seçim yalnızca port numarasına (`selectedPort == entry.localPort`) göre yapıldığı için aynı portu paylaşan birden fazla UDP satırı (ör. `UDP6 5353` mDNS) aynı anda seçili görünüyordu. Seçim artık her satır için benzersiz `"\(tableId)-\(idx)"` anahtarıyla tutulur; yalnızca tıklanan tek satır seçilir.
+- **Inspector Duplicate Soket Tekilleştirmesi:** `src/commands.rs` (`run_inspect`) içinde aynı `(protocol, local, remote, state, pid)` bilgisine sahip özdeş macOS `lsof` soket kopyaları tekilleştirildi; böylece Inspector'da aynı binding 10 kez tekrar etmez.
 
 ---
 

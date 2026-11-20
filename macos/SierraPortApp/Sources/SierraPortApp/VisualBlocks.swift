@@ -205,8 +205,10 @@ enum TableSortColumn: String {
 
 struct PortTableView: View {
     let entries: [PortEntry]
-    var selectedPort: Int? = nil
-    let onInspect: (Int) -> Void
+    var tableId: String = "ports"
+    var selectedRowKey: String? = nil
+    var focusedRowIndex: Int? = nil
+    let onInspect: (Int, String) -> Void
     let onKill: (Int) -> Void
 
     @State private var filterText: String = ""
@@ -303,13 +305,16 @@ struct PortTableView: View {
                         Divider().opacity(0.4)
 
                         LazyVStack(spacing: 2) {
-                            ForEach(Array(displayed.prefix(200).enumerated()), id: \.offset) { _, entry in
+                            ForEach(Array(displayed.prefix(200).enumerated()), id: \.offset) { idx, entry in
+                                let rowKey = "\(tableId)-\(idx)"
                                 PortRowView(
                                     entry: entry,
-                                    isSelected: selectedPort == entry.localPort,
-                                    onInspect: onInspect,
+                                    isSelected: selectedRowKey == rowKey,
+                                    isKeyboardFocused: focusedRowIndex == idx,
+                                    onInspect: { port in onInspect(port, rowKey) },
                                     onKill: onKill
                                 )
+                                .id("port-row-\(idx)")
                             }
                         }
                     }
@@ -348,6 +353,7 @@ struct PortTableView: View {
 struct PortRowView: View {
     let entry: PortEntry
     let isSelected: Bool
+    var isKeyboardFocused: Bool = false
     let onInspect: (Int) -> Void
     let onKill: (Int) -> Void
     @State private var isHovered = false
@@ -423,12 +429,17 @@ struct PortRowView: View {
             .clipped()
 
             HStack(spacing: 8) {
+                if isKeyboardFocused {
+                    Text("⏎")
+                        .font(.system(size: 11, weight: .bold, design: .monospaced))
+                        .foregroundStyle(.cyan)
+                }
                 Button {
                     onInspect(entry.localPort)
                 } label: {
                     Image(systemName: "sparkle.magnifyingglass")
                         .font(.system(size: 12))
-                        .foregroundStyle(isSelected ? .cyan : .secondary)
+                        .foregroundStyle((isSelected || isKeyboardFocused) ? .cyan : .secondary)
                 }
                 .buttonStyle(.borderless)
                 .help("Deep Inspect & Probe Port \(entry.localPort)")
@@ -445,7 +456,7 @@ struct PortRowView: View {
                     .help("Terminate Process on Port \(entry.localPort)")
                 }
             }
-            .frame(width: 60, alignment: .trailing)
+            .frame(width: 68, alignment: .trailing)
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 5)
@@ -453,14 +464,19 @@ struct PortRowView: View {
         .background(
             RoundedRectangle(cornerRadius: 7, style: .continuous)
                 .fill(
-                    isSelected
-                        ? Color.cyan.opacity(0.14)
-                        : (isHovered ? SierraTheme.rowHover : Color.clear)
+                    isKeyboardFocused
+                        ? Color.cyan.opacity(0.18)
+                        : (isSelected ? Color.cyan.opacity(0.11) : (isHovered ? SierraTheme.rowHover : Color.clear))
                 )
         )
         .overlay(
             RoundedRectangle(cornerRadius: 7, style: .continuous)
-                .strokeBorder(isSelected ? Color.cyan.opacity(0.35) : Color.clear, lineWidth: 1)
+                .strokeBorder(
+                    isKeyboardFocused
+                        ? Color.cyan.opacity(0.75)
+                        : (isSelected ? Color.cyan.opacity(0.35) : Color.clear),
+                    lineWidth: isKeyboardFocused ? 1.5 : 1
+                )
         )
         .onHover { isHovered = $0 }
         .onTapGesture { onInspect(entry.localPort) }

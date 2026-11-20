@@ -444,9 +444,21 @@ pub fn run_inspect(
     global: &GlobalOptions,
 ) -> Result<(), String> {
     let all_entries = scan_ports()?;
+    let mut seen_bindings = HashSet::new();
     let port_entries: Vec<PortEntry> = all_entries
         .iter()
-        .filter(|e| e.local_port == port)
+        .filter(|e| {
+            e.local_port == port
+                && seen_bindings.insert((
+                    e.protocol,
+                    e.local_addr.clone(),
+                    e.local_port,
+                    e.remote_addr.clone(),
+                    e.remote_port,
+                    e.state.clone(),
+                    e.pid,
+                ))
+        })
         .cloned()
         .collect();
 

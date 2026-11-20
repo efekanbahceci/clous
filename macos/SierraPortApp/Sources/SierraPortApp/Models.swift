@@ -419,6 +419,7 @@ struct TickHistoryPoint: Identifiable {
 struct CommandBlock: Identifiable {
     let id = UUID()
     let command: String
+    let originalInput: String?
     let timestamp: Date
     let durationMs: Int
     let payload: BlockPayload

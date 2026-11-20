@@ -14,6 +14,14 @@ final class SierraPortViewModel: ObservableObject {
     @Published var activeChipCommand: String? = nil
     @Published var highlightedBlockId: UUID? = nil
 
+    // Input validation, shake & keyboard-first navigation
+    @Published var inputError: String? = nil
+    @Published var inputShakeTrigger: CGFloat = 0
+    @Published var relatedSuggestions: [String] = []
+    @Published var selectedSuggestionIndex: Int? = nil
+    @Published var focusedResultIndex: Int? = nil
+    @Published var focusedResultBlockId: UUID? = nil
+
     // Command history
     @Published var history: [String] = []
     private var historyIndex: Int? = nil
@@ -40,6 +48,7 @@ final class SierraPortViewModel: ObservableObject {
 
     // Slide-over Forensic Inspector
     @Published var selectedPort: Int? = nil
+    @Published var selectedRowKey: String? = nil
     @Published var inspectedReport: InspectReport? = nil
     @Published var isInspecting: Bool = false
     @Published var showingInspector: Bool = false
@@ -66,15 +75,19 @@ final class SierraPortViewModel: ObservableObject {
         streamProcess?.terminate()
     }
 
-    // MARK: - Smart Autocomplete
+    // MARK: - Smart Bilingual Autocomplete & Related Suggestions
 
     var autocompleteSuggestions: [String] {
+        if !relatedSuggestions.isEmpty {
+            return relatedSuggestions
+        }
+
         let trimmed = commandInput.trimmingCharacters(in: .whitespaces)
         if trimmed.isEmpty {
             return [
                 "list --wide --sort mem --desc",
                 "list --exposed",
-                "audit",
+                "audit --deep",
                 "inspect 5000 --probe",
                 "check 80,443,3000,5000,5432 127.0.0.1 --banner",
                 "stats",
@@ -82,41 +95,312 @@ final class SierraPortViewModel: ObservableObject {
             ]
         }
 
-        let lower = trimmed.lowercased()
-        let baseCommands = [
+        return suggestRelatedCommands(for: trimmed)
+    }
+
+    /// Suggests relevant English SierraPort CLI commands for both English & Turkish queries or typos.
+    func suggestRelatedCommands(for query: String) -> [String] {
+        let lower = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if lower.isEmpty { return [] }
+
+        let tokens = tokenize(lower)
+        let extractedPort = tokens.compactMap { tok -> Int? in
+            let c = tok.trimmingCharacters(in: CharacterSet(charactersIn: ":"))
+            if let n = Int(c), n >= 1 && n <= 65535 { return n }
+            return nil
+        }.first
+        let portNum = extractedPort ?? 3000
+
+        var matches: [String] = []
+
+        func add(_ cmd: String) {
+            if !matches.contains(cmd) { matches.append(cmd) }
+        }
+
+        // Semantic keyword map (English + Turkish intents -> English CLI commands)
+        let intentRules: [([String], [String])] = [
+            (["close", "stop", "kill", "end", "terminate", "kapat", "durdur", "sonlandır", "sonlandir", "öldür", "oldur"],
+             ["kill \(portNum) -y --wait", "kill \(portNum) -f -y", "who \(portNum)"]),
+            (["security", "audit", "firewall", "sign", "trust", "risk", "safe", "güvenlik", "guvenlik", "denetim", "imza", "koruma"],
+             ["audit --deep", "audit --profile strict --deep", "audit --profile zero-trust --deep"]),
+            (["exposed", "external", "public", "open", "dışa", "disa", "dışarı", "açık", "acik", "port"],
+             ["list --exposed", "list --wide", "list --all"]),
+            (["mem", "ram", "memory", "heavy", "bellek", "hafıza", "hafiza"],
+             ["list --wide --sort mem --desc", "stats"]),
+            (["free", "available", "empty", "unused", "boş", "bos", "müsait", "musait"],
+             ["free --range 8000-8999 --count 3", "free --range 3000-3999 --count 5"]),
+            (["inspect", "detail", "tree", "banner", "incele", "detay", "bak", "soyağacı", "soyagaci"],
+             ["inspect \(portNum) --probe", "who \(portNum)", "check \(portNum) 127.0.0.1 --banner"]),
+            (["who", "owner", "pid", "kim", "hangi", "sahip", "süreç", "surec"],
+             ["who \(portNum)", "inspect \(portNum) --probe", "list --wide"]),
+            (["check", "probe", "ping", "scan", "test", "tara", "kontrol"],
+             ["check 80,443,3000,5000 127.0.0.1 --banner", "check \(portNum) 127.0.0.1 --banner", "audit --deep"]),
+            (["watch", "live", "stream", "monitor", "canlı", "canli", "izle", "takip"],
+             ["watch -i 500", "list --all"]),
+            (["stat", "chart", "graph", "summary", "analytic", "istatistik", "grafik", "özet", "ozet", "analiz"],
+             ["stats", "list --wide --sort mem --desc"]),
+            (["diff", "snap", "baseline", "drift", "fark", "karşılaştır", "karsilastir", "yedek"],
+             ["snapshot save /tmp/sierraport_base.json", "diff /tmp/sierraport_base.json"]),
+            (["all", "conn", "socket", "tüm", "tum", "hepsi", "bütün", "bağlantı", "baglanti"],
+             ["list --all", "list --all --state ESTABLISHED", "list --all --state CLOSE_WAIT"]),
+            (["tcp", "udp", "ipv4", "ipv6"],
+             ["list --tcp", "list --udp", "list --all --tcp"]),
+            (["list", "ls", "show", "listele", "göster", "goster"],
+             ["list", "list --wide", "list --exposed", "list --all"])
+        ]
+
+        for (keywords, cmds) in intentRules {
+            if keywords.contains(where: { lower.contains($0) || $0.hasPrefix(lower) }) {
+                for c in cmds { add(c) }
+            }
+        }
+
+        // Prefix & substring match against catalog commands
+        let catalog = [
             "list",
             "list --wide",
             "list --exposed",
             "list --all",
-            "list --tcp --sort mem --desc",
+            "list --wide --sort mem --desc",
             "list --all --state CLOSE_WAIT",
-            "audit",
-            "audit --strict",
+            "audit --deep",
+            "audit --profile strict --deep",
+            "audit --profile zero-trust --deep",
+            "inspect \(portNum) --probe",
+            "who \(portNum)",
+            "kill \(portNum) -y --wait",
+            "check 80,443,3000,5000 127.0.0.1 --banner",
             "stats",
             "watch -i 500",
             "free --range 8000-8999 --count 3",
-            "check 80,443,3000,5000 127.0.0.1 --banner",
             "snapshot save /tmp/sierraport_base.json",
             "diff /tmp/sierraport_base.json",
-            "clear",
-            "help"
+            "help",
+            "clear"
         ]
 
-        var results = baseCommands.filter { $0.lowercased().hasPrefix(lower) && $0.lowercased() != lower }
+        for item in catalog where item.lowercased().hasPrefix(lower) || item.lowercased().contains(lower) {
+            add(item)
+        }
 
-        // Dynamic live port suggestions for inspect / who / kill
-        if lower.hasPrefix("inspect") || lower.hasPrefix("who") || lower.hasPrefix("kill") {
-            let verb = trimmed.split(separator: " ").first.map(String.init) ?? "inspect"
-            let ports = Array(Set((latestTick?.entries ?? []).map(\.localPort))).sorted().prefix(6)
+        // Dynamic live port suggestions when typing inspect / who / kill / close
+        if lower.hasPrefix("inspect") || lower.hasPrefix("who") || lower.hasPrefix("kill") || lower.hasPrefix("close") {
+            let verb = lower.hasPrefix("close") ? "kill" : (tokens.first ?? "inspect")
+            let ports = Array(Set((latestTick?.entries ?? []).map(\.localPort))).sorted().prefix(5)
             for p in ports {
-                let candidate = verb == "inspect" ? "inspect \(p) --probe" : "\(verb) \(p)"
-                if candidate.lowercased().hasPrefix(lower) {
-                    results.insert(candidate, at: 0)
-                }
+                let candidate = verb == "inspect" ? "inspect \(p) --probe" : (verb == "kill" ? "kill \(p) -y --wait" : "\(verb) \(p)")
+                add(candidate)
             }
         }
 
-        return Array(results.prefix(6))
+        // Fuzzy edit-distance fallback on command verbs if still empty (catches typos like "audt", "lsit", "stts")
+        if matches.isEmpty, let firstTok = tokens.first {
+            let verbMap: [(String, String)] = [
+                ("list", "list --wide"),
+                ("audit", "audit --deep"),
+                ("inspect", "inspect 5000 --probe"),
+                ("check", "check 80,443,3000,5000 127.0.0.1 --banner"),
+                ("kill", "kill 3000 -y --wait"),
+                ("who", "who 5000"),
+                ("stats", "stats"),
+                ("watch", "watch -i 500"),
+                ("free", "free --range 8000-8999 --count 3"),
+                ("diff", "diff /tmp/sierraport_base.json"),
+                ("help", "help")
+            ]
+            let close = verbMap
+                .map { ($0.1, levenshtein(firstTok, $0.0)) }
+                .filter { $0.1 <= 2 }
+                .sorted { $0.1 < $1.1 }
+            for (cmd, _) in close { add(cmd) }
+        }
+
+        // Always offer helpful process filter option if user typed a single word that might be a process
+        if matches.isEmpty {
+            add("list --all --proc \(query.trimmingCharacters(in: .whitespaces))")
+            add("list --wide")
+            add("audit --deep")
+            add("help")
+        }
+
+        return Array(matches.prefix(6))
+    }
+
+    private func levenshtein(_ a: String, _ b: String) -> Int {
+        let aChars = Array(a)
+        let bChars = Array(b)
+        if aChars.isEmpty { return bChars.count }
+        if bChars.isEmpty { return aChars.count }
+        var dist = Array(repeating: Array(repeating: 0, count: bChars.count + 1), count: aChars.count + 1)
+        for i in 0...aChars.count { dist[i][0] = i }
+        for j in 0...bChars.count { dist[0][j] = j }
+        for i in 1...aChars.count {
+            for j in 1...bChars.count {
+                let cost = aChars[i - 1] == bChars[j - 1] ? 0 : 1
+                dist[i][j] = min(dist[i - 1][j] + 1, dist[i][j - 1] + 1, dist[i - 1][j - 1] + cost)
+            }
+        }
+        return dist[aChars.count][bChars.count]
+    }
+
+    func clearInputError() {
+        if inputError != nil || !relatedSuggestions.isEmpty {
+            inputError = nil
+            relatedSuggestions = []
+        }
+        selectedSuggestionIndex = nil
+        focusedResultIndex = nil
+        focusedResultBlockId = nil
+    }
+
+    /// Returns the first expanded block that contains navigable items (ports or audit findings with ports).
+    var activeNavigableBlock: CommandBlock? {
+        blocks.first { block in
+            guard block.isExpanded && !block.showRaw else { return false }
+            switch block.payload {
+            case .ports(let entries): return !entries.isEmpty
+            case .audit(let report): return !report.findings.filter { !allowlistedKeys.contains($0.allowlistKey) && $0.port != nil }.isEmpty
+            default: return false
+            }
+        }
+    }
+
+    var activeResultCount: Int {
+        guard let block = activeNavigableBlock else { return 0 }
+        switch block.payload {
+        case .ports(let entries): return min(entries.count, 200)
+        case .audit(let report):
+            return report.findings.filter { !allowlistedKeys.contains($0.allowlistKey) && $0.port != nil }.count
+        default: return 0
+        }
+    }
+
+    var shouldNavigateResultsOnTab: Bool {
+        commandInput.trimmingCharacters(in: .whitespaces).isEmpty
+            && inputError == nil
+            && relatedSuggestions.isEmpty
+            && selectedSuggestionIndex == nil
+            && activeResultCount > 0
+    }
+
+    // MARK: - Keyboard-First Navigation (Tab / Shift+Tab / Arrow Keys / Esc)
+
+    func selectNextTarget() {
+        if focusedResultIndex != nil || shouldNavigateResultsOnTab {
+            guard let block = activeNavigableBlock, activeResultCount > 0 else { return }
+            focusedResultBlockId = block.id
+            if let cur = focusedResultIndex {
+                focusedResultIndex = (cur + 1) % activeResultCount
+            } else {
+                focusedResultIndex = 0
+            }
+            return
+        }
+        selectNextSuggestion()
+    }
+
+    func selectPreviousTarget() {
+        if let cur = focusedResultIndex, activeResultCount > 0 {
+            if cur > 0 {
+                focusedResultIndex = cur - 1
+            } else {
+                focusedResultIndex = nil
+                focusedResultBlockId = nil
+            }
+            return
+        }
+        selectPreviousSuggestion()
+    }
+
+    func selectNextSuggestion() {
+        let count = autocompleteSuggestions.count
+        guard count > 0 else { return }
+        if let current = selectedSuggestionIndex {
+            selectedSuggestionIndex = (current + 1) % count
+        } else {
+            selectedSuggestionIndex = 0
+        }
+    }
+
+    func selectPreviousSuggestion() {
+        let count = autocompleteSuggestions.count
+        guard count > 0 else { return }
+        if let current = selectedSuggestionIndex {
+            selectedSuggestionIndex = current == 0 ? (count - 1) : (current - 1)
+        } else {
+            selectedSuggestionIndex = count - 1
+        }
+    }
+
+    func handleUpArrow() {
+        if let cur = focusedResultIndex {
+            if cur > 0 {
+                focusedResultIndex = cur - 1
+            } else {
+                focusedResultIndex = nil
+                focusedResultBlockId = nil
+            }
+            return
+        }
+        if let current = selectedSuggestionIndex {
+            if current > 0 {
+                selectedSuggestionIndex = current - 1
+            } else {
+                selectedSuggestionIndex = nil
+            }
+        } else {
+            historyUp()
+        }
+    }
+
+    func handleDownArrow() {
+        if focusedResultIndex != nil || shouldNavigateResultsOnTab {
+            selectNextTarget()
+            return
+        }
+        let count = autocompleteSuggestions.count
+        if count > 0 {
+            selectNextSuggestion()
+        } else {
+            historyDown()
+        }
+    }
+
+    func handleEscape() {
+        if showingInspector {
+            showingInspector = false
+            selectedPort = nil
+            selectedRowKey = nil
+        } else if focusedResultIndex != nil {
+            focusedResultIndex = nil
+            focusedResultBlockId = nil
+        } else if selectedSuggestionIndex != nil {
+            selectedSuggestionIndex = nil
+        } else if inputError != nil || !relatedSuggestions.isEmpty {
+            clearInputError()
+        } else if !commandInput.isEmpty {
+            commandInput = ""
+        }
+    }
+
+    private func activateFocusedResult() -> Bool {
+        guard let rowIdx = focusedResultIndex, let block = activeNavigableBlock else { return false }
+        switch block.payload {
+        case .ports(let entries):
+            let sorted = entries.sorted { a, b in
+                a.localPort == b.localPort ? a.protocolName < b.protocolName : a.localPort < b.localPort
+            }
+            guard rowIdx >= 0 && rowIdx < sorted.count else { return false }
+            inspectPort(sorted[rowIdx].localPort, rowKey: "\(block.id.uuidString)-\(rowIdx)")
+            return true
+        case .audit(let report):
+            let withPorts = report.findings.filter { !allowlistedKeys.contains($0.allowlistKey) && $0.port != nil }
+            guard rowIdx >= 0 && rowIdx < withPorts.count, let port = withPorts[rowIdx].port else { return false }
+            inspectPort(port)
+            return true
+        default:
+            return false
+        }
     }
 
     // MARK: - History Navigation
@@ -147,23 +431,63 @@ final class SierraPortViewModel: ObservableObject {
     // MARK: - Command Execution
 
     func submitCommand() {
+        // 1. If a result row inside an expanded block is focused via Tab / ↓, inspect it immediately!
+        if activateFocusedResult() {
+            return
+        }
+
+        // 2. If a suggestion chip is focused via Tab / ↓, run it immediately!
+        let suggestions = autocompleteSuggestions
+        if let idx = selectedSuggestionIndex, idx >= 0 && idx < suggestions.count {
+            let chosen = suggestions[idx]
+            selectedSuggestionIndex = nil
+            runSuggestion(chosen)
+            return
+        }
+
         let cmd = commandInput.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !cmd.isEmpty else { return }
+
+        guard let resolved = resolveStrictCommand(cmd) else {
+            // Invalid command or Turkish phrase: shake input, show error, list related commands & pre-focus first suggestion!
+            inputError = "Unknown command: \"\(cmd)\" — press Tab / ↓ and Enter to run a suggestion"
+            relatedSuggestions = suggestRelatedCommands(for: cmd)
+            selectedSuggestionIndex = nil
+            withAnimation(.default) {
+                inputShakeTrigger += 1
+            }
+            return
+        }
+
+        clearInputError()
         commandInput = ""
         historyIndex = nil
         if history.last != cmd {
             history.append(cmd)
         }
         Task {
-            await executeCommand(cmd)
+            await executeResolvedCommand(resolved.command, origin: resolved.wasTranslated ? cmd : nil)
         }
     }
 
     func executeCommand(_ rawInput: String) async {
-        let cleaned = rawInput
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .replacingOccurrences(of: "^sierraport\\s+", with: "", options: .regularExpression)
+        let trimmedInput = rawInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmedInput.isEmpty { return }
 
+        guard let resolved = resolveStrictCommand(trimmedInput) else {
+            inputError = "Unknown command: \"\(trimmedInput)\" — select a related command below"
+            relatedSuggestions = suggestRelatedCommands(for: trimmedInput)
+            withAnimation(.default) {
+                inputShakeTrigger += 1
+            }
+            return
+        }
+
+        clearInputError()
+        await executeResolvedCommand(resolved.command, origin: resolved.wasTranslated ? trimmedInput : nil)
+    }
+
+    private func executeResolvedCommand(_ cleaned: String, origin displayOrigin: String?) async {
         if cleaned.isEmpty { return }
 
         if cleaned == "clear" || cleaned == "cls" {
@@ -185,7 +509,6 @@ final class SierraPortViewModel: ObservableObject {
 
         let decoder = JSONDecoder()
 
-        // Determine if this subcommand supports structured JSON visualization
         let supportsJson = [
             "list", "ls", "who", "find", "pid",
             "audit", "sec", "security",
@@ -206,7 +529,10 @@ final class SierraPortViewModel: ObservableObject {
             let rawText = rRes.stdout.isEmpty ? rRes.stderr : rRes.stdout
 
             if jRes.exitCode != 0 && jRes.stdout.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                appendBlock(cmd: cleaned, durationMs: jRes.durationMs, payload: .error(jRes.stderr.trimmingCharacters(in: .whitespacesAndNewlines)), raw: rawText)
+                let errMsg = jRes.stderr.trimmingCharacters(in: .whitespacesAndNewlines)
+                inputError = errMsg.isEmpty ? "Invalid command syntax" : errMsg
+                relatedSuggestions = suggestRelatedCommands(for: cleaned)
+                withAnimation(.default) { inputShakeTrigger += 1 }
                 return
             }
 
@@ -261,9 +587,8 @@ final class SierraPortViewModel: ObservableObject {
                 payload = .text(rawText)
             }
 
-            appendBlock(cmd: cleaned, durationMs: jRes.durationMs, payload: payload, raw: rawText)
+            appendBlock(cmd: cleaned, origin: displayOrigin, durationMs: jRes.durationMs, payload: payload, raw: rawText)
         } else {
-            // Plain execution (kill, help, version, snapshot save, wait, etc.)
             var args = tokens
             if subcmd == "kill" && !args.contains("-y") && !args.contains("--yes") {
                 args.append("-y")
@@ -275,11 +600,71 @@ final class SierraPortViewModel: ObservableObject {
             let res = await bridge.run(arguments: args)
             let output = res.stdout.isEmpty ? res.stderr : res.stdout
             let payload: BlockPayload = res.exitCode == 0 ? .text(output) : .error(output)
-            appendBlock(cmd: cleaned, durationMs: res.durationMs, payload: payload, raw: output)
+            appendBlock(cmd: cleaned, origin: displayOrigin, durationMs: res.durationMs, payload: payload, raw: output)
+        }
+    }
+
+    /// Accepts valid English CLI commands and clean English shorthands only.
+    /// Returns `nil` for unknown commands, typos, or Turkish phrases so the UI shakes and suggests matches.
+    private func resolveStrictCommand(_ input: String) -> (command: String, wasTranslated: Bool)? {
+        let stripped = input
+            .replacingOccurrences(of: "^(sierraport|sp)\\s+", with: "", options: [.regularExpression, .caseInsensitive])
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        let tokens = tokenize(stripped)
+        guard let first = tokens.first?.lowercased() else { return nil }
+
+        let knownCommands: Set<String> = [
+            "list", "ls", "watch", "monitor", "w",
+            "audit", "sec", "security",
+            "inspect", "info", "deep",
+            "check", "probe", "ping",
+            "who", "find", "pid",
+            "kill", "stats", "summary",
+            "snapshot", "snap", "diff",
+            "free", "available", "wait",
+            "help", "version", "--help", "-h", "--version", "-v",
+            "clear", "cls"
+        ]
+        if knownCommands.contains(first) || first.hasPrefix("-") {
+            return (stripped, false)
+        }
+
+        let lower = stripped.lowercased()
+
+        // Bare port number (e.g. "5000" or ":3000" or "port 5432")
+        if tokens.count == 1, let p = Int(first.trimmingCharacters(in: CharacterSet(charactersIn: ":"))), p >= 1 && p <= 65535 {
+            return ("inspect \(p) --probe", true)
+        }
+        if tokens.count == 2 && first == "port", let p = Int(tokens[1]), p >= 1 && p <= 65535 {
+            return ("inspect \(p) --probe", true)
+        }
+
+        // Clean English shorthands: "close 3000", "stop 3000", "terminate 3000"
+        if tokens.count == 2 && ["close", "stop", "terminate"].contains(first),
+           let p = Int(tokens[1]), p >= 1 && p <= 65535 {
+            return ("kill \(p) -y --wait", true)
+        }
+
+        // Single-word English shorthands
+        switch lower {
+        case "exposed": return ("list --exposed", true)
+        case "memory", "ram": return ("list --wide --sort mem --desc", true)
+        case "tcp": return ("list --tcp", true)
+        case "udp": return ("list --udp", true)
+        case "all", "all connections": return ("list --all", true)
+        case "live": return ("watch", true)
+        case "analytics": return ("stats", true)
+        case "free port", "free ports": return ("free --range 8000-8999 --count 3", true)
+        case "security scan", "deep audit": return ("audit --deep", true)
+        case "strict audit": return ("audit --profile strict --deep", true)
+        case "zero trust", "zero-trust": return ("audit --profile zero-trust --deep", true)
+        default: return nil
         }
     }
 
     func runSuggestion(_ cmd: String) {
+        clearInputError()
         activeChipCommand = cmd
         commandInput = ""
         historyIndex = nil
@@ -294,13 +679,13 @@ final class SierraPortViewModel: ObservableObject {
         }
     }
 
-    private func appendBlock(cmd: String, durationMs: Int, payload: BlockPayload, raw: String) {
-        // Collapse older blocks so the newly executed command opens cleanly with zero collision
+    private func appendBlock(cmd: String, origin: String? = nil, durationMs: Int, payload: BlockPayload, raw: String) {
         for idx in blocks.indices {
             blocks[idx].isExpanded = false
         }
         let block = CommandBlock(
             command: cmd,
+            originalInput: origin,
             timestamp: Date(),
             durationMs: durationMs,
             payload: payload,
@@ -497,8 +882,9 @@ final class SierraPortViewModel: ObservableObject {
         }
     }
 
-    func inspectPort(_ port: Int, probe: Bool = true) {
+    func inspectPort(_ port: Int, rowKey: String? = nil, probe: Bool = true) {
         selectedPort = port
+        selectedRowKey = rowKey
         showingInspector = true
         isInspecting = true
         Task {
