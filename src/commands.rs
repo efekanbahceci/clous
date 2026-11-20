@@ -1,7 +1,9 @@
 use std::collections::{HashMap, HashSet, VecDeque};
+use std::fmt::Write as _;
 use std::fs::OpenOptions;
 use std::io::{self, Write};
 use std::path::Path;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
@@ -10,6 +12,7 @@ use crate::cli::{GlobalOptions, KillTarget, SnapshotAction};
 use crate::display::{
     Theme, print_audit_report, print_diff_report, print_inspect_report, print_ports_compact,
     print_ports_csv, print_ports_json, print_ports_table, print_probe_results, print_stats,
+    render_ports_compact, render_ports_table,
 };
 use crate::models::{
     FilterOptions, OutputFormat, PortEntry, expand_port_ranges, parse_port_spec, well_known_service,
@@ -36,6 +39,50 @@ pub fn run_list(filter: &FilterOptions, global: &GlobalOptions) -> Result<(), St
     Ok(())
 }
 
+static WATCH_STOP: AtomicBool = AtomicBool::new(false);
+
+#[cfg(unix)]
+unsafe extern "C" {
+    fn signal(sig: i32, handler: usize) -> usize;
+}
+
+#[cfg(unix)]
+extern "C" fn handle_sigint(_sig: i32) {
+    WATCH_STOP.store(true, Ordering::SeqCst);
+}
+
+fn install_watch_signal_handler() {
+    WATCH_STOP.store(false, Ordering::SeqCst);
+    #[cfg(unix)]
+    unsafe {
+        const SIGINT: i32 = 2;
+        signal(SIGINT, handle_sigint as *const () as usize);
+    }
+}
+
+/// RAII guard that enters the terminal alternate screen buffer and hides the cursor,
+/// guaranteeing clean restoration on exit or Ctrl+C.
+struct WatchTerminalGuard;
+
+impl WatchTerminalGuard {
+    fn enter() -> Self {
+        let mut out = io::stdout().lock();
+        // Enter alternate screen buffer, hide cursor, clear screen, move home
+        let _ = out.write_all(b"\x1b[?1049h\x1b[?25l\x1b[2J\x1b[H");
+        let _ = out.flush();
+        Self
+    }
+}
+
+impl Drop for WatchTerminalGuard {
+    fn drop(&mut self) {
+        let mut out = io::stdout().lock();
+        // Show cursor and exit alternate screen buffer
+        let _ = out.write_all(b"\x1b[?25h\x1b[?1049l");
+        let _ = out.flush();
+    }
+}
+
 pub fn run_watch(
     filter: &FilterOptions,
     interval_ms: u64,
@@ -43,6 +90,9 @@ pub fn run_watch(
     alert_new: bool,
     global: &GlobalOptions,
 ) -> Result<(), String> {
+    install_watch_signal_handler();
+    let _term_guard = WatchTerminalGuard::enter();
+
     let theme = Theme::new(global.no_color);
     let interval = Duration::from_millis(interval_ms);
     let mut previous: HashMap<_, PortEntry> = HashMap::new();
@@ -50,13 +100,17 @@ pub fn run_watch(
     let mut first_run = true;
     let mut total_opened = 0usize;
     let mut total_closed = 0usize;
+    let mut tick: u64 = 0;
 
-    loop {
+    while !WATCH_STOP.load(Ordering::SeqCst) {
+        tick += 1;
+        let scan_start = Instant::now();
         let mut entries: Vec<PortEntry> = scan_ports()?
             .into_iter()
             .filter(|e| filter.matches(e))
             .collect();
         filter.sort_entries(&mut entries);
+        let scan_ms = scan_start.elapsed().as_millis();
 
         let current: HashMap<_, PortEntry> = entries
             .iter()
@@ -132,49 +186,80 @@ pub fn run_watch(
             }
         }
 
-        if alert_new && opened_this_tick {
-            print!("\x07");
-        }
-
+        let tcp_cnt = entries.iter().filter(|e| e.protocol.is_tcp()).count();
+        let udp_cnt = entries.iter().filter(|e| e.protocol.is_udp()).count();
         let exposed_cnt = entries
             .iter()
             .filter(|e| e.state.is_listening() && e.bind_scope().is_exposed())
             .count();
 
-        // Clear screen and move cursor to top-left
-        print!("\x1b[2J\x1b[H");
-        println!(
+        // Build complete frame in memory for flicker-free, single-write in-place refresh
+        let mut raw_body = String::with_capacity(4096);
+        let _ = writeln!(
+            raw_body,
             "{}  {}  {}",
             theme.bold("SierraPort Live Watch"),
-            theme.dim(&format!("(refresh: {}ms | UTC {})", interval_ms, ts)),
+            theme.dim(&format!(
+                "(refresh: {}ms | scan: {}ms | tick #{} | UTC {})",
+                interval_ms, scan_ms, tick, ts
+            )),
             theme.dim("Press Ctrl+C to exit")
         );
-        println!(
-            "  {}  |  {}  |  {}  |  {}\n",
+        let _ = writeln!(
+            raw_body,
+            "  {}  |  {}  |  {}  |  {}  |  {}  |  {}",
             theme.cyan(&format!("Active: {}", entries.len())),
+            theme.dim(&format!("TCP: {tcp_cnt}")),
+            theme.dim(&format!("UDP: {udp_cnt}")),
             theme.yellow(&format!("Exposed: {exposed_cnt}")),
             theme.green(&format!("+{total_opened} opened")),
             theme.red(&format!("-{total_closed} closed"))
         );
+        raw_body.push('\n');
 
-        match global.format {
-            OutputFormat::Compact => print_ports_compact(&entries, &theme),
-            _ => print_ports_table(&entries, &theme, global.wide),
-        }
+        let table_str = match global.format {
+            OutputFormat::Compact => render_ports_compact(&entries, &theme),
+            _ => render_ports_table(&entries, &theme, global.wide),
+        };
+        raw_body.push_str(&table_str);
 
         if !events.is_empty() {
-            println!("\n{}", theme.bold("Recent Changes:"));
+            let _ = writeln!(raw_body, "\n{}", theme.bold("Recent Changes:"));
             for ev in &events {
-                println!("  {ev}");
+                let _ = writeln!(raw_body, "  {ev}");
             }
         }
 
-        let _ = io::stdout().flush();
+        // Compose atomic ANSI frame: cursor home + clear-to-EOL on every line + clear-to-EOS
+        let mut frame = String::with_capacity(raw_body.len() + 256);
+        if alert_new && opened_this_tick {
+            frame.push('\x07');
+        }
+        frame.push_str("\x1b[H");
+        for line in raw_body.lines() {
+            frame.push_str(line);
+            frame.push_str("\x1b[K\n");
+        }
+        frame.push_str("\x1b[J");
+
+        {
+            let mut out = io::stdout().lock();
+            let _ = out.write_all(frame.as_bytes());
+            let _ = out.flush();
+        }
+
         previous = current;
         first_run = false;
 
-        thread::sleep(interval);
+        // Sleep in short slices so Ctrl+C exits immediately
+        let wake_at = Instant::now() + interval;
+        while Instant::now() < wake_at && !WATCH_STOP.load(Ordering::SeqCst) {
+            let rem = wake_at.saturating_duration_since(Instant::now());
+            thread::sleep(rem.min(Duration::from_millis(50)));
+        }
     }
+
+    Ok(())
 }
 
 pub fn run_check(

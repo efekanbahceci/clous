@@ -111,9 +111,16 @@ impl Theme {
 }
 
 pub fn print_ports_table(entries: &[PortEntry], theme: &Theme, wide: bool) {
+    print!("{}", render_ports_table(entries, theme, wide));
+}
+
+pub fn render_ports_table(entries: &[PortEntry], theme: &Theme, wide: bool) -> String {
+    use std::fmt::Write as _;
+    let mut out = String::new();
+
     if entries.is_empty() {
-        println!("{}", theme.dim("No matching ports found."));
-        return;
+        let _ = writeln!(out, "{}", theme.dim("No matching ports found."));
+        return out;
     }
 
     let proto_w = 5;
@@ -153,7 +160,7 @@ pub fn print_ports_table(entries: &[PortEntry], theme: &Theme, wide: bool) {
             "PROCESS",
             "COMMAND"
         );
-        println!("{}", theme.bold(&header));
+        let _ = writeln!(out, "{}", theme.bold(&header));
         let sep_len = proto_w
             + port_w
             + scope_w
@@ -165,13 +172,13 @@ pub fn print_ports_table(entries: &[PortEntry], theme: &Theme, wide: bool) {
             + mem_w
             + service_w
             + 38;
-        println!("{}", theme.dim(&"─".repeat(sep_len)));
+        let _ = writeln!(out, "{}", theme.dim(&"─".repeat(sep_len)));
     } else {
         let header = format!(
             "{:<proto_w$} {:<port_w$} {:<scope_w$} {:<local_w$} {:<remote_w$} {:<state_w$} {:<pid_w$} {:<service_w$} {}",
             "PROTO", "PORT", "SCOPE", "LOCAL", "REMOTE", "STATE", "PID", "SERVICE", "PROCESS"
         );
-        println!("{}", theme.bold(&header));
+        let _ = writeln!(out, "{}", theme.bold(&header));
         let sep_len = proto_w
             + port_w
             + scope_w
@@ -181,7 +188,7 @@ pub fn print_ports_table(entries: &[PortEntry], theme: &Theme, wide: bool) {
             + pid_w
             + service_w
             + 20;
-        println!("{}", theme.dim(&"─".repeat(sep_len)));
+        let _ = writeln!(out, "{}", theme.dim(&"─".repeat(sep_len)));
     }
 
     for e in entries {
@@ -201,7 +208,8 @@ pub fn print_ports_table(entries: &[PortEntry], theme: &Theme, wide: bool) {
             let user = truncate_str(e.user.as_deref().unwrap_or("-"), user_w);
             let mem = e.memory_human();
             let cmd = truncate_str(e.cmdline.as_deref().unwrap_or("-"), 56);
-            println!(
+            let _ = writeln!(
+                out,
                 "{:<proto_w$} {} {} {:<local_w$} {:<remote_w$} {} {:<pid_w$} {:<user_w$} {:<mem_w$} {} {:<18} {}",
                 e.protocol.as_str(),
                 theme.cyan(&format!("{:<port_w$}", e.local_port)),
@@ -221,7 +229,8 @@ pub fn print_ports_table(entries: &[PortEntry], theme: &Theme, wide: bool) {
                 Some(t) => format!(" {}", theme.magenta(&format!("[{t}]"))),
                 None => String::new(),
             };
-            println!(
+            let _ = writeln!(
+                out,
                 "{:<proto_w$} {} {} {:<local_w$} {:<remote_w$} {} {:<pid_w$} {} {}{}",
                 e.protocol.as_str(),
                 theme.cyan(&format!("{:<port_w$}", e.local_port)),
@@ -241,7 +250,8 @@ pub fn print_ports_table(entries: &[PortEntry], theme: &Theme, wide: bool) {
         .iter()
         .filter(|e| e.state.is_listening() && e.bind_scope().is_exposed())
         .count();
-    println!(
+    let _ = writeln!(
+        out,
         "\n{}",
         theme.dim(&format!(
             "Total: {} socket(s) | Exposed listeners: {}",
@@ -249,12 +259,19 @@ pub fn print_ports_table(entries: &[PortEntry], theme: &Theme, wide: bool) {
             exposed
         ))
     );
+    out
 }
 
 pub fn print_ports_compact(entries: &[PortEntry], theme: &Theme) {
+    print!("{}", render_ports_compact(entries, theme));
+}
+
+pub fn render_ports_compact(entries: &[PortEntry], theme: &Theme) -> String {
+    use std::fmt::Write as _;
+    let mut out = String::new();
     if entries.is_empty() {
-        println!("{}", theme.dim("No matching ports found."));
-        return;
+        let _ = writeln!(out, "{}", theme.dim("No matching ports found."));
+        return out;
     }
     for e in entries {
         let scope = e.bind_scope();
@@ -263,7 +280,8 @@ pub fn print_ports_compact(entries: &[PortEntry], theme: &Theme) {
             .map(|p| format!("pid:{p}"))
             .unwrap_or_else(|| "pid:-".to_string());
         let proc_name = e.process_name.as_deref().unwrap_or("-");
-        println!(
+        let _ = writeln!(
+            out,
             "{:<4} {:>5} {} {:<11} {} ({})",
             e.protocol.as_str(),
             theme.cyan(&format!("{:>5}", e.local_port)),
@@ -273,6 +291,7 @@ pub fn print_ports_compact(entries: &[PortEntry], theme: &Theme) {
             theme.dim(&pid_part)
         );
     }
+    out
 }
 
 pub fn print_ports_csv(entries: &[PortEntry]) {
