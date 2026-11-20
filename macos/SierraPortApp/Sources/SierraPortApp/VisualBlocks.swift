@@ -465,17 +465,17 @@ struct PortRowView: View {
             RoundedRectangle(cornerRadius: 7, style: .continuous)
                 .fill(
                     isKeyboardFocused
-                        ? Color.cyan.opacity(0.18)
-                        : (isSelected ? Color.cyan.opacity(0.11) : (isHovered ? SierraTheme.rowHover : Color.clear))
+                        ? SierraTheme.selectionFill
+                        : (isSelected ? SierraTheme.accent.opacity(0.14) : (isHovered ? SierraTheme.rowHover : Color.clear))
                 )
         )
         .overlay(
             RoundedRectangle(cornerRadius: 7, style: .continuous)
                 .strokeBorder(
                     isKeyboardFocused
-                        ? Color.cyan.opacity(0.75)
-                        : (isSelected ? Color.cyan.opacity(0.35) : Color.clear),
-                    lineWidth: isKeyboardFocused ? 1.5 : 1
+                        ? SierraTheme.accent.opacity(0.75)
+                        : (isSelected ? SierraTheme.accent.opacity(0.40) : Color.clear),
+                    lineWidth: isKeyboardFocused ? 1.25 : 1
                 )
         )
         .onHover { isHovered = $0 }

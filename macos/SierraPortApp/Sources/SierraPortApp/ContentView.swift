@@ -2,7 +2,9 @@ import SwiftUI
 
 struct ContentView: View {
     @ObservedObject var vm: SierraPortViewModel
+    @ObservedObject var hotkeyManager: GlobalHotkeyManager
     @Binding var themeRaw: String
+    let onEditShortcut: () -> Void
     @FocusState private var isCommandFocused: Bool
 
     private var themePref: AppThemePreference {
@@ -14,24 +16,30 @@ struct ContentView: View {
             sidebar
                 .background(SierraTheme.sidebar)
         } detail: {
-            ZStack(alignment: .bottom) {
-                mainDetail
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(SierraTheme.canvas)
+            VStack(spacing: 0) {
+                ZStack(alignment: .bottom) {
+                    mainDetail
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .background(SierraTheme.canvas)
 
-                if let msg = vm.statusMessage {
-                    Text(msg)
-                        .font(.system(size: 12, weight: .medium))
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 8)
-                        .background(SierraTheme.surfaceElevated, in: Capsule())
-                        .overlay(Capsule().strokeBorder(SierraTheme.border, lineWidth: 1))
-                        .shadow(color: .black.opacity(0.25), radius: 8, y: 4)
-                        .padding(.bottom, 16)
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                    if let msg = vm.statusMessage {
+                        Text(msg)
+                            .font(SierraFont.ui(12, weight: .medium))
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 8)
+                            .background(SierraTheme.surfaceElevated, in: Capsule())
+                            .overlay(Capsule().strokeBorder(SierraTheme.border, lineWidth: 1))
+                            .shadow(color: .black.opacity(0.25), radius: 8, y: 4)
+                            .padding(.bottom, 14)
+                            .transition(.move(edge: .bottom).combined(with: .opacity))
+                    }
                 }
+                .background(SierraTheme.canvas)
+
+                // Raycast-style persistent Bottom Action Bar
+                Divider().opacity(0.45)
+                raycastFooterBar
             }
-            .background(SierraTheme.canvas)
             .animation(.spring(response: 0.3, dampingFraction: 0.85), value: vm.statusMessage)
             .inspector(isPresented: $vm.showingInspector) {
                 inspectorDrawer
@@ -118,24 +126,86 @@ struct ContentView: View {
         }
     }
 
+    // MARK: - Raycast Signature Bottom Action Bar
+
+    private var raycastFooterBar: some View {
+        HStack(spacing: 12) {
+            HStack(spacing: 6) {
+                SierraAppIconView(size: 16)
+                Text(vm.selectedTab.rawValue)
+                    .font(SierraFont.ui(11.5, weight: .medium))
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+
+            HStack(spacing: 14) {
+                HStack(spacing: 5) {
+                    Text(vm.focusedResultIndex != nil ? "Inspect" : "Run")
+                        .font(SierraFont.ui(11, weight: .medium))
+                        .foregroundStyle(.secondary)
+                    RaycastKeycap(key: "⏎")
+                }
+
+                HStack(spacing: 5) {
+                    Text("Navigate")
+                        .font(SierraFont.ui(11, weight: .medium))
+                        .foregroundStyle(.secondary)
+                    RaycastKeycap(key: "Tab")
+                }
+
+                HStack(spacing: 5) {
+                    Text("Inspector")
+                        .font(SierraFont.ui(11, weight: .medium))
+                        .foregroundStyle(.secondary)
+                    RaycastKeycap(key: "⌥⌘I")
+                }
+
+                if let hk = hotkeyManager.currentHotkey {
+                    Button {
+                        QuickLauncherController.shared.toggle()
+                    } label: {
+                        HStack(spacing: 5) {
+                            Text("Quick Launch")
+                                .font(SierraFont.ui(11, weight: .medium))
+                                .foregroundStyle(.secondary)
+                            HStack(spacing: 3) {
+                                ForEach(hk.keycaps, id: \.self) { cap in
+                                    RaycastKeycap(key: cap)
+                                }
+                            }
+                        }
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+        .background(SierraTheme.sidebar)
+    }
+
     // MARK: - Sidebar
 
     private var sidebar: some View {
         VStack(alignment: .leading, spacing: 0) {
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 0) {
-                    Text("Sierra")
-                        .font(.system(size: 20, weight: .semibold, design: .default))
-                    Text("Port")
-                        .font(.system(size: 20, weight: .light, design: .default))
+            HStack(spacing: 10) {
+                SierraAppIconView(size: 32)
+                VStack(alignment: .leading, spacing: 1) {
+                    HStack(spacing: 0) {
+                        Text("Sierra")
+                            .font(.system(size: 18, weight: .semibold, design: .default))
+                        Text("Port")
+                            .font(.system(size: 18, weight: .light, design: .default))
+                            .foregroundStyle(.secondary)
+                    }
+                    Text("PORT MONITOR")
+                        .font(.system(size: 8.5, weight: .semibold))
+                        .tracking(1.1)
                         .foregroundStyle(.secondary)
                 }
-                Text("PORT MONITOR & INSPECTOR")
-                    .font(.system(size: 9, weight: .semibold))
-                    .tracking(1.2)
-                    .foregroundStyle(.secondary)
             }
-            .padding(.horizontal, 16)
+            .padding(.horizontal, 14)
             .padding(.top, 12)
             .padding(.bottom, 14)
 
@@ -148,8 +218,35 @@ struct ContentView: View {
 
             Divider().opacity(0.4)
 
-            // Theme Switcher (Dark #111110 / Light / System)
+            // Global Hotkey Pill + Theme Switcher
             VStack(alignment: .leading, spacing: 8) {
+                Button {
+                    onEditShortcut()
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "command")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(.cyan)
+                        Text("Quick Launch")
+                            .font(.system(size: 11, weight: .medium))
+                        Spacer()
+                        Text(hotkeyManager.currentHotkey?.displayString ?? "Set")
+                            .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(SierraTheme.surfaceElevated, in: RoundedRectangle(cornerRadius: 5))
+                            .overlay(RoundedRectangle(cornerRadius: 5).strokeBorder(SierraTheme.border, lineWidth: 1))
+                            .foregroundStyle(hotkeyManager.isRegistered ? .primary : .secondary)
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 6)
+                    .background(SierraTheme.canvas.opacity(0.55), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(SierraTheme.borderSubtle, lineWidth: 1))
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help("Customize system-wide Raycast-style Quick Launcher hotkey")
+
                 HStack(spacing: 4) {
                     ForEach(AppThemePreference.allCases) { pref in
                         let isSelected = themePref == pref
@@ -234,49 +331,27 @@ struct ContentView: View {
 
             // Minimalist Apple-Style Brand Header & Info
             VStack(spacing: 14) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .fill(
-                            LinearGradient(
-                                colors: [Color.cyan.opacity(0.18), Color.blue.opacity(0.08)],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                        .frame(width: 60, height: 60)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                                .strokeBorder(Color.cyan.opacity(0.32), lineWidth: 1)
-                        )
-                    Image(systemName: "terminal.fill")
-                        .font(.system(size: 26, weight: .medium))
-                        .foregroundStyle(
-                            LinearGradient(
-                                colors: [.cyan, .primary],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                }
+                SierraAppIconView(size: 76)
+                    .shadow(color: .black.opacity(0.32), radius: 14, y: 6)
 
                 VStack(spacing: 4) {
                     HStack(spacing: 0) {
                         Text("Sierra")
-                            .font(.system(size: 36, weight: .semibold, design: .default))
+                            .font(SierraFont.display(36, weight: .semibold))
                             .tracking(-1.0)
                         Text("Port")
-                            .font(.system(size: 36, weight: .light, design: .default))
+                            .font(SierraFont.display(36, weight: .light))
                             .tracking(-1.0)
                             .foregroundStyle(.secondary)
                     }
                     Text("COMMAND DECK")
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(SierraFont.ui(10.5, weight: .semibold))
                         .tracking(2.2)
                         .foregroundStyle(.secondary)
                 }
 
                 Text("Run any SierraPort CLI command to inspect listening ports, audit external exposure, trace process ancestry, or grab live protocol banners — rendered as clean, collapsible visual cards.")
-                    .font(.system(size: 13))
+                    .font(SierraFont.ui(13))
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
                     .lineSpacing(3)
@@ -489,10 +564,11 @@ struct ContentView: View {
                     .strokeBorder(
                         hasError
                             ? Color.red.opacity(0.75)
-                            : (isCommandFocused ? Color.cyan.opacity(0.55) : SierraTheme.border),
+                            : (isCommandFocused ? SierraTheme.accent.opacity(0.65) : SierraTheme.topSpecular),
                         lineWidth: hasError ? 1.5 : 1
                     )
             )
+            .shadow(color: .black.opacity(0.14), radius: 10, y: 4)
             .modifier(ShakeEffect(animatableData: vm.inputShakeTrigger))
 
             if let err = vm.inputError {
@@ -548,14 +624,14 @@ struct ContentView: View {
             .padding(.vertical, fullWidth ? 8 : 5)
             .frame(maxWidth: fullWidth ? .infinity : nil, alignment: .leading)
             .background(
-                (isHighlighted ? Color.cyan.opacity(0.18) : SierraTheme.surface),
+                (isHighlighted ? SierraTheme.selectionFill : SierraTheme.surface),
                 in: RoundedRectangle(cornerRadius: fullWidth ? 9 : 14, style: .continuous)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: fullWidth ? 9 : 14, style: .continuous)
                     .strokeBorder(
-                        isHighlighted ? Color.cyan.opacity(0.75) : SierraTheme.border,
-                        lineWidth: isKeyboardFocused ? 1.5 : 1
+                        isHighlighted ? SierraTheme.accent.opacity(0.7) : SierraTheme.border,
+                        lineWidth: isKeyboardFocused ? 1.25 : 1
                     )
             )
             .contentShape(Rectangle())
@@ -726,16 +802,7 @@ struct ContentView: View {
                 .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
-        .background(SierraTheme.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .strokeBorder(
-                    isNewlyOpened
-                        ? Color.cyan.opacity(0.65)
-                        : (block.isExpanded ? SierraTheme.border : SierraTheme.borderSubtle),
-                    lineWidth: isNewlyOpened ? 1.5 : 1
-                )
-        )
+        .raycastCard(cornerRadius: 14, highlighted: isNewlyOpened)
         .animation(.easeInOut(duration: 0.25), value: isNewlyOpened)
     }
 
@@ -1046,6 +1113,7 @@ struct ShakeEffect: GeometryEffect {
 
 struct MenuBarView: View {
     @ObservedObject var vm: SierraPortViewModel
+    @ObservedObject var hotkeyManager: GlobalHotkeyManager
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -1098,7 +1166,11 @@ struct MenuBarView: View {
             Divider()
 
             HStack {
-                Button("Open SierraPort") {
+                Button("Quick Launcher") {
+                    QuickLauncherController.shared.show()
+                }
+                Spacer()
+                Button("Open App") {
                     NSApp.activate(ignoringOtherApps: true)
                 }
                 Spacer()

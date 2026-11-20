@@ -21,6 +21,14 @@ Bu doküman, **SierraPort** projesinde yapılan tüm geliştirmeleri **gün, tar
 | Cuma, 20 Kasım 2026 | `15:54` | *(push bekliyor)* | Klavye-öncelikli (`Tab` / `Shift+Tab` / `↑↓` / `⏎` / `Esc` / `⌘1–4`) mouse'suz gezinme optimizasyonu |
 | Cuma, 20 Kasım 2026 | `15:59` | *(push bekliyor)* | Sonuç tablosu içi `Tab` / `↑↓` gezinme, otomatik kaydırma ve tek `Enter` ile Forensic Inspector açma |
 | Cuma, 20 Kasım 2026 | `16:03` | *(push bekliyor)* | Tekil satır seçim düzeltmesi (`selectedRowKey`) ve `inspect` duplicate UDP soket tekilleştirmesi |
+| Cuma, 20 Kasım 2026 | `20:01` | *(push bekliyor)* | Resmi Ghostty-stili Terminal Çerçeveli SierraPort Uygulama Logosu (`AppIcon.icns`, Sidebar, Command Deck ve Menu Bar entegrasyonu) |
+| Cuma, 20 Kasım 2026 | `20:04` | *(push bekliyor)* | `#0B24AC` Kobalt Mavi Degrade Uygulama İkonu — terminal çerçevesi kaldırıldı, şeffaf beyaz maskot büyütüldü (`AppIcon.icns` güncellendi) |
+| Cuma, 20 Kasım 2026 | `20:05` | *(push bekliyor)* | Uygulama ikonu ana rengi `#121846` derin gece laciverdi degradeye (`#1F296E → #121846 → #080B24`) güncellendi |
+| Cuma, 20 Kasım 2026 | `20:07` | *(push bekliyor)* | Uygulama ikonu ana rengi `#082452` derin okyanus mavisi degradeye (`#123C82 → #082452 → #031129`) güncellendi |
+| Cuma, 20 Kasım 2026 | `20:14` | *(push bekliyor)* | Raycast/Spotlight Tarzı Sistem Geneli Global Kısayol, Yüzen Hızlı Başlatıcı (`NSPanel`) ve Motion İlk Kurulum (Onboarding) Ekranı |
+| Cuma, 20 Kasım 2026 | `20:23` | *(push bekliyor)* | Raycast Tasarım Sistemi & Tipografi (`SierraFont`: Inter / SF Pro + JetBrains Mono / SF Mono, üst ışık kenarlıklı `raycastCard`, alt aksiyon çubuğu ve safir vurgu rengi) |
+| Cuma, 20 Kasım 2026 | `20:30` | *(push bekliyor)* | Gerçek Inter v4.1 Font Paketi Gömülmesi, Yüzen Başlatıcı Çerçeve/Geri Dönüş Düzeltmeleri, Beyaz Maskot İkonu ve Canlı Port Önerileri |
+| Cuma, 20 Kasım 2026 | `21:21` | *(push bekliyor)* | Kısayol Ayarlama Sayfası için Slow-Motion Termal Gradyan (`ThermalGradientBackground`) ve Buzlu Cam Kart UI |
 
 ---
 
@@ -144,6 +152,81 @@ Bu doküman, **SierraPort** projesinde yapılan tüm geliştirmeleri **gün, tar
 
 - **Tekil Satır Vurgulama (`selectedRowKey`):** Satır seçimi port numarası yerine her satıra özgü benzersiz `"\(tableId)-\(idx)"` anahtarına taşındı; aynı portu paylaşan birden fazla UDP satırından (ör. `UDP6 5353`) birine tıklandığında artık yalnızca o tek satır seçili olur.
 - **Inspector Duplicate Soket Tekilleştirmesi:** `src/commands.rs` (`run_inspect`) içinde aynı `(protocol, local, remote, state, pid)` bilgisine sahip özdeş macOS `lsof` soket kopyaları tekilleştirildi.
+
+---
+
+## Cuma, 20 Kasım 2026 — `20:01` · Commit: *(push bekliyor)*
+### Resmi Ghostty-Stili Terminal Çerçeveli Uygulama Logosu ve macOS İkon Entegrasyonu
+**Etkilenen Modüller:** `assets/sierraport-mark.png`, `assets/sierraport-app-icon.png`, `assets/AppIcon.icns`, `scripts/build-macos-app.sh`, `macos/SierraPortApp/Sources/SierraPortApp/{Theme,SierraPortApp,ContentView}.swift`
+
+- **Ultra Yüksek Kaliteli Maskot Ayıklama (`assets/sierraport-mark.png`):** Gönderilen maskot görselindeki siyah arka plan yumuşak `smoothstep` luminans maskesiyle pikselleşme ve koyu kenar halesi olmadan tamamen kesilerek `1024×1024` şeffaf `#F5F5F4` vektör keskinliğinde marka işaretine dönüştürüldü.
+- **Ghostty Tarzı Terminal Çerçeveli Uygulama İkonu (`assets/sierraport-app-icon.png` & `assets/AppIcon.icns`):** Dışta antrasit/titanyum macOS squircle çerçeve (`#333330 → #111110`), üstte sade 3 pencere noktası ve ince ayırıcı çizgi, içte gömülü mat siyah terminal ekranının merkezinde SierraPort maskotu olacak şekilde 10 çözünürlüklü resmi macOS `.icns` paketi üretildi (`16px` – `512px@2x`).
+- **Uygulama Geneli Entegrasyon:** `CFBundleIconFile = AppIcon` (Dock, Finder, Spotlight, `⌘+Tab`), Sidebar başlığı, Command Deck karşılama ekranı ve macOS Menü Çubuğu (otomatik Dark/Light uyumlu `isTemplate` maskot ikonu) tek bir resmi marka kimliği altında birleştirildi.
+
+---
+
+## Cuma, 20 Kasım 2026 — `20:04` · Commit: *(push bekliyor)*
+### `#0B24AC` Kobalt Mavi Degrade Uygulama İkonu Güncellemesi
+**Etkilenen Modüller:** `assets/sierraport-app-icon.png`, `assets/AppIcon.icns`, `dist/SierraPort.app`
+
+- **Yeni Ana Tema Rengi (`#0B24AC`):** Terminal çerçevesi kaldırılarak macOS squircle içerisine `#1D3DE2 → #0B24AC → #051264` kobalt mavi degrade ve yumuşak üst ışık yansıması uygulandı.
+- **Büyütülmüş Şeffaf Beyaz Maskot:** Şeffaf beyaz SierraPort maskotu `688×688` (squircle genişliğinin ~%74'ü) boyutuna büyütülüp ince derinlik gölgesiyle tam merkeze yerleştirildi; tüm `16px`–`512px@2x` macOS `.icns` katmanları ve `dist/SierraPort.app` paketi yenilendi.
+
+---
+
+## Cuma, 20 Kasım 2026 — `20:05` · Commit: *(push bekliyor)*
+### `#121846` Gece Laciverdi Degrade Uygulama İkonu Güncellemesi
+**Etkilenen Modüller:** `assets/sierraport-app-icon.png`, `assets/AppIcon.icns`, `dist/SierraPort.app`
+
+- Uygulama ikonunun arka plan degradeleri `#1F296E → #121846 → #080B24` derin gece laciverdi tonlarına güncellendi; `AppIcon.icns` ve `dist/SierraPort.app` yeniden paketlendi.
+
+---
+
+## Cuma, 20 Kasım 2026 — `20:07` · Commit: *(push bekliyor)*
+### `#082452` Derin Okyanus Mavisi Degrade Uygulama İkonu Güncellemesi
+**Etkilenen Modüller:** `assets/sierraport-app-icon.png`, `assets/AppIcon.icns`, `dist/SierraPort.app`
+
+- Uygulama ikonunun arka plan degradeleri `#123C82 → #082452 → #031129` derin okyanus mavisi tonlarına güncellendi; `AppIcon.icns` ve `dist/SierraPort.app` yeniden paketlendi.
+
+---
+
+## Cuma, 20 Kasım 2026 — `20:14` · Commit: *(push bekliyor)*
+### Raycast / Spotlight Tarzı Sistem Geneli Kısayol, Yüzen Hızlı Başlatıcı ve Motion Onboarding
+**Etkilenen Modüller:** `macos/SierraPortApp/Sources/SierraPortApp/{GlobalHotkeyManager,QuickLauncherPanel,ShortcutOnboardingView,SierraPortApp,ContentView}.swift`
+
+- **Sistem Geneli macOS Global Kısayol (`GlobalHotkeyManager.swift`):** Apple Carbon `RegisterEventHotKey` API'si ile harici bağımlılık ve Accessibility izni gerektirmeden macOS genelinde her uygulama ve Space üzerinden çalışan özel kısayol kaydı eklendi.
+- **Raycast-Stili Motion İlk Kurulum Ekranı (`ShortcutOnboardingView.swift`):** İlk açılışta (ve istendiğinde Sidebar'daki **Quick Launch** düğmesinden tekrar) kademeli spring animasyonlar, `#082452` ortam ışığı, 3 boyutlu dokunsal tuş başlıkları (`TactileKeycapView`), canlı tuş kombinasyonu kaydedici (`NSEvent` monitor) ve hazır şablonlar (`⌥ Space`, `⌃ Space`, `⌘ ⇧ P`, `⌥ P`) ile kısayol tanımlanır.
+- **Yüzen Spotlight/Raycast Hızlı Başlatıcı (`QuickLauncherPanel.swift`):** Belirlenen kısayola hangi uygulamada olunursa olunsun basıldığında ekranın üst-ortasında kenarlıksız yüzen `NSPanel` açılır; kullanıcı `Tab`/`↑↓`/`Enter` ile doğrudan komut çalıştırıp port tablosu, güvenlik skoru veya forensic inspect sonuçlarını anında panel içinde görür ve `Esc` (veya dışarı tıklama) ile kapatır.
+
+---
+
+## Cuma, 20 Kasım 2026 — `20:23` · Commit: *(push bekliyor)*
+### Raycast Tasarım Sistemi ve Tipografi Güncellemesi (`SierraFont` & Raycast UI)
+**Etkilenen Modüller:** `macos/SierraPortApp/Sources/SierraPortApp/{Theme,ContentView,QuickLauncherPanel,VisualBlocks}.swift`
+
+- **Raycast Tipografi Sistemi (`SierraFont`):** Raycast'in kullandığı açık lisanslı **Inter** (SIL OFL) ve **JetBrains Mono** fontlarını sistemde yüklüyse otomatik algılayan, yüklü değilse Apple'ın native **SF Pro** ve **SF Mono** tipografisiyle hukuki açıdan %100 güvenli biçimde eşleşen tipografi katmanı kuruldu.
+- **Raycast Yüzey ve Kart Dili (`raycastCard` & `RaycastKeycap`):** Kartlara ve yüzen başlatıcıya ince üst cam ışık kenarlığı (`topSpecular`), `#082452` uygulama ikonuyla uyumlu safir mavi odak vurgusu (`SierraTheme.accent`) ve Raycast'in ikonik nötr satır seçim dolgusu (`selectionFill`) eklendi.
+- **Kalıcı Alt Aksiyon Çubuğu (`raycastFooterBar`):** Ana pencerenin altına Raycast tarzı dokunsal tuş başlıklarıyla (`⏎`, `Tab`, `⌥⌘I`, `Quick Launch`) durum ve kısayol çubuğu yerleştirildi.
+
+---
+
+## Cuma, 20 Kasım 2026 — `20:30` · Commit: *(push bekliyor)*
+### Gerçek Inter v4.1 Font Paketi, Quick Launcher Çerçeve/Odak Düzeltmeleri ve Beyaz Maskot İkonu
+**Etkilenen Modüller:** `assets/fonts/Inter-*.ttf`, `scripts/build-macos-app.sh`, `macos/SierraPortApp/Sources/SierraPortApp/{Theme,SierraPortApp,ShortcutOnboardingView,QuickLauncherPanel}.swift`
+
+- **Gerçek Gömülü `Inter` v4.1 Fontu (SIL OFL 1.1):** Resmi `Inter-Regular`, `Inter-Medium`, `Inter-SemiBold` ve `Inter-Bold` `.ttf` dosyaları doğrudan `SierraPort.app/Contents/Resources/Fonts/` içine gömülüp `CTFontManagerRegisterFontsForURL` ile açılışta kaydedildi; tüm uygulama gerçek Raycast **Inter** tipografisiyle çalışır.
+- **Yüzen Başlatıcı Bozuk Kenarlık Düzeltmesi:** `NSPanel` pencere gölgesiyle çakışan iç padding ve çift SwiftUI gölgesi kaldırıldı; `NSHostingView` katmanı şeffaf ve `cornerRadius: 16` ile temizce kırpılarak pürüzsüz tek parça 1px kenarlık sağlandı.
+- **Ana Uygulamaya Geri Dönüş Düzeltmesi:** `NSApp.windows` içinde gizli Menu Bar penceresi yerine gerçek ana pencere (`$0.canBecomeMain && !($0 is FloatingLauncherPanel)`) seçilerek `Esc` veya **Open App** ile ana pencereye her zaman sorunsuz dönülmesi sağlandı.
+- **Dinamik Quick Launcher & Saf Beyaz Maskot:** Kısayol açılışında gecikmesiz metin odaklaması, yazarken canlı port eşleştirme, `Tab`/`↑↓` + `Enter` akışı ve hem Onboarding hem Quick Launcher'da mavi kare yerine yalnızca şeffaf beyaz maskot (`SierraMascotMarkView`) kullanıldı.
+
+---
+
+## Cuma, 20 Kasım 2026 — `21:21` · Commit: *(push bekliyor)*
+### Kısayol Sayfası için Slow-Motion Termal Gradyan Arka Planı (`ThermalGradientBackground`)
+**Etkilenen Modüller:** `macos/SierraPortApp/Sources/SierraPortApp/ShortcutOnboardingView.swift`
+
+- **Slow-Motion Termal Gradyan (`TimelineView` + 4 Katmanlı Termal Küre):** Uygulamanın `#111110` koyu tema ve `#082452` derin okyanus mavisi kimliğiyle uyumlu 4 termal renk katmanı (Derin Safir `#082452 → #1647A8`, Sıcak Termal Mercan/Amber `#E6672A → #B8352B`, Termal Mor Köprü `#562EA6` ve Termal Camgöbeği `#1692B8`) 60fps akıcılıkla ağır çekim yörünge hareketiyle dönecek şekilde eklendi.
+- **Buzlu Cam Kart & Okunabilirlik:** Kısayol kayıt kartı `.ultraThinMaterial` + yarı saydam `SierraTheme.surface` cam yüzeyi ve hafif kontrast tülü ile hem Dark hem Light temada yüksek okunabilirlik sunacak şekilde yenilendi.
 
 ---
 

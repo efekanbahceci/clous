@@ -25,6 +25,13 @@ mkdir -p "$BUNDLE_DIR/Contents/MacOS" "$BUNDLE_DIR/Contents/Resources"
 
 cp "$SWIFT_BIN" "$BUNDLE_DIR/Contents/MacOS/$APP_NAME"
 cp "$RUST_BIN" "$BUNDLE_DIR/Contents/Resources/sierraport"
+cp "$ROOT_DIR/assets/AppIcon.icns" "$BUNDLE_DIR/Contents/Resources/AppIcon.icns"
+cp "$ROOT_DIR/assets/sierraport-app-icon.png" "$BUNDLE_DIR/Contents/Resources/sierraport-app-icon.png"
+cp "$ROOT_DIR/assets/sierraport-mark.png" "$BUNDLE_DIR/Contents/Resources/sierraport-mark.png"
+if [ -d "$ROOT_DIR/assets/fonts" ]; then
+    mkdir -p "$BUNDLE_DIR/Contents/Resources/Fonts"
+    cp "$ROOT_DIR/assets/fonts/"*.ttf "$BUNDLE_DIR/Contents/Resources/Fonts/" 2>/dev/null || true
+fi
 chmod +x "$BUNDLE_DIR/Contents/MacOS/$APP_NAME" "$BUNDLE_DIR/Contents/Resources/sierraport"
 
 cat > "$BUNDLE_DIR/Contents/Info.plist" << 'EOF'
@@ -36,6 +43,8 @@ cat > "$BUNDLE_DIR/Contents/Info.plist" << 'EOF'
     <string>en</string>
     <key>CFBundleExecutable</key>
     <string>SierraPort</string>
+    <key>CFBundleIconFile</key>
+    <string>AppIcon</string>
     <key>CFBundleIdentifier</key>
     <string>dev.sierraport.macos</string>
     <key>CFBundleInfoDictionaryVersion</key>
