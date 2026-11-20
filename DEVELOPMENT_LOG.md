@@ -4,6 +4,21 @@ Bu doküman, **SierraPort** projesinin ilk sürümünden itibaren geçirdiği t�
 
 ---
 
+## Kronolojik Zaman Çizelgesi ve GitHub Kayıtları
+
+| Faz | Gün & Tarih | Saat (TRT) | Git Commit | Geliştirme Özeti |
+|---|---|---|---|---|
+| **Başlangıç** | Perşembe, 19 Kasım 2026 | `14:48` | `cd81280` | Initial commit (depo kurulumu) |
+| **Faz 1** | Perşembe, 19 Kasım 2026 | `14:59` | `eea6881` | Çekirdek Rust CLI (`v0.1.0`) — `list`, `watch`, `check`, `who`, `kill`, `stats` |
+| **Bakım** | Cuma, 20 Kasım 2026 | `13:41` | `600994b` | `display.rs` import düzenlemesi |
+| **Faz 2** | Cuma, 20 Kasım 2026 | `13:53` | `bb9de39` | Gelişmiş port analiz, `audit`, `inspect`, `snapshot`/`diff`, `free`, `wait` (`v0.2.0`) |
+| **Faz 3** | Cuma, 20 Kasım 2026 | `14:00` – `14:16` | `6007630`, `d06a727` | Titremesiz In-Place `watch` TUI, `DOCS.md`, İngilizce `README.md` ve Apple-stili SVG banner'lar |
+| **Faz 4** | Cuma, 20 Kasım 2026 | `14:32` | `87104ac` | Native macOS `SierraPort.app` (SwiftUI + Rust `stream` NDJSON + Menu Bar Extra) |
+| **Faz 5** | Cuma, 20 Kasım 2026 | `15:20` | `cca4b1a` | Katlanabilir Terminal Deck, dinamik Swift Charts, `#111110` Dark/Light tema, `sierraport-preview.png` |
+| **Faz 6** | Cuma, 20 Kasım 2026 | `15:33` | `8143ede` | Yeni Nesil Güvenlik & Binary Güven Denetim Motoru (`codesign`, Firewall Posture, Deep Probe, Allowlist, Export MD) |
+
+---
+
 ## İçindekiler
 
 1. [Faz 1 — Çekirdek Rust CLI Altyapısı (v0.1.0)](#faz-1--çekirdek-rust-cli-altyapısı-v010)
@@ -16,7 +31,8 @@ Bu doküman, **SierraPort** projesinin ilk sürümünden itibaren geçirdiği t�
 ---
 
 ## Faz 1 — Çekirdek Rust CLI Altyapısı (v0.1.0)
-**Tarih:** 2026-11-19  
+**Zaman:** Perşembe, 19 Kasım 2026 — `14:59` (TRT / UTC+3)  
+**Git Commit:** `eea6881` (Başlangıç: `cd81280` — `14:48`)  
 **Etkilenen Modüller:** `src/main.rs`, `src/cli.rs`, `src/models.rs`, `src/commands.rs`, `src/display.rs`, `src/scanner/{linux,macos,windows}.rs`
 
 ### Ne Yapıldı?
@@ -30,7 +46,8 @@ Bu doküman, **SierraPort** projesinin ilk sürümünden itibaren geçirdiği t�
 ---
 
 ## Faz 2 — Gelişmiş Port Analiz, Denetim ve Otomasyon Motoru (v0.2.0)
-**Tarih:** 2026-11-20  
+**Zaman:** Cuma, 20 Kasım 2026 — `13:53` (TRT / UTC+3)  
+**Git Commit:** `bb9de39`  
 **Etkilenen Modüller:** `src/audit.rs`, `src/snapshot.rs`, `src/models.rs`, `src/scanner/mod.rs`, `src/scanner/macos.rs`, `src/scanner/linux.rs`, `src/display.rs`, `src/cli.rs`, `src/commands.rs`
 
 ### Ne Yapıldı?
@@ -51,7 +68,8 @@ Bu doküman, **SierraPort** projesinin ilk sürümünden itibaren geçirdiği t�
 ---
 
 ## Faz 3 — Titremesiz Yerinde Canlı İzleme (In-Place TUI) & Kapsamlı Dokümantasyon
-**Tarih:** 2026-11-20  
+**Zaman:** Cuma, 20 Kasım 2026 — `14:00` – `14:16` (TRT / UTC+3)  
+**Git Commit:** `6007630` (`14:00`), `d06a727` (`14:16`)  
 **Etkilenen Modüller:** `src/commands.rs`, `src/display.rs`, `DOCS.md`, `README.md`, `assets/sierraport-banner-{dark,light}.svg`
 
 ### Ne Yapıldı?
@@ -64,7 +82,8 @@ Bu doküman, **SierraPort** projesinin ilk sürümünden itibaren geçirdiği t�
 ---
 
 ## Faz 4 — Native macOS Masaüstü Uygulaması (`SierraPort.app`: SwiftUI + Rust Core)
-**Tarih:** 2026-11-20  
+**Zaman:** Cuma, 20 Kasım 2026 — `14:32` (TRT / UTC+3)  
+**Git Commit:** `87104ac`  
 **Etkilenen Modüller:** `src/commands.rs` (`stream` NDJSON), `macos/SierraPortApp/Sources/SierraPortApp/*`, `scripts/build-macos-app.sh`
 
 ### Ne Yapıldı?
@@ -78,7 +97,8 @@ Bu doküman, **SierraPort** projesinin ilk sürümünden itibaren geçirdiği t�
 ---
 
 ## Faz 5 — Dinamik UI/UX, Katlanabilir Terminal Deck ve `#111110` Adaptif Tema Sistemi
-**Tarih:** 2026-11-20  
+**Zaman:** Cuma, 20 Kasım 2026 — `15:20` (TRT / UTC+3)  
+**Git Commit:** `cca4b1a`  
 **Etkilenen Modüller:** `macos/SierraPortApp/Sources/SierraPortApp/{Theme,ContentView,VisualBlocks,ViewModel,Models,SierraPortApp}.swift`, `assets/sierraport-preview.png`
 
 ### Ne Yapıldı?
@@ -91,7 +111,8 @@ Bu doküman, **SierraPort** projesinin ilk sürümünden itibaren geçirdiği t�
 ---
 
 ## Faz 6 — Yeni Nesil Güvenlik & Binary Güven Denetim Motoru
-**Tarih:** 2026-11-20  
+**Zaman:** Cuma, 20 Kasım 2026 — `15:33` (TRT / UTC+3)  
+**Git Commit:** `8143ede`  
 **Etkilenen Modüller:** `src/audit.rs`, `src/cli.rs`, `src/commands.rs`, `src/display.rs`, `macos/SierraPortApp/Sources/SierraPortApp/{Models,ViewModel,VisualBlocks,ContentView}.swift`
 
 ### Ne Yapıldı?
