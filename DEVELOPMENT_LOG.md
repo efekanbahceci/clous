@@ -29,6 +29,7 @@ Bu doküman, **SierraPort** projesinde yapılan tüm geliştirmeleri **gün, tar
 | Cuma, 20 Kasım 2026 | `20:23` | *(push bekliyor)* | Raycast Tasarım Sistemi & Tipografi (`SierraFont`: Inter / SF Pro + JetBrains Mono / SF Mono, üst ışık kenarlıklı `raycastCard`, alt aksiyon çubuğu ve safir vurgu rengi) |
 | Cuma, 20 Kasım 2026 | `20:30` | *(push bekliyor)* | Gerçek Inter v4.1 Font Paketi Gömülmesi, Yüzen Başlatıcı Çerçeve/Geri Dönüş Düzeltmeleri, Beyaz Maskot İkonu ve Canlı Port Önerileri |
 | Cuma, 20 Kasım 2026 | `21:21` | *(push bekliyor)* | Kısayol Ayarlama Sayfası için Slow-Motion Termal Gradyan (`ThermalGradientBackground`) ve Buzlu Cam Kart UI |
+| Cuma, 20 Kasım 2026 | `21:26` | *(push bekliyor)* | Kısmi Çapraz Termal Tutulma Gradyanı (`ThermalEclipseBackground` + Film Greni) ve Tek Seferlik 3 Adımlı İlk Kurulum Sihirbazı (Tema → Güvenlik Profili → Kısayol) |
 
 ---
 
@@ -227,6 +228,20 @@ Bu doküman, **SierraPort** projesinde yapılan tüm geliştirmeleri **gün, tar
 
 - **Slow-Motion Termal Gradyan (`TimelineView` + 4 Katmanlı Termal Küre):** Uygulamanın `#111110` koyu tema ve `#082452` derin okyanus mavisi kimliğiyle uyumlu 4 termal renk katmanı (Derin Safir `#082452 → #1647A8`, Sıcak Termal Mercan/Amber `#E6672A → #B8352B`, Termal Mor Köprü `#562EA6` ve Termal Camgöbeği `#1692B8`) 60fps akıcılıkla ağır çekim yörünge hareketiyle dönecek şekilde eklendi.
 - **Buzlu Cam Kart & Okunabilirlik:** Kısayol kayıt kartı `.ultraThinMaterial` + yarı saydam `SierraTheme.surface` cam yüzeyi ve hafif kontrast tülü ile hem Dark hem Light temada yüksek okunabilirlik sunacak şekilde yenilendi.
+
+---
+
+## Cuma, 20 Kasım 2026 — `21:26` · Commit: *(push bekliyor)*
+### Kısmi Çapraz Termal Tutulma Gradyanı ve Tek Seferlik 3 Adımlı İlk Kurulum Sihirbazı
+**Etkilenen Modüller:** `macos/SierraPortApp/Sources/SierraPortApp/ShortcutOnboardingView.swift`, `macos/SierraPortApp/Sources/SierraPortApp/SierraPortApp.swift`
+
+- **Kısmi Çapraz Termal Tutulma Gradyanı (`ThermalEclipseBackground` + `ProceduralGrain`):** Referans termal görsellerden ilhamla, ekranın tamamını tekdüze boyamak yerine yaklaşık %65–72'sine yayılan ve sağ üst / köşelerde sakin karanlık negatif alan bırakan ağır çekim çapraz eliptik termal yay tasarlandı. Derin safir (`#082452 → #0052D4`), elektrik camgöbeği (`#00B4FF`), termal menekşe-magenta (`#5B2CC6 → #D9308A`), güneş amberi (`#F58A29`) ve önbellekli organik film greni dokusu birleştirildi.
+- **Tek Seferlik 3 Adımlı İlk Kurulum Sihirbazı (`SetupStep`):** Uygulama ilk kez açıldığında kullanıcıya yalnızca **bir kez** sorulacak 3 adımlı kurulum akışı eklendi:
+  1. **Tema Seçimi (Appearance):** Canlı mini pencere önizlemeli `Dark (#111110)`, `Light (#F6F6F4)` ve `System` seçenekleri (seçim anında tema önizlenir).
+  2. **Güvenlik Denetim Profili (Security Posture):** `Developer`, `Strict` ve `Zero-Trust` varsayılan denetim profili seçimi.
+  3. **Global Kısayol (Quick Launcher Shortcut):** İkili kısayol kaydedici (`TactileKeycapView` + hazır seçenekler).
+- **Tekrar Sormama Garantisi:** Tamamlandığında `@AppStorage("sierraport_setup_wizard_done_v2")` bayrağı kalıcı olarak kaydedilir ve sonraki açılışlarda doğrudan ana uygulama başlar; kullanıcı ileride kısayolunu değiştirmek isterse sol menüdeki **Quick Launch** düğmesi doğrudan Kısayol adımını açar.
+- **Kullanım Değeri:** Bireysel geliştiriciler ve kurumsal ekipler uygulamayı ilk kurulumda 10 saniye içinde kendi tema, güvenlik sıkılığı ve sistem geneli kısayol tercihlerine göre kişiselleştirip doğrudan kullanıma geçebilir.
 
 ---
 
