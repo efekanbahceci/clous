@@ -42,6 +42,7 @@ Bu doküman, **SierraPort** projesinde yapılan tüm geliştirmeleri **gün, tar
 | Cumartesi, 21 Kasım 2026 | `11:10` | *(push bekliyor)* | Grafik Motoru Düzeltmesi: Monotonik `historySeq` + `streamGeneration` Koruması, Etkileşimli Metrik Seçici (`All/Active/Exposed/Scan ms`) ve Hover İzleme |
 | Cumartesi, 21 Kasım 2026 | `11:16` | *(push bekliyor)* | Tam Sistem Hata Taraması & 7 Düzeltme: Eşzamanlı Pipe Okuma, `NSLock` Akış Tamponu, Çıkışta Alt Süreç Temizliği, Güvenlik Profili Kalıcılığı, Quick Launcher Tıklama ve Clippy Sıfırlama |
 | Cumartesi, 21 Kasım 2026 | `11:40` | *(push bekliyor)* | Güvenlik Denetimi İyileştirmeleri (8 Doğrulanmış Bulgu + Sertleştirme): `codesign --verify --strict`, POSIX Tek-Tırnak `remediation_cmd`, `ZeroTrust` LAN Denetimi, `O_NOFOLLOW`/`0o600` Dosya Güvenliği, ANSI/NDJSON/JSONL/Markdown Kaçışı ve `#if DEBUG` İkili Arama |
+| Cumartesi, 21 Kasım 2026 | `11:44` | *(push bekliyor)* | Skill Klasörlerinin Tek Çatı Altında (`.agents/skills/`) Birleştirilmesi ve 10 Yinelemeli Symlink Klasörünün Temizlenmesi |
 
 ---
 
@@ -380,6 +381,15 @@ Bu doküman, **SierraPort** projesinde yapılan tüm geliştirmeleri **gün, tar
 - **Terminal / NDJSON / JSONL / Markdown Kaçışı (`src/scanner/mod.rs`, `src/display.rs`, `src/commands.rs`, `ViewModel.swift`):** HTTP `Server:` başlığı ve `Host:` isteği kontrol karakterlerinden arındırıldı; `sanitize_terminal` ile `diff` ve `inspect` çıktıları korundu; `run_stream` ve `run_watch --log` tam RFC 8259 `json_escape` kullanacak şekilde düzeltildi; `exportAuditMarkdown` Markdown/tablo kaçışı eklendi.
 - **Dosya Güvenliği, Mutlak Sistem Yolları & PID Koruması (`src/snapshot.rs`, `src/commands.rs`, `src/scanner/{mod,macos}.rs`, `Bridge.swift`, `Models.swift`):** `save_snapshot`, `load_snapshot` (16 MiB sınır + `is_file()`) ve `append_log_line` `O_NOFOLLOW` + `0o600` ile sertleştirildi; `/usr/sbin/lsof`, `/bin/ps`, `/usr/bin/codesign`, `/bin/kill` mutlak yollarına geçildi; `kill` için `pid <= 1`, `self-PID` ve boş `--proc` koruması eklendi; `Bridge.locateBinary` CWD araması `#if DEBUG` içine alındı; `AuditFinding.allowlistKey` `endpoint` alanını kapsayacak şekilde genişletildi ve `/tmp/sierraport_base.json` önerisi `~/sierraport_base.json` olarak güncellendi.
 - **Regresyon Testleri (`src/main.rs`):** 2 yeni güvenlik regresyon testi eklendi (toplam `9/9` test).
+
+---
+
+## Cumartesi, 21 Kasım 2026 — `11:44` · Commit: *(push bekliyor)*
+### Skill Klasörlerinin Tek Çatı Altında (`.agents/skills/`) Toplanması
+**Etkilenen Modüller:** `.gitignore`, `.agents/skills/`
+
+- Proje kökünde `npx skills` tarafından oluşturulan ve tamamı `.agents/skills/` dizinine işaret eden 10 yinelemeli symlink klasörü (`.augment`, `.autohand`, `.bob`, `.claude`, `.commandcode`, `.continue`, `.cortex`, `.goose`, `.kimchi`, `/skills`) silinip Git indeksinden çıkarıldı.
+- Tüm 16 skill yalnızca tek kanonik klasör olan `.agents/skills/` altında korundu (Antigravity'nin skill keşif mekanizması kesintisiz çalışmaya devam eder) ve yinelemeli symlink klasörleri `.gitignore` dosyasına eklendi.
 
 ---
 

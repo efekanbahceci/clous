@@ -5,3 +5,15 @@ Cargo.lock
 **/*.rs.bk
 *.pdb
 .DS_Store
+
+# Duplicate agent skill symlink mirrors (canonical skills live in .agents/skills/)
+.augment/
+.autohand/
+.bob/
+.claude/
+.commandcode/
+.continue/
+.cortex/
+.goose/
+.kimchi/
+/skills/
