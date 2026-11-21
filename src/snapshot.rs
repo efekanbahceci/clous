@@ -79,15 +79,56 @@ pub fn create_snapshot(entries: &[PortEntry]) -> Snapshot {
     }
 }
 
+const MAX_SNAPSHOT_BYTES: u64 = 16 * 1024 * 1024;
+
+#[cfg(target_os = "macos")]
+const UNIX_O_NOFOLLOW: i32 = 0x0100;
+#[cfg(target_os = "linux")]
+const UNIX_O_NOFOLLOW: i32 = 0x20000;
+
 pub fn save_snapshot(path: &Path, snapshot: &Snapshot) -> Result<(), String> {
+    use std::io::Write;
     let json = serialize_snapshot(snapshot);
-    fs::write(path, json)
+    let mut opts = fs::OpenOptions::new();
+    opts.write(true).create(true).truncate(true);
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        opts.custom_flags(UNIX_O_NOFOLLOW).mode(0o600);
+    }
+    let mut file = opts
+        .open(path)
+        .map_err(|e| format!("Failed to write snapshot to '{}': {e}", path.display()))?;
+    file.write_all(json.as_bytes())
         .map_err(|e| format!("Failed to write snapshot to '{}': {e}", path.display()))
 }
 
 pub fn load_snapshot(path: &Path) -> Result<Snapshot, String> {
-    let raw = fs::read_to_string(path)
+    use std::io::Read;
+    let mut opts = fs::OpenOptions::new();
+    opts.read(true);
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        opts.custom_flags(UNIX_O_NOFOLLOW);
+    }
+    let file = opts
+        .open(path)
         .map_err(|e| format!("Failed to read snapshot '{}': {e}", path.display()))?;
+    let meta = file
+        .metadata()
+        .map_err(|e| format!("Failed to stat snapshot '{}': {e}", path.display()))?;
+    if !meta.is_file() {
+        return Err(format!("Snapshot path '{}' is not a regular file", path.display()));
+    }
+    let mut raw = String::new();
+    let read_len = file
+        .take(MAX_SNAPSHOT_BYTES + 1)
+        .read_to_string(&mut raw)
+        .map_err(|e| format!("Failed to read snapshot '{}': {e}", path.display()))?;
+    if (read_len as u64) > MAX_SNAPSHOT_BYTES {
+        return Err(format!("Snapshot '{}' exceeds 16 MiB safety limit", path.display()));
+    }
     parse_snapshot(&raw)
 }
 
@@ -270,12 +311,12 @@ fn extract_json_string(obj: &str, key: &str) -> Option<String> {
             '\\' => match chars.next()? {
                 '"' => out.push('"'),
                 '\\' => out.push('\\'),
-                'n' => out.push('\n'),
-                'r' => out.push('\r'),
-                't' => out.push('\t'),
-                other => out.push(other),
+                'n' | 'r' | 't' => out.push(' '),
+                other if !other.is_control() => out.push(other),
+                _ => {}
             },
-            other => out.push(other),
+            other if !other.is_control() => out.push(other),
+            _ => {}
         }
     }
     None

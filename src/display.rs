@@ -794,9 +794,9 @@ pub fn print_diff_report(report: &DiffReport, theme: &Theme, json: bool) {
             "  {} {:<5} {:<20} (PID: {}, {})",
             theme.green("+ ADDED  "),
             e.protocol.as_str(),
-            format!("{}:{}", e.local_addr, e.local_port),
+            sanitize_terminal(&format!("{}:{}", e.local_addr, e.local_port)),
             e.pid.map(|p| p.to_string()).unwrap_or_else(|| "-".into()),
-            e.process_name.as_deref().unwrap_or("-")
+            sanitize_terminal(e.process_name.as_deref().unwrap_or("-"))
         );
     }
     for e in &report.removed {
@@ -804,9 +804,9 @@ pub fn print_diff_report(report: &DiffReport, theme: &Theme, json: bool) {
             "  {} {:<5} {:<20} (was PID: {}, {})",
             theme.red("- REMOVED"),
             e.protocol.as_str(),
-            format!("{}:{}", e.local_addr, e.local_port),
+            sanitize_terminal(&format!("{}:{}", e.local_addr, e.local_port)),
             e.pid.map(|p| p.to_string()).unwrap_or_else(|| "-".into()),
-            e.process_name.as_deref().unwrap_or("-")
+            sanitize_terminal(e.process_name.as_deref().unwrap_or("-"))
         );
     }
     for c in &report.changed {
@@ -815,7 +815,7 @@ pub fn print_diff_report(report: &DiffReport, theme: &Theme, json: bool) {
             theme.yellow("~ CHANGED"),
             c.after.protocol.as_str(),
             c.after.local_port,
-            c.changes.join(" | ")
+            sanitize_terminal(&c.changes.join(" | "))
         );
     }
 
@@ -855,7 +855,7 @@ pub fn print_inspect_report(
                 e.protocol.as_str(),
                 json_escape(&e.local_endpoint()),
                 json_escape(&e.remote_endpoint()),
-                e.state.as_str(),
+                json_escape(e.state.as_str()),
                 e.bind_scope().as_str(),
                 opt_u64_json(e.pid.map(u64::from)),
                 opt_str_json(e.user.as_deref()),
@@ -984,9 +984,14 @@ pub fn print_inspect_report(
             p.detected_protocol.as_deref().unwrap_or("-")
         );
         if let Some(ref b) = p.banner {
-            println!("  Banner: {}", theme.cyan(b));
+            println!("  Banner: {}", theme.cyan(&sanitize_terminal(b)));
         }
     }
+}
+
+/// Strip ASCII C0/DEL and C1 control characters (including ESC, BEL, CR, LF) before printing untrusted text to a terminal.
+pub fn sanitize_terminal(s: &str) -> String {
+    s.chars().filter(|c| !c.is_control()).collect()
 }
 
 fn ascii_bar(value: usize, max_val: usize, width: usize) -> String {
@@ -1033,7 +1038,7 @@ fn opt_str_json(val: Option<&str>) -> String {
     }
 }
 
-fn json_escape(s: &str) -> String {
+pub fn json_escape(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
     for ch in s.chars() {
         match ch {

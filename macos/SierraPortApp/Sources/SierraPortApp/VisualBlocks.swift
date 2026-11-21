@@ -82,99 +82,285 @@ struct KpiPill: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 13)
+        .frame(maxWidth: .infinity, minHeight: 68, alignment: .leading)
+        .padding(.horizontal, 14)
         .padding(.vertical, 10)
-        .background(SierraTheme.surface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .strokeBorder(SierraTheme.border, lineWidth: 1)
-        )
+        .raycastCard(cornerRadius: 14)
     }
 }
 
-// MARK: - Live Real-Time Activity Sparkline
+// MARK: - Live Real-Time Activity Sparkline (Interactive, Option-Safe, Monotonic)
+
+enum LiveChartMetric: String, CaseIterable, Identifiable {
+    case combined = "All"
+    case active = "Active"
+    case exposed = "Exposed"
+    case latency = "Scan ms"
+
+    var id: String { rawValue }
+}
 
 struct LiveSparklineView: View {
     let history: [TickHistoryPoint]
-    var height: CGFloat = 115
+    var height: CGFloat = 128
+
+    @State private var metric: LiveChartMetric = .combined
+    @State private var hoveredTick: Int? = nil
+
+    private var ordered: [TickHistoryPoint] {
+        history.sorted { $0.tick < $1.tick }
+    }
+
+    private var inspectedPoint: TickHistoryPoint? {
+        if let ht = hoveredTick,
+           let match = ordered.min(by: { abs($0.tick - ht) < abs($1.tick - ht) }) {
+            return match
+        }
+        return ordered.last
+    }
+
+    private func yTop(for pts: [TickHistoryPoint]) -> Int {
+        switch metric {
+        case .combined, .active:
+            let peak = pts.map(\.active).max() ?? 10
+            return max(peak + max(2, peak / 5), 6)
+        case .exposed:
+            let peak = pts.map(\.exposed).max() ?? 5
+            return max(peak + max(2, peak / 4), 5)
+        case .latency:
+            let peak = pts.map(\.scanMs).max() ?? 40
+            return max(peak + max(10, peak / 4), 20)
+        }
+    }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 10) {
                 Label("Live Socket Activity", systemImage: "waveform.path.ecg")
-                    .font(.system(size: 12, weight: .semibold))
-                Spacer()
-                if let last = history.last {
-                    HStack(spacing: 12) {
-                        HStack(spacing: 4) {
-                            Circle().fill(.cyan).frame(width: 6, height: 6)
-                            Text("Active: \(last.active)")
+                    .font(SierraFont.ui(12.5, weight: .semibold))
+
+                // Compact Interactive Metric Mode Switcher
+                HStack(spacing: 2) {
+                    ForEach(LiveChartMetric.allCases) { m in
+                        let isSel = metric == m
+                        Button {
+                            withAnimation(.easeOut(duration: 0.20)) {
+                                metric = m
+                            }
+                        } label: {
+                            Text(m.rawValue)
+                                .font(SierraFont.ui(10.5, weight: isSel ? .semibold : .regular))
+                                .foregroundStyle(isSel ? Color.primary : Color.secondary)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 3.5)
+                                .background(
+                                    isSel ? SierraTheme.glassFillElevated : Color.clear,
+                                    in: Capsule()
+                                )
+                                .contentShape(Capsule())
                         }
-                        HStack(spacing: 4) {
-                            Circle().fill(.orange).frame(width: 6, height: 6)
-                            Text("Exposed: \(last.exposed)")
-                        }
-                        Text("\(last.scanMs)ms")
-                            .foregroundStyle(.secondary)
+                        .buttonStyle(.plain)
                     }
-                    .font(.system(size: 11, design: .monospaced))
+                }
+                .padding(2)
+                .background(SierraTheme.glassFill, in: Capsule())
+                .overlay(Capsule().strokeBorder(SierraTheme.glassBorderBottom, lineWidth: 1))
+
+                Spacer()
+
+                if let pt = inspectedPoint {
+                    HStack(spacing: 12) {
+                        if metric == .combined || metric == .active {
+                            HStack(spacing: 4) {
+                                Circle().fill(.cyan).frame(width: 6, height: 6)
+                                Text("Active: \(pt.active)")
+                            }
+                        }
+                        if metric == .combined || metric == .exposed {
+                            HStack(spacing: 4) {
+                                Circle().fill(.orange).frame(width: 6, height: 6)
+                                Text("Exposed: \(pt.exposed)")
+                            }
+                        }
+                        HStack(spacing: 4) {
+                            if metric == .latency {
+                                Circle().fill(.purple).frame(width: 6, height: 6)
+                            }
+                            Text("\(pt.scanMs)ms")
+                                .foregroundStyle(metric == .latency ? Color.purple : Color.secondary)
+                        }
+                        if hoveredTick != nil {
+                            Text(pt.time)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .font(SierraFont.mono(11, weight: .medium))
                     .contentTransition(.numericText())
                 }
             }
 
-            if history.count < 2 {
-                HStack {
+            if ordered.isEmpty {
+                HStack(spacing: 8) {
                     ProgressView().controlSize(.small)
                     Text("Collecting live telemetry...")
-                        .font(.system(size: 12))
+                        .font(SierraFont.ui(12))
                         .foregroundStyle(.secondary)
                 }
                 .frame(maxWidth: .infinity, minHeight: height)
             } else {
-                let minTick = history.first?.tick ?? 0
-                let maxTick = max((history.last?.tick ?? 1), minTick + 1)
-                let maxVal = max(history.map(\.active).max() ?? 10, 5)
-                let yTop = maxVal + max(2, maxVal / 5)
+                let firstTick = ordered.first?.tick ?? 0
+                let lastTick = ordered.last?.tick ?? 1
+                let xUpper = max(lastTick, firstTick + 1)
+                let upperY = yTop(for: ordered)
 
                 Chart {
-                    ForEach(history) { pt in
-                        AreaMark(
-                            x: .value("Tick", pt.tick),
-                            yStart: .value("Zero", 0),
-                            yEnd: .value("Active", pt.active),
-                            series: .value("Series", "ActiveArea")
-                        )
-                        .interpolationMethod(.monotone)
-                        .foregroundStyle(
-                            LinearGradient(
-                                colors: [Color.cyan.opacity(0.24), Color.cyan.opacity(0.01)],
-                                startPoint: .top,
-                                endPoint: .bottom
+                    switch metric {
+                    case .combined:
+                        ForEach(ordered) { pt in
+                            AreaMark(
+                                x: .value("Tick", pt.tick),
+                                yStart: .value("Zero", 0),
+                                yEnd: .value("Active", pt.active),
+                                series: .value("Series", "ActiveArea")
                             )
-                        )
+                            .interpolationMethod(.catmullRom)
+                            .foregroundStyle(
+                                LinearGradient(
+                                    colors: [Color.cyan.opacity(0.24), Color.cyan.opacity(0.01)],
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                )
+                            )
 
-                        LineMark(
-                            x: .value("Tick", pt.tick),
-                            y: .value("Active", pt.active),
-                            series: .value("Series", "Active")
-                        )
-                        .interpolationMethod(.monotone)
-                        .foregroundStyle(.cyan)
-                        .lineStyle(StrokeStyle(lineWidth: 2))
+                            LineMark(
+                                x: .value("Tick", pt.tick),
+                                y: .value("Active", pt.active),
+                                series: .value("Series", "Active")
+                            )
+                            .interpolationMethod(.catmullRom)
+                            .foregroundStyle(.cyan)
+                            .lineStyle(StrokeStyle(lineWidth: 2, lineCap: .round))
 
-                        LineMark(
-                            x: .value("Tick", pt.tick),
-                            y: .value("Exposed", pt.exposed),
-                            series: .value("Series", "Exposed")
-                        )
-                        .interpolationMethod(.monotone)
-                        .foregroundStyle(.orange)
-                        .lineStyle(StrokeStyle(lineWidth: 1.75, dash: [4, 3]))
+                            LineMark(
+                                x: .value("Tick", pt.tick),
+                                y: .value("Exposed", pt.exposed),
+                                series: .value("Series", "Exposed")
+                            )
+                            .interpolationMethod(.catmullRom)
+                            .foregroundStyle(.orange)
+                            .lineStyle(StrokeStyle(lineWidth: 1.75, lineCap: .round, dash: [4, 3]))
+                        }
+                        if let last = ordered.last {
+                            PointMark(x: .value("Tick", last.tick), y: .value("Active", last.active))
+                                .foregroundStyle(.cyan)
+                                .symbolSize(36)
+                        }
+
+                    case .active:
+                        ForEach(ordered) { pt in
+                            AreaMark(
+                                x: .value("Tick", pt.tick),
+                                yStart: .value("Zero", 0),
+                                yEnd: .value("Active", pt.active),
+                                series: .value("Series", "ActiveOnlyArea")
+                            )
+                            .interpolationMethod(.catmullRom)
+                            .foregroundStyle(
+                                LinearGradient(
+                                    colors: [Color.cyan.opacity(0.28), Color.cyan.opacity(0.02)],
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                )
+                            )
+
+                            LineMark(
+                                x: .value("Tick", pt.tick),
+                                y: .value("Active", pt.active),
+                                series: .value("Series", "ActiveOnly")
+                            )
+                            .interpolationMethod(.catmullRom)
+                            .foregroundStyle(.cyan)
+                            .lineStyle(StrokeStyle(lineWidth: 2.2, lineCap: .round))
+                        }
+                        if let last = ordered.last {
+                            PointMark(x: .value("Tick", last.tick), y: .value("Active", last.active))
+                                .foregroundStyle(.cyan)
+                                .symbolSize(40)
+                        }
+
+                    case .exposed:
+                        ForEach(ordered) { pt in
+                            AreaMark(
+                                x: .value("Tick", pt.tick),
+                                yStart: .value("Zero", 0),
+                                yEnd: .value("Exposed", pt.exposed),
+                                series: .value("Series", "ExposedOnlyArea")
+                            )
+                            .interpolationMethod(.catmullRom)
+                            .foregroundStyle(
+                                LinearGradient(
+                                    colors: [Color.orange.opacity(0.28), Color.orange.opacity(0.02)],
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                )
+                            )
+
+                            LineMark(
+                                x: .value("Tick", pt.tick),
+                                y: .value("Exposed", pt.exposed),
+                                series: .value("Series", "ExposedOnly")
+                            )
+                            .interpolationMethod(.catmullRom)
+                            .foregroundStyle(.orange)
+                            .lineStyle(StrokeStyle(lineWidth: 2.2, lineCap: .round))
+                        }
+                        if let last = ordered.last {
+                            PointMark(x: .value("Tick", last.tick), y: .value("Exposed", last.exposed))
+                                .foregroundStyle(.orange)
+                                .symbolSize(40)
+                        }
+
+                    case .latency:
+                        ForEach(ordered) { pt in
+                            AreaMark(
+                                x: .value("Tick", pt.tick),
+                                yStart: .value("Zero", 0),
+                                yEnd: .value("ScanMs", pt.scanMs),
+                                series: .value("Series", "LatencyArea")
+                            )
+                            .interpolationMethod(.catmullRom)
+                            .foregroundStyle(
+                                LinearGradient(
+                                    colors: [Color.purple.opacity(0.28), Color.purple.opacity(0.02)],
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                )
+                            )
+
+                            LineMark(
+                                x: .value("Tick", pt.tick),
+                                y: .value("ScanMs", pt.scanMs),
+                                series: .value("Series", "Latency")
+                            )
+                            .interpolationMethod(.catmullRom)
+                            .foregroundStyle(.purple)
+                            .lineStyle(StrokeStyle(lineWidth: 2.2, lineCap: .round))
+                        }
+                        if let last = ordered.last {
+                            PointMark(x: .value("Tick", last.tick), y: .value("ScanMs", last.scanMs))
+                                .foregroundStyle(.purple)
+                                .symbolSize(40)
+                        }
+                    }
+
+                    if hoveredTick != nil, let pt = inspectedPoint {
+                        RuleMark(x: .value("Hovered", pt.tick))
+                            .foregroundStyle(Color.primary.opacity(0.22))
+                            .lineStyle(StrokeStyle(lineWidth: 1, dash: [3, 3]))
                     }
                 }
-                .chartXScale(domain: minTick...maxTick)
-                .chartYScale(domain: 0...yTop)
+                .chartXScale(domain: firstTick...xUpper)
+                .chartYScale(domain: 0...upperY)
                 .chartLegend(.hidden)
                 .chartXAxis(.hidden)
                 .chartYAxis {
@@ -182,18 +368,36 @@ struct LiveSparklineView: View {
                         AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5, dash: [2, 3]))
                             .foregroundStyle(.primary.opacity(0.08))
                         AxisValueLabel()
-                            .font(.system(size: 9, design: .monospaced))
+                            .font(SierraFont.mono(10))
                     }
                 }
+                .chartOverlay { proxy in
+                    GeometryReader { geo in
+                        Rectangle()
+                            .fill(.clear)
+                            .contentShape(Rectangle())
+                            .onContinuousHover { phase in
+                                switch phase {
+                                case .active(let loc):
+                                    guard let plotFrame = proxy.plotFrame else { return }
+                                    let origin = geo[plotFrame].origin
+                                    let xPos = loc.x - origin.x
+                                    if let tickVal: Int = proxy.value(atX: xPos) {
+                                        hoveredTick = tickVal
+                                    }
+                                case .ended:
+                                    hoveredTick = nil
+                                }
+                            }
+                    }
+                }
+                .animation(.easeOut(duration: 0.22), value: metric)
+                .animation(.linear(duration: 0.18), value: lastTick)
                 .frame(height: height)
             }
         }
         .padding(14)
-        .background(SierraTheme.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .strokeBorder(SierraTheme.border, lineWidth: 1)
-        )
+        .raycastCard(cornerRadius: 16)
     }
 }
 
@@ -1336,7 +1540,7 @@ struct StatsVisualView: View {
                                 .foregroundStyle(exposedCount > 0 ? .orange : .green)
                                 .contentTransition(.numericText())
                             Text("EXPOSED")
-                                .font(.system(size: 8, weight: .bold))
+                                .font(SierraFont.ui(10, weight: .semibold))
                                 .foregroundStyle(.secondary)
                         }
                     }
@@ -1349,28 +1553,26 @@ struct StatsVisualView: View {
                                     .fill(scopeColor(item.label))
                                     .frame(width: 8, height: 8)
                                 Text(item.label)
-                                    .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                                    .font(SierraFont.mono(11, weight: .semibold))
                                 Spacer()
                                 Text("\(item.value)")
-                                    .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                                    .font(SierraFont.mono(12, weight: .semibold))
+                                    .contentTransition(.numericText())
                                 Text("(\(pct)%)")
-                                    .font(.system(size: 10, design: .monospaced))
+                                    .font(SierraFont.mono(10))
                                     .foregroundStyle(.secondary)
-                                    .frame(width: 36, alignment: .trailing)
+                                    .frame(width: 38, alignment: .trailing)
                             }
                         }
                     }
                     .frame(maxWidth: .infinity)
                 }
+                .animation(.easeOut(duration: 0.25), value: scopeData.map(\.value))
             }
         }
         .padding(14)
         .frame(maxHeight: .infinity, alignment: .top)
-        .background(SierraTheme.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .strokeBorder(SierraTheme.border, lineWidth: 1)
-        )
+        .raycastCard(cornerRadius: 16)
     }
 
     private var protocolBreakdownCard: some View {
@@ -1414,11 +1616,7 @@ struct StatsVisualView: View {
         }
         .padding(14)
         .frame(maxHeight: .infinity, alignment: .top)
-        .background(SierraTheme.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .strokeBorder(SierraTheme.border, lineWidth: 1)
-        )
+        .raycastCard(cornerRadius: 16)
     }
 
     private var stateChartCard: some View {
@@ -1448,16 +1646,13 @@ struct StatsVisualView: View {
                 .chartXScale(domain: 0...xUpper)
                 .chartLegend(.hidden)
                 .chartXAxis(.hidden)
+                .animation(.easeOut(duration: 0.25), value: stateData.map(\.value))
                 .frame(height: max(120, CGFloat(stateData.count) * 28))
             }
         }
         .padding(14)
         .frame(maxHeight: .infinity, alignment: .top)
-        .background(SierraTheme.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .strokeBorder(SierraTheme.border, lineWidth: 1)
-        )
+        .raycastCard(cornerRadius: 16)
     }
 
     private var topProcessesCard: some View {
@@ -1518,11 +1713,7 @@ struct StatsVisualView: View {
         }
         .padding(14)
         .frame(maxHeight: .infinity, alignment: .top)
-        .background(SierraTheme.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .strokeBorder(SierraTheme.border, lineWidth: 1)
-        )
+        .raycastCard(cornerRadius: 16)
     }
 
     private func scopeColor(_ s: String) -> Color {

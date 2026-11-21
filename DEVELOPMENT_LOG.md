@@ -32,6 +32,16 @@ Bu doküman, **SierraPort** projesinde yapılan tüm geliştirmeleri **gün, tar
 | Cuma, 20 Kasım 2026 | `21:26` | *(push bekliyor)* | Kısmi Çapraz Termal Tutulma Gradyanı (`ThermalEclipseBackground` + Film Greni) ve Tek Seferlik 3 Adımlı İlk Kurulum Sihirbazı (Tema → Güvenlik Profili → Kısayol) |
 | Cuma, 20 Kasım 2026 | `21:28` | *(push bekliyor)* | İlk Kurulum Test Betiği (`scripts/test-onboarding.sh`) — tek komutla ilk açılış simülasyonu ve `--full` tam sıfırlama |
 | Cuma, 20 Kasım 2026 | `21:34` | *(push bekliyor)* | 60/120fps GPU `Canvas` Slow-Motion Termal Gradyan, Akıcı Yönlü Adım Geçişleri, `Enter (⏎)` İlerleme Kısayolu ve Canlı Light Mode Mavi Termal Palet |
+| Cumartesi, 21 Kasım 2026 | `10:07` | *(push bekliyor)* | `macos/SierraPortApp/` klasörünün `.gitignore` kapsamına alınması ve Git indeksinden (`--cached`) çıkarılması |
+| Cumartesi, 21 Kasım 2026 | `10:15` | *(push bekliyor)* | Apple Liquid Glass Arayüz Sistemi: Yüzen Cam Kenar Çubuğu, Terminal Deck Derin Safir Degrade Arka Plan, 20pt Yumuşak Pencere Çerçevesi ve Eşit Ölçülü Cam Kartlar |
+| Cumartesi, 21 Kasım 2026 | `10:19` | *(push bekliyor)* | Native macOS Pencere Çerçevesi / Trafik Işıkları Düzeltmesi ve Mavi Degradenin Yalnızca Boş Terminal Deck ile Sınırlandırılması |
+| Cumartesi, 21 Kasım 2026 | `10:25` | *(push bekliyor)* | Trafik Işıklarının Yüzen Kenar Çubuğu İçine Hizalanması, Light Mode Gölgelerinin Hafifletilmesi ve Dinamik Cam Satır Gezinme Çubuğu |
+| Cumartesi, 21 Kasım 2026 | `10:30` | *(push bekliyor)* | Gemini Stili `MacTrafficLightsView`, Katlanabilir Sol Menü (`sidebar.left` / `⌘\`) ve Geniş Tıklama Alanlı `TactileGlassButtonStyle` |
+| Cumartesi, 21 Kasım 2026 | `10:34` | *(push bekliyor)* | Apple Design Skill (HIG) Revizyonu: `Reduce Motion`/`Reduce Transparency`/`Increase Contrast`, Yerel macOS Menü Çubuğu Komutları, 10pt Tipografi Tabanı ve VoiceOver Etiketleri |
+| Cumartesi, 21 Kasım 2026 | `10:50` | *(push bekliyor)* | Türkçe Teknik Analiz, Mimari ve Gelecek Yol Haritası Sunum Raporu (`docs/SierraPort-Teknik-Analiz-Raporu.pdf`, 7 sayfa) |
+| Cumartesi, 21 Kasım 2026 | `11:10` | *(push bekliyor)* | Grafik Motoru Düzeltmesi: Monotonik `historySeq` + `streamGeneration` Koruması, Etkileşimli Metrik Seçici (`All/Active/Exposed/Scan ms`) ve Hover İzleme |
+| Cumartesi, 21 Kasım 2026 | `11:16` | *(push bekliyor)* | Tam Sistem Hata Taraması & 7 Düzeltme: Eşzamanlı Pipe Okuma, `NSLock` Akış Tamponu, Çıkışta Alt Süreç Temizliği, Güvenlik Profili Kalıcılığı, Quick Launcher Tıklama ve Clippy Sıfırlama |
+| Cumartesi, 21 Kasım 2026 | `11:40` | *(push bekliyor)* | Güvenlik Denetimi İyileştirmeleri (8 Doğrulanmış Bulgu + Sertleştirme): `codesign --verify --strict`, POSIX Tek-Tırnak `remediation_cmd`, `ZeroTrust` LAN Denetimi, `O_NOFOLLOW`/`0o600` Dosya Güvenliği, ANSI/NDJSON/JSONL/Markdown Kaçışı ve `#if DEBUG` İkili Arama |
 
 ---
 
@@ -264,6 +274,112 @@ Bu doküman, **SierraPort** projesinde yapılan tüm geliştirmeleri **gün, tar
 - **Taze ve Yönlü Adım Geçişleri:** İleri/geri yön algılayan (`isMovingForward`) kayma + hafif ölçek + opaklık spring geçişleri (`.spring(response: 0.36, dampingFraction: 0.88)`) ile tema, güvenlik profili ve kısayol adımları arasında sıfır takılmalı geçiş sağlandı.
 - **Enter (`⏎`) ile İlerleme Kısayolu:** `NSEvent` yerel klavye dinleyicisi ile özel kısayol kaydı aktif değilken `Enter` / `Return` tuşuna basıldığında doğrudan bir sonraki adıma geçilmesi (son adımda kurulumu tamamlaması) ve ana butonlarda `⏎` tuş rozeti gösterilmesi eklendi.
 - **Light Mode Canlı Mavi Termal Degrade:** Açık tema seçildiğinde arka planın soluklaşmasına yol açan tam ekran örtü kaldırıldı; `#F5F6F8` porselen zemin üzerinde net ve canlı görünen derin okyanus safiri (`#082452 → #0E52D8`), elektrik gök mavisi (`#00A8FF → #38BDF8`), kraliyet kobalt-indigo (`#1D4ED8`) ve buzul camgöbeği (`#06B6D4`) termal paleti eklendi.
+
+---
+
+## Cumartesi, 21 Kasım 2026 — `10:07` · Commit: *(push bekliyor)*
+### `macos/SierraPortApp/` Klasörünün GitHub Dışına Alınması (`.gitignore`)
+**Etkilenen Modüller:** `.gitignore`
+
+- `macos/SierraPortApp/` klasörü `.gitignore` dosyasına eklendi.
+- Daha önce Git tarafından takip edilen 11 dosya `git rm -r --cached macos/SierraPortApp` ile yerel diskteki dosyalara dokunulmadan Git indeksinden çıkarıldı; bir sonraki commit & push sonrasında `macos/SierraPortApp/` GitHub deposunda görünmeyecek.
+
+---
+
+## Cumartesi, 21 Kasım 2026 — `10:15` · Commit: *(push bekliyor)*
+### Apple Liquid Glass Arayüz Sistemi, Yüzen Cam Kenar Çubuğu ve Terminal Deck Safir Degrade
+**Etkilenen Modüller:** `macos/SierraPortApp/Sources/SierraPortApp/{Theme,SierraPortApp,ContentView,VisualBlocks}.swift`
+
+- **Yumuşatılmış Pencere Çerçevesi (`20pt` Sürekli Köşe):** `WindowThemeSync` ve ana pencere katmanında `cornerRadius: 20` (`.continuous`) ile keskin pencere köşeleri yumuşatıldı ve dış çerçeveye ince ışık yansımalı cam kenarlık eklendi.
+- **Yüzen Apple Cam Kenar Çubuğu (`floatingGlassSidebar`):** Sol menü çubuğu pencere kenarlarından 8pt içeride duran, `18pt` yuvarlatılmış, `.ultraThinMaterial` + `sidebarGlassFill` saydam cam paneline dönüştürüldü; aktif sekme kapsül (`Capsule`) cam hapı ve alt kontrol kutuları (Quick Launch, Tema, Rust Core) eşit yükseklik ve köşe yarıçaplarıyla hizalandı.
+- **Terminal Deck Derin Safir Degrade Arka Planı (`TerminalAmbientBackdrop`):** Koyu temada `#0A0B0E` zemin üzerinde alt-orta bölgeden yayılan derin gece safiri/lacivert (`#1A3B9C → #0D2264 → #08143A`), açık temada ise ferah gök-safir parlamalı arka plan eklendi.
+- **Eşit & Uyumlu Cam Kutular (`raycastCard`, `KpiPill`, Quick Commands):** Uygulama genelindeki tüm kartlar, KPI kutuları (`minHeight: 68`), komut bloğu kartları (`cornerRadius: 16`), üst durum kapsülleri, alt aksiyon çubuğu ve 2 sütunlu eşit genişlik/yükseklik (`40pt`) hızlı komut kutuları tek tip Apple buzlu cam opaklığı ve parlak üst kenarlık (specular rim) ile birleştirildi.
+
+---
+
+## Cumartesi, 21 Kasım 2026 — `10:19` · Commit: *(push bekliyor)*
+### Native macOS Pencere Çerçevesi Düzeltmesi ve Boş Terminal Deck Degrade Sınırlandırması
+**Etkilenen Modüller:** `macos/SierraPortApp/Sources/SierraPortApp/{Theme,SierraPortApp,ContentView}.swift`
+
+- **Pencere Çerçevesi & Trafik Işıkları Düzeltmesi:** `NSThemeFrame` (`window.contentView?.superview`) üzerindeki bozucu katman kırpması, `isOpaque = false` ve boş `.windowToolbarStyle(.unified)` çakışması kaldırıldı; pencere doğal macOS yuvarlatılmış çerçevesine ve hatasız kapat/küçült/büyüt düğmelerine kavuşturuldu. Yüzen cam kenar çubuğu `.ignoresSafeArea(.container, edges: .top)` ile üst çubukla kusursuz hizalandı.
+- **Yalnızca Boş Terminal Deck'te Safir Degrade:** `TerminalAmbientBackdrop` sadece `vm.selectedTab == .terminal && vm.blocks.isEmpty` durumunda (henüz komut çalıştırılmamışken) görünür hale getirildi; komut girildiğinde ve **Live Watch**, **Security Audit**, **Analytics** sekmelerinde klasik düz `#111110` / `#F6F6F4` tema rengine dönülür.
+
+---
+
+## Cumartesi, 21 Kasım 2026 — `10:25` · Commit: *(push bekliyor)*
+### Trafik Işıkları Konumlandırması, Light Mode Gölge Optimizasyonu ve Dinamik Cam Gezinme Çubuğu
+**Etkilenen Modüller:** `macos/SierraPortApp/Sources/SierraPortApp/{Theme,ContentView}.swift`
+
+- **Trafik Işıkları Yüzen Kenar Çubuğu İçine Hizalandı:** `WindowThemeSync.Coordinator` üzerinden macOS `closeButton` / `miniaturizeButton` / `zoomButton` düğmeleri pencere yeniden boyutlandırma ve odak değişimlerinde dahi yüzen cam kenar çubuğunun sol üst köşesinin içine (`x: 18/38/58`, `topInset: 14pt`) oturacak şekilde konumlandırıldı; marka başlığı `42pt` üst boşlukla sıfır çakışmayla hizalandı.
+- **Light Mode Neredeyse Sıfır Arka Gölge:** `SierraTheme.cardShadow` (Light Mode'da `%3` opaklık, `radius: 3, y: 1`) ve net `1px` `glassBorderTop`/`glassBorderBottom` kenarlıkları eklenerek beyaz temada kutuların etrafını karartan koyu gölgeler kaldırıldı.
+- **Dinamik Apple Glass Satır Gezinme Çubuğu:** Aktif Terminal Deck üstündeki uyumsuz `Tab / ↓ browse rows` metni kaldırılıp yerine `RaycastKeycap` tuş rozetli (`[Tab] Browse N rows` / `[⏎] Inspect · [Esc] Back`) cam kapsülü ve kompakt cam aksiyon kapsülü (Expand / Collapse / Clear) yerleştirildi.
+
+---
+
+## Cumartesi, 21 Kasım 2026 — `10:30` · Commit: *(push bekliyor)*
+### Gemini Stili Trafik Işıkları, Katlanabilir Sol Menü (`⌘\`) ve Dinamik Tıklanabilir Butonlar
+**Etkilenen Modüller:** `macos/SierraPortApp/Sources/SierraPortApp/{Theme,ContentView,ShortcutOnboardingView}.swift`
+
+- **Gemini Stili `MacTrafficLightsView`:** macOS'un 28pt'lik dar başlık çubuğuna sıkışan sistem düğmeleri gizlenip yerine yüzen cam kenar çubuğunun sol üstüne tam hizalanan, grup hover simgeli (`×`, `−`, `+`) ve geniş `16×16pt` tıklama alanlı `MacTrafficLightsView` eklendi.
+- **Katlanabilir Sol Menü Çubuğu (`sidebar.left` & `⌘\`):** Sol menünün sağ üstüne arama (`magnifyingglass`) ve menüyü kapatma (`sidebar.left`) düğmeleri eklendi; menü kapatıldığında sağ çalışma alanı tam genişliğe açılır ve sol üstte trafik ışıklarıyla birlikte yeniden açma düğmesi belirir.
+- **Tıklanabilirlik & Dinamik Buton Hissi (`TactileGlassButtonStyle` + `WindowDragArea`):** Tıklamaları yutan `window.isMovableByWindowBackground = true` kapatıldı; pencere sürükleme yalnızca üst boş çubuğa (`WindowDragArea`) taşındı. Tüm menü, araç çubuğu, tema ve hızlı komut butonları hover vurgusu, basma ölçek animasyonu (`0.96`) ve tam çerçeveli geniş tıklama alanıyla (`contentShape`) güncellendi.
+
+---
+
+## Cumartesi, 21 Kasım 2026 — `10:34` · Commit: *(push bekliyor)*
+### Apple Design Skill (macOS HIG) Uyum Revizyonu
+**Etkilenen Modüller:** `macos/SierraPortApp/Sources/SierraPortApp/{Theme,SierraPortApp,ContentView,ShortcutOnboardingView}.swift`
+
+- **Sistem Erişilebilirlik Durumları (`liquid-glass.md`, `accessibility.md`, `motion.md`):**
+  - `ThermalEclipseBackground`, macOS **Hareketi Azalt (`accessibilityReduceMotion`)** açıkken sürekli `TimelineView` animasyonunu durdurup sakin statik kareye geçer.
+  - `RaycastCardModifier` ve yüzen cam kenar çubuğu, **Saydamlığı Azalt (`accessibilityReduceTransparency`)** açıkken opak yüzeylere döner; **Kontrastı Artır (`colorSchemeContrast == .increased`)** modunda kenarlık kontrastını güçlendirir.
+- **Yerel macOS Menü Çubuğu Komutları (`designing-for-macos.md`):** `SierraPortDesktopApp` içine `.commands` ile **Navigate** (`Terminal Deck ⌘1`, `Live Watch ⌘2`, `Security Audit ⌘3`, `Analytics ⌘4`, `Toggle Forensic Inspector ⌥⌘I`) ve **Actions** (`Open Quick Launcher`, `Refresh Metrics ⌘R`, `Configure Global Shortcut…`) menüleri eklendi.
+- **macOS 10pt Tipografi Tabanı & VoiceOver Etiketleri (`accessibility.md`):** 10pt altındaki mikro etiketler (`8.5pt`, `9.5pt`) macOS HIG tabanı olan `10pt`'ye yükseltildi; yalnızca simge içeren tüm butonlara `.accessibilityLabel(...)` eklendi.
+- **Ölçülü Dinamik Buton Geri Bildirimi (`motion.md`, `pointing-devices.md`):** Sık kullanılan butonlarda aşırı zıplama olmadan `0.98` hafif basma ölçeği ve `0.10s` anlık hover tepkisi uygulandı (`Reduce Motion` açıkken animasyon sıfırlanır).
+
+---
+
+## Cumartesi, 21 Kasım 2026 — `10:50` · Commit: *(push bekliyor)*
+### Türkçe Teknik Analiz, Mimari ve Yol Haritası PDF Raporu
+**Etkilenen Modüller:** `docs/SierraPort-Teknik-Analiz-Raporu.pdf`
+
+- `technical-writing` yönergelerine uygun, tüm metrikleri doğrudan kaynak kod ve derleme çıktılarından doğrulanmış 7 sayfalık Türkçe teknik analiz ve müşteri sunum PDF raporu oluşturuldu.
+- Kapak sayfası, yönetici özeti, rakip karşılaştırması, vektörel SVG sistem mimarisi diyagramı, modül/satır dağılımı, CLI ve güvenlik denetim motoru analizi, yerel macOS uygulaması ve Apple HIG uyumu, mimari ödünleşimler/kısıtlar, bireysel/kurumsal değer önerileri ile kısa/orta/uzun vadeli gelecek öngörüleri yer alır.
+
+---
+
+## Cumartesi, 21 Kasım 2026 — `11:10` · Commit: *(push bekliyor)*
+### Canlı Grafik Motoru Düzeltmesi ve Etkileşimli Analitik Grafikleri
+**Etkilenen Modüller:** `macos/SierraPortApp/Sources/SierraPortApp/{ViewModel,ContentView,VisualBlocks}.swift`
+
+- **Seçenek Değişiminde Grafik Bozulma Kök Nedeni Giderildi:** `500ms / 1s / 2s / 5s` aralığı veya `All States` değiştirildiğinde yeni başlayan `sierraport stream` alt sürecinin `tick` sayacını `1`'den sıfırlaması nedeniyle X ekseninin ters dönüp çökmesi (`minTick > maxTick`) sorunu, kesin artan `historySeq` sayacı ve eski alt süreç satırlarını eleyen `streamGeneration` belirteciyle tamamen çözüldü. Aralık değişiminde grafik kesintisiz devam eder; `All States` değişiminde ölçek temizce sıfırlanır.
+- **Etkileşimli Canlı Grafik (`LiveSparklineView`):** Grafik başlığına anlık geçişli `All / Active / Exposed / Scan ms` metrik seçici hapları, fare ile grafik üzerinde gezindikçe dikey kılavuz çizgisi (`RuleMark`) + anlık zaman/değer okuması (`onContinuousHover`) ve en güncel noktada canlı uç işaretçisi (`PointMark`) eklendi.
+- **Analitik Kartları (`StatsVisualView`):** Tüm grafik kartları tek tip Apple Liquid Glass `.raycastCard(cornerRadius: 16)` çerçevesine, 10pt minimum HIG tipografisine ve akıcı değer geçiş animasyonlarına kavuşturuldu.
+
+---
+
+## Cumartesi, 21 Kasım 2026 — `11:16` · Commit: *(push bekliyor)*
+### Tam Sistem Hata Taraması (`diagnosing-bugs`) ve 7 Teknik Hata Düzeltmesi
+**Etkilenen Modüller:** `src/audit.rs`, `src/scanner/macos.rs`, `macos/SierraPortApp/Sources/SierraPortApp/{Bridge,ViewModel,QuickLauncherPanel}.swift`
+
+- **Pipe Deadlock Düzeltmesi (`Bridge.swift`):** `stdout` ve `stderr` akışları eşzamanlı (`DispatchGroup`, ayrı `runSync` içinde Swift 6 uyumlu) okunarak 64 KB üstü çıktılarda kilitlenme riski ortadan kaldırıldı ve dosya tanımlayıcıları (`close()`) temizlendi.
+- **Akış Tamponu Eşzamanlılık & Sızıntı Düzeltmesi (`Bridge.swift`):** `startStream` içindeki `buffer` `NSLock` ile korundu, 4 MB üst sınır eklendi ve `terminationHandler` ile kapanışta `readabilityHandler` temizlendi.
+- **Yetim Alt Süreç Koruması (`ViewModel.swift`):** `NSApplication.willTerminateNotification` dinleyicisi eklenerek uygulama kapatıldığında `sierraport stream` arka plan sürecinin anında sonlandırılması garanti altına alındı.
+- **Güvenlik Profili Kalıcılığı (`ViewModel.swift`):** İlk kurulumda veya Audit sekmesinde seçilen `auditProfile` artık `UserDefaults` (`sierraport_audit_profile`) üzerinden kalıcı olarak saklanır.
+- **Quick Launcher Tıklama & Pencere Geri Getirme (`QuickLauncherPanel.swift`):** `isMovableByWindowBackground = false` yapılarak tıklama yutulması giderildi; `orderFrontRegardless()` ile ana pencereye dönüş sağlamlaştırıldı.
+- **Rust Clippy Sıfır Uyarı (`src/audit.rs`, `src/scanner/macos.rs`):** `collapsible_if` ve `type_complexity` (`PsAncestryEntry`) uyarıları giderilerek `cargo clippy --all-targets -- -D warnings` sıfır uyarıyla geçildi.
+
+---
+
+## Cumartesi, 21 Kasım 2026 — `11:40` · Commit: *(push bekliyor)*
+### Güvenlik Denetimi Bulgularının Düzeltilmesi ve Sistem Sertleştirmesi
+**Etkilenen Modüller:** `src/{audit,commands,display,main,snapshot}.rs`, `src/scanner/{mod,macos}.rs`, `macos/SierraPortApp/Sources/SierraPortApp/{Bridge,Models,ViewModel}.swift`
+
+- **İkili Güven Doğrulaması & AirPlay Muafiyeti (`src/audit.rs`):** `verify_binary_signature` artık önce `/usr/bin/codesign --verify --strict` ile kriptografik imza doğrulaması yapar ve çıkış kodunu denetler (`/System/` ön ek kısayolu kaldırıldı); `is_suspicious_path` yolları kanonikleştirip `/private/var/tmp/` dizinini de kapsar; `is_apple_airplay` gerçek `/System/Library/CoreServices/ControlCenter.app/` yolunu şart koşar.
+- **Zero-Trust LAN Denetimi & Kabuk Kaçışı (`src/audit.rs`):** `ZeroTrust` ve `Strict` profillerinde `BindScope::Lan` dinleyicileri de kapsam dahiline alındı; `TRUST-UNSIGNED` `remediation_cmd` yolları POSIX tek-tırnak (`shell_single_quote`) ile kaçışlandı.
+- **Terminal / NDJSON / JSONL / Markdown Kaçışı (`src/scanner/mod.rs`, `src/display.rs`, `src/commands.rs`, `ViewModel.swift`):** HTTP `Server:` başlığı ve `Host:` isteği kontrol karakterlerinden arındırıldı; `sanitize_terminal` ile `diff` ve `inspect` çıktıları korundu; `run_stream` ve `run_watch --log` tam RFC 8259 `json_escape` kullanacak şekilde düzeltildi; `exportAuditMarkdown` Markdown/tablo kaçışı eklendi.
+- **Dosya Güvenliği, Mutlak Sistem Yolları & PID Koruması (`src/snapshot.rs`, `src/commands.rs`, `src/scanner/{mod,macos}.rs`, `Bridge.swift`, `Models.swift`):** `save_snapshot`, `load_snapshot` (16 MiB sınır + `is_file()`) ve `append_log_line` `O_NOFOLLOW` + `0o600` ile sertleştirildi; `/usr/sbin/lsof`, `/bin/ps`, `/usr/bin/codesign`, `/bin/kill` mutlak yollarına geçildi; `kill` için `pid <= 1`, `self-PID` ve boş `--proc` koruması eklendi; `Bridge.locateBinary` CWD araması `#if DEBUG` içine alındı; `AuditFinding.allowlistKey` `endpoint` alanını kapsayacak şekilde genişletildi ve `/tmp/sierraport_base.json` önerisi `~/sierraport_base.json` olarak güncellendi.
+- **Regresyon Testleri (`src/main.rs`):** 2 yeni güvenlik regresyon testi eklendi (toplam `9/9` test).
 
 ---
 

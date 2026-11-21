@@ -67,6 +67,19 @@ struct ShortcutOnboardingView: View {
                 .ignoresSafeArea()
                 .animation(.easeInOut(duration: 0.45), value: isDark)
 
+            // Top Window Bar (Traffic Lights + Drag Area)
+            VStack {
+                HStack(spacing: 10) {
+                    MacTrafficLightsView()
+                    WindowDragArea()
+                        .frame(height: 28)
+                }
+                .padding(.horizontal, 16)
+                .padding(.top, 12)
+                Spacer()
+            }
+            .ignoresSafeArea(.container, edges: .top)
+
             VStack(spacing: 0) {
                 Spacer(minLength: 20)
 
@@ -624,6 +637,7 @@ private struct EnterKeyHintPill: View {
 
 struct ThermalEclipseBackground: View {
     let isDark: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         ZStack {
@@ -632,9 +646,9 @@ struct ThermalEclipseBackground: View {
                 ? Color(red: 0x0C/255, green: 0x0D/255, blue: 0x10/255)
                 : Color(red: 0xF5/255, green: 0xF6/255, blue: 0xF8/255))
 
-            // GPU-accelerated Canvas — zero Gaussian blur passes, full native refresh rate, ultra-slow motion
-            TimelineView(.animation) { timeline in
-                let t = timeline.date.timeIntervalSinceReferenceDate
+            // GPU-accelerated Canvas — pauses motion automatically when macOS Reduce Motion is enabled
+            TimelineView(.animation(paused: reduceMotion)) { timeline in
+                let t = reduceMotion ? 0 : timeline.date.timeIntervalSinceReferenceDate
                 Canvas(rendersAsynchronously: true) { ctx, size in
                     let w = size.width
                     let h = size.height

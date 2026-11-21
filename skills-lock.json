@@ -1,0 +1,117 @@
+{
+  "version": 2,
+  "skills": {
+    "api-security-testing": {
+      "source": "usestrix/strix",
+      "commit": "a1ccf777d80e812edf23fc8b82bdc17def6143ac",
+      "sourceType": "github",
+      "skillPath": "skills/api-security-testing/SKILL.md",
+      "computedHash": "32f365479f3446fff784b2ccc48b5115cd06e27be980de90824638779d78c48b"
+    },
+    "apple-design": {
+      "source": "dickwu/apple-design-skill",
+      "commit": "91e15664896f6f27e75dcf1414d1226cb95fa167",
+      "sourceType": "github",
+      "skillPath": "SKILL.md",
+      "computedHash": "a585f7b4611708c57e2074d436b8dcaaebdd9a0b5ac143646eb39c6fcf686c68"
+    },
+    "application-security-testing": {
+      "source": "usestrix/strix",
+      "commit": "a1ccf777d80e812edf23fc8b82bdc17def6143ac",
+      "sourceType": "github",
+      "skillPath": "skills/application-security-testing/SKILL.md",
+      "computedHash": "28c343b8c5cf3dd8daf7dda199d387761132b80f47648eb8aeb08502e158c446"
+    },
+    "ci-security-scanning-with-strix": {
+      "source": "usestrix/strix",
+      "commit": "a1ccf777d80e812edf23fc8b82bdc17def6143ac",
+      "sourceType": "github",
+      "skillPath": "skills/ci-security-scanning-with-strix/SKILL.md",
+      "computedHash": "13949ab1e24f8cac87a11b221e55e52e6bfcf712ccd9eaeefeae4e3608c70d44"
+    },
+    "diagnosing-bugs": {
+      "source": "mattpocock/skills",
+      "commit": "abeeaf95660ba9e8b7c753eb38f441ca707a8823",
+      "sourceType": "github",
+      "skillPath": "skills/engineering/diagnosing-bugs/SKILL.md",
+      "computedHash": "87c78ae966e591f9ceb177789cc5cc9de69277cd26679ffd36ca5300f430d513"
+    },
+    "figma": {
+      "source": "heygen-com/hyperframes",
+      "commit": "48382cf3601c1ab6bb6f284580e33ce4bf8f33b6",
+      "sourceType": "github",
+      "skillPath": "skills/figma/SKILL.md",
+      "computedHash": "c0fa96dcd20130cbb865024a5b2ebaed0330dddd4dd2b9891e3cc3fd63b861f2"
+    },
+    "find-security-vulnerabilities-in-code": {
+      "source": "usestrix/strix",
+      "commit": "a1ccf777d80e812edf23fc8b82bdc17def6143ac",
+      "sourceType": "github",
+      "skillPath": "skills/find-security-vulnerabilities-in-code/SKILL.md",
+      "computedHash": "d9ea567e93b8add3991b0c43c1b9f3ea604c6c53e0f88ef4bcec3be9e616efac"
+    },
+    "fix-security-vulnerabilities-with-strix": {
+      "source": "usestrix/strix",
+      "commit": "a1ccf777d80e812edf23fc8b82bdc17def6143ac",
+      "sourceType": "github",
+      "skillPath": "skills/fix-security-vulnerabilities-with-strix/SKILL.md",
+      "computedHash": "7febe815c271b39c688d583efef9a4f9674eaed063264f7218c7c67aacbd7abe"
+    },
+    "managed-pentesting-with-strix": {
+      "source": "usestrix/strix",
+      "commit": "a1ccf777d80e812edf23fc8b82bdc17def6143ac",
+      "sourceType": "github",
+      "skillPath": "skills/managed-pentesting-with-strix/SKILL.md",
+      "computedHash": "72ff2e9e61e426a08550196c260884ba43f7949f498c56ee896588d2792d8eb8"
+    },
+    "owasp-top-10-testing": {
+      "source": "usestrix/strix",
+      "commit": "a1ccf777d80e812edf23fc8b82bdc17def6143ac",
+      "sourceType": "github",
+      "skillPath": "skills/owasp-top-10-testing/SKILL.md",
+      "computedHash": "dc3518dd62ce6b048dad7a969adfe88ea8e4d8bb8fd9c8a1627b443c8a508996"
+    },
+    "penetration-testing-with-strix": {
+      "source": "usestrix/strix",
+      "commit": "a1ccf777d80e812edf23fc8b82bdc17def6143ac",
+      "sourceType": "github",
+      "skillPath": "skills/penetration-testing-with-strix/SKILL.md",
+      "computedHash": "54ba2e5fabb69e319421fdf6c8bdbd43650b66d0ed592b920f57e60e25d9e809"
+    },
+    "security-audit": {
+      "source": "cloudflare/security-audit-skill",
+      "commit": "c1c8a8c1471069fb0e188eeaff69b8e8db6564a8",
+      "sourceType": "github",
+      "skillPath": "skills/security-audit/SKILL.md",
+      "computedHash": "8513eb3b2c39b8d05ef4f47b32ef4d18280b93a5efb91d8df6272f7435034af5"
+    },
+    "seo-audit": {
+      "source": "coreyhaines31/marketingskills",
+      "commit": "5b2b400eec1e7e1cec76245a715d0b0d4fd2a9c1",
+      "sourceType": "github",
+      "skillPath": "skills/seo-audit/SKILL.md",
+      "computedHash": "d42f6f32bb62f8ebce93826ef33a7b663f2259b2891a0992f3d63dbd46f0f5ad"
+    },
+    "swiftui-performance-audit": {
+      "source": "Dimillian/Skills",
+      "commit": "05ba982bfeb0d77d3c97d4542b0ee15034d05f84",
+      "sourceType": "github",
+      "skillPath": "swiftui-performance-audit/SKILL.md",
+      "computedHash": "3f3609a42419b4917ce165ec46d0b60188202be18a1fcc5276d74ebe0bc0f064"
+    },
+    "technical-writing": {
+      "source": "riekelt/technical-writer",
+      "commit": "85e53729dd959a2795d593d6769068e342cf3486",
+      "sourceType": "github",
+      "skillPath": "plugins/technical-writer/skills/technical-writing/SKILL.md",
+      "computedHash": "1887649c89f345364dc4d0cb58f0f6fa1b4b6fd52286eecdc2823585d3109015"
+    },
+    "web-app-penetration-testing": {
+      "source": "usestrix/strix",
+      "commit": "a1ccf777d80e812edf23fc8b82bdc17def6143ac",
+      "sourceType": "github",
+      "skillPath": "skills/web-app-penetration-testing/SKILL.md",
+      "computedHash": "12d42989bda70f680c0c7b60aa8882f635d59aa7bc24e76eb78cbdf63085cba7"
+    }
+  }
+}

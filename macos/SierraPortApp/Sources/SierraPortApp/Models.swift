@@ -166,7 +166,7 @@ struct AuditFinding: Codable, Identifiable, Hashable {
     var id: String { "\(code)-\(port ?? -1)-\(title)" }
 
     var allowlistKey: String {
-        "\(code)|\(port.map(String.init) ?? "-")|\(process ?? "-")"
+        "\(code)|\(port.map(String.init) ?? "-")|\(process ?? "-")|\(endpoint ?? "-")"
     }
 
     var penalty: Int {

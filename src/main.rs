@@ -303,4 +303,51 @@ mod tests {
         let waited_closed = wait_for_port("127.0.0.1", bound_port, false, 1000, 50).unwrap();
         assert!(waited_closed < 1000);
     }
+
+    #[test]
+    fn test_security_zerotrust_lan_and_airplay_spoof() {
+        use crate::audit::{AuditOptions, AuditProfile, run_audit_with_options};
+
+        // 1. LAN-bound listener must be flagged under ZeroTrust
+        let lan_entries = vec![
+            sample_entry(9999, "192.168.1.10", "internal-svc", SocketState::Listen),
+            sample_entry(6379, "10.0.0.5", "redis-server", SocketState::Listen),
+        ];
+        let zt = run_audit_with_options(
+            &lan_entries,
+            AuditOptions {
+                profile: AuditProfile::ZeroTrust,
+                deep_scan: false,
+                check_host: false,
+            },
+        );
+        assert!(zt.findings.iter().any(|f| f.code == "ZT-EXPOSED" && f.port == Some(9999)));
+        assert!(zt.findings.iter().any(|f| f.code == "EXP-CRIT" && f.port == Some(6379)));
+
+        // 2. Spoofed ControlCe process on port 5000 without Apple ControlCenter path must NOT be exempted
+        let mut spoof = sample_entry(5000, "0.0.0.0", "ControlCe_evil", SocketState::Listen);
+        spoof.cmdline = Some("/tmp/ControlCe_evil".to_string());
+        let dev = run_audit_with_options(
+            &[spoof],
+            AuditOptions {
+                profile: AuditProfile::Developer,
+                deep_scan: false,
+                check_host: false,
+            },
+        );
+        assert!(dev.findings.iter().any(|f| f.code == "EXP-DEV" && f.port == Some(5000)));
+    }
+
+    #[test]
+    fn test_security_sanitize_json_and_kill_guards() {
+        use crate::display::{json_escape, sanitize_terminal};
+        use crate::scanner::terminate_pid;
+
+        assert_eq!(sanitize_terminal("ok\x1b]0;spoof\x07\r\nend"), "ok]0;spoofend");
+        assert_eq!(json_escape("My\\x20App\"test"), "My\\\\x20App\\\"test");
+
+        assert!(terminate_pid(0, false).is_err());
+        assert!(terminate_pid(1, false).is_err());
+        assert!(terminate_pid(std::process::id(), false).is_err());
+    }
 }

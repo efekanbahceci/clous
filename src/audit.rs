@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 use std::process::Command;
 
-use crate::models::{PortEntry, SocketState, well_known_service};
+use crate::models::{BindScope, PortEntry, SocketState, well_known_service};
 use crate::scanner::probe_ports;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -235,9 +235,16 @@ pub fn run_audit_with_options(entries: &[PortEntry], opts: AuditOptions) -> Audi
         let is_apple_airplay = (e.local_port == 5000 || e.local_port == 7000)
             && e.process_name
                 .as_deref()
-                .is_some_and(|p| p.starts_with("ControlCe"));
+                .is_some_and(|p| p.starts_with("ControlCe"))
+            && extract_executable_path(e).is_some_and(|p| {
+                p.starts_with("/System/Library/CoreServices/ControlCenter.app/")
+            });
 
-        if is_exposed && CRITICAL_EXPOSED_PORTS.contains(&e.local_port) {
+        let is_non_loopback = scope != BindScope::Loopback;
+        let effective_exposed =
+            is_exposed || (scope == BindScope::Lan && opts.profile != AuditProfile::Developer);
+
+        if effective_exposed && CRITICAL_EXPOSED_PORTS.contains(&e.local_port) {
             if seen_port_rules.insert(("EXP-CRIT", e.local_port)) {
                 findings.push(AuditFinding {
                     severity: Severity::Critical,
@@ -258,7 +265,7 @@ pub fn run_audit_with_options(entries: &[PortEntry], opts: AuditOptions) -> Audi
                     remediation_cmd: Some(remediation_for_port(e.local_port)),
                 });
             }
-        } else if is_exposed && HIGH_EXPOSED_PORTS.contains(&e.local_port) {
+        } else if effective_exposed && HIGH_EXPOSED_PORTS.contains(&e.local_port) {
             if seen_port_rules.insert(("EXP-HIGH", e.local_port)) {
                 findings.push(AuditFinding {
                     severity: Severity::High,
@@ -267,7 +274,7 @@ pub fn run_audit_with_options(entries: &[PortEntry], opts: AuditOptions) -> Audi
                     process: proc_label.clone(),
                     endpoint: endpoint.clone(),
                     title: format!(
-                        "Sensitive service {svc} (port {}) listening on all/public interfaces ({})",
+                        "Sensitive service {svc} (port {}) listening on non-loopback interface ({})",
                         e.local_port, e.local_addr
                     ),
                     recommendation: format!(
@@ -277,7 +284,7 @@ pub fn run_audit_with_options(entries: &[PortEntry], opts: AuditOptions) -> Audi
                     remediation_cmd: Some(remediation_for_port(e.local_port)),
                 });
             }
-        } else if is_exposed && DEV_EXPOSED_PORTS.contains(&e.local_port) {
+        } else if effective_exposed && DEV_EXPOSED_PORTS.contains(&e.local_port) {
             let skip_in_dev = opts.profile == AuditProfile::Developer && is_apple_airplay;
             if !skip_in_dev && seen_port_rules.insert(("EXP-DEV", e.local_port)) {
                 let sev = match opts.profile {
@@ -299,22 +306,23 @@ pub fn run_audit_with_options(entries: &[PortEntry], opts: AuditOptions) -> Audi
                     remediation_cmd: Some(format!("sierraport kill {} -y --wait", e.local_port)),
                 });
             }
-        } else if is_exposed && opts.profile == AuditProfile::ZeroTrust {
-            if seen_port_rules.insert(("ZT-EXPOSED", e.local_port)) {
-                findings.push(AuditFinding {
-                    severity: Severity::Medium,
-                    code: "ZT-EXPOSED",
-                    port: Some(e.local_port),
-                    process: proc_label.clone(),
-                    endpoint: endpoint.clone(),
-                    title: format!(
-                        "Zero-Trust violation: non-loopback listener on port {} ({})",
-                        e.local_port, e.local_addr
-                    ),
-                    recommendation: "Under Zero-Trust policy, bind services to 127.0.0.1 or place behind an authenticated proxy.".to_string(),
-                    remediation_cmd: Some(remediation_for_port(e.local_port)),
-                });
-            }
+        } else if is_non_loopback
+            && opts.profile == AuditProfile::ZeroTrust
+            && seen_port_rules.insert(("ZT-EXPOSED", e.local_port))
+        {
+            findings.push(AuditFinding {
+                severity: Severity::Medium,
+                code: "ZT-EXPOSED",
+                port: Some(e.local_port),
+                process: proc_label.clone(),
+                endpoint: endpoint.clone(),
+                title: format!(
+                    "Zero-Trust violation: non-loopback listener on port {} ({})",
+                    e.local_port, e.local_addr
+                ),
+                recommendation: "Under Zero-Trust policy, bind services to 127.0.0.1 or place behind an authenticated proxy.".to_string(),
+                remediation_cmd: Some(remediation_for_port(e.local_port)),
+            });
         }
 
         if PLAINTEXT_LEGACY_PORTS.contains(&e.local_port)
@@ -433,7 +441,10 @@ pub fn run_audit_with_options(entries: &[PortEntry], opts: AuditOptions) -> Audi
                         proc_name, ports
                     ),
                     recommendation: "Confirm this binary is an expected local build; code-sign production services.".to_string(),
-                    remediation_cmd: Some(format!("codesign -dv --verbose=2 \"{}\"", path)),
+                    remediation_cmd: Some(format!(
+                        "codesign --verify --strict --verbose=2 {}",
+                        shell_single_quote(&path)
+                    )),
                 });
             }
 
@@ -580,11 +591,20 @@ fn extract_executable_path(entry: &PortEntry) -> Option<String> {
     }
 }
 
+fn shell_single_quote(s: &str) -> String {
+    let cleaned: String = s.chars().filter(|c| !c.is_control()).collect();
+    format!("'{}'", cleaned.replace('\'', "'\"'\"'"))
+}
+
 fn is_suspicious_path(path: &str) -> bool {
-    let lower = path.to_ascii_lowercase();
+    let resolved = std::fs::canonicalize(path)
+        .map(|p| p.to_string_lossy().into_owned())
+        .unwrap_or_else(|_| path.to_string());
+    let lower = resolved.to_ascii_lowercase();
     lower.starts_with("/tmp/")
         || lower.starts_with("/private/tmp/")
         || lower.starts_with("/var/tmp/")
+        || lower.starts_with("/private/var/tmp/")
         || lower.contains("/downloads/")
         || lower.contains("/desktop/")
         || lower.starts_with("/dev/shm/")
@@ -632,12 +652,39 @@ fn inspect_host_firewall() -> (Option<bool>, Option<bool>) {
 fn verify_binary_signature(path: &str) -> (BinaryTrustLevel, Option<String>) {
     #[cfg(target_os = "macos")]
     {
-        let Ok(output) = Command::new("codesign")
+        if !std::path::Path::new(path).is_file() {
+            return (BinaryTrustLevel::Unknown, None);
+        }
+
+        // First cryptographically verify the Mach-O signature (exit status checked)
+        let Ok(verify_out) = Command::new("/usr/bin/codesign")
+            .args(["--verify", "--strict", path])
+            .output()
+        else {
+            return (BinaryTrustLevel::Unknown, None);
+        };
+
+        if !verify_out.status.success() {
+            let err_lower = String::from_utf8_lossy(&verify_out.stderr).to_ascii_lowercase();
+            if err_lower.contains("code object is not signed at all")
+                || err_lower.contains("invalid signature")
+                || err_lower.contains("modified")
+            {
+                return (BinaryTrustLevel::Unsigned, None);
+            }
+            return (BinaryTrustLevel::Unknown, None);
+        }
+
+        let Ok(output) = Command::new("/usr/bin/codesign")
             .args(["-dv", "--verbose=2", path])
             .output()
         else {
             return (BinaryTrustLevel::Unknown, None);
         };
+
+        if !output.status.success() {
+            return (BinaryTrustLevel::Unknown, None);
+        }
 
         // codesign writes signature details to stderr
         let combined = format!(
@@ -647,9 +694,6 @@ fn verify_binary_signature(path: &str) -> (BinaryTrustLevel, Option<String>) {
         );
         let lower = combined.to_ascii_lowercase();
 
-        if lower.contains("code object is not signed at all") {
-            return (BinaryTrustLevel::Unsigned, None);
-        }
         if lower.contains("signature=adhoc") {
             return (BinaryTrustLevel::AdHoc, Some("Ad-Hoc".to_string()));
         }
@@ -659,16 +703,11 @@ fn verify_binary_signature(path: &str) -> (BinaryTrustLevel, Option<String>) {
             .find_map(|l| l.strip_prefix("Authority="))
             .map(|s| s.trim().to_string());
 
-        if path.starts_with("/System/")
-            || path.starts_with("/usr/libexec/")
-            || authority
-                .as_deref()
-                .is_some_and(|a| a.contains("Software Signing") || a.contains("Apple"))
+        if authority
+            .as_deref()
+            .is_some_and(|a| a == "Software Signing" || a.starts_with("Apple "))
         {
-            return (
-                BinaryTrustLevel::AppleSigned,
-                authority.or_else(|| Some("Apple".to_string())),
-            );
+            return (BinaryTrustLevel::AppleSigned, authority);
         }
 
         if authority.is_some() {

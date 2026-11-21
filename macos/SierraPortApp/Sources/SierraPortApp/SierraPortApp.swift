@@ -66,8 +66,44 @@ struct SierraPortDesktopApp: App {
             }
         }
         .windowStyle(.hiddenTitleBar)
-        .windowToolbarStyle(.unified(showsTitle: false))
         .defaultSize(width: 1180, height: 760)
+        .commands {
+            CommandMenu("Navigate") {
+                Button("Terminal Deck") { vm.selectedTab = .terminal }
+                    .keyboardShortcut("1", modifiers: .command)
+                Button("Live Watch") { vm.selectedTab = .watch }
+                    .keyboardShortcut("2", modifiers: .command)
+                Button("Security Audit") { vm.selectedTab = .audit }
+                    .keyboardShortcut("3", modifiers: .command)
+                Button("Analytics") { vm.selectedTab = .stats }
+                    .keyboardShortcut("4", modifiers: .command)
+                Divider()
+                Button("Toggle Forensic Inspector") {
+                    withAnimation(.spring(response: 0.28, dampingFraction: 0.85)) {
+                        vm.showingInspector.toggle()
+                    }
+                }
+                .keyboardShortcut("i", modifiers: [.command, .option])
+            }
+            CommandMenu("Actions") {
+                Button("Open Quick Launcher") {
+                    QuickLauncherController.shared.toggle()
+                }
+                Button("Refresh Metrics") {
+                    Task {
+                        await vm.refreshAudit()
+                        await vm.refreshStats()
+                    }
+                }
+                .keyboardShortcut("r", modifiers: .command)
+                Divider()
+                Button("Configure Global Shortcut…") {
+                    withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) {
+                        showingShortcutEditor = true
+                    }
+                }
+            }
+        }
 
         MenuBarExtra {
             MenuBarView(vm: vm, hotkeyManager: hotkeyManager)

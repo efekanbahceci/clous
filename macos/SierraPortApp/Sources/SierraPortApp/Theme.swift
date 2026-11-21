@@ -139,8 +139,58 @@ enum SierraTheme {
     static let rowHover = Color(nsColor: NSColor(name: nil) { appearance in
         let isDark = appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
         return isDark
-            ? NSColor.white.withAlphaComponent(0.05)
+            ? NSColor.white.withAlphaComponent(0.06)
             : NSColor.black.withAlphaComponent(0.04)
+    })
+
+    // MARK: - Apple Liquid Glass Tokens
+
+    /// Translucent glass surface fill layered over .ultraThinMaterial
+    static let glassFill = Color(nsColor: NSColor(name: nil) { appearance in
+        let isDark = appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+        return isDark
+            ? NSColor(srgbRed: 0x1A / 255.0, green: 0x1B / 255.0, blue: 0x20 / 255.0, alpha: 0.42)
+            : NSColor.white.withAlphaComponent(0.56)
+    })
+
+    /// Slightly brighter glass fill for floating inputs, active pills, and elevated cards
+    static let glassFillElevated = Color(nsColor: NSColor(name: nil) { appearance in
+        let isDark = appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+        return isDark
+            ? NSColor.white.withAlphaComponent(0.09)
+            : NSColor.white.withAlphaComponent(0.76)
+    })
+
+    /// Floating sidebar glass tint (inspired by macOS translucent sidebar panels)
+    static let sidebarGlassFill = Color(nsColor: NSColor(name: nil) { appearance in
+        let isDark = appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+        return isDark
+            ? NSColor(srgbRed: 0x14 / 255.0, green: 0x15 / 255.0, blue: 0x18 / 255.0, alpha: 0.56)
+            : NSColor.white.withAlphaComponent(0.62)
+    })
+
+    /// Luminous top specular edge for Apple glass borders
+    static let glassBorderTop = Color(nsColor: NSColor(name: nil) { appearance in
+        let isDark = appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+        return isDark
+            ? NSColor.white.withAlphaComponent(0.20)
+            : NSColor.black.withAlphaComponent(0.10)
+    })
+
+    /// Subtle bottom/side glass border
+    static let glassBorderBottom = Color(nsColor: NSColor(name: nil) { appearance in
+        let isDark = appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+        return isDark
+            ? NSColor.white.withAlphaComponent(0.07)
+            : NSColor.black.withAlphaComponent(0.09)
+    })
+
+    /// Adaptive card shadow — deep ambient in Dark Mode, near-zero whisper in Light Mode
+    static let cardShadow = Color(nsColor: NSColor(name: nil) { appearance in
+        let isDark = appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+        return isDark
+            ? NSColor.black.withAlphaComponent(0.18)
+            : NSColor.black.withAlphaComponent(0.03)
     })
 
     static func loadBundledImage(named filename: String) -> NSImage? {
@@ -175,41 +225,140 @@ enum SierraTheme {
     }
 }
 
-// MARK: - Raycast Card & Keycap Primitives
+// MARK: - Apple Liquid Glass Card & Keycap Primitives
 
 struct RaycastCardModifier: ViewModifier {
-    var cornerRadius: CGFloat = 13
+    var cornerRadius: CGFloat = 16
     var highlighted: Bool = false
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @Environment(\.colorSchemeContrast) private var colorSchemeContrast
 
     func body(content: Content) -> some View {
+        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+        let isDark = colorScheme == .dark
+        let highContrast = colorSchemeContrast == .increased
+
         content
-            .background(
-                LinearGradient(
-                    colors: [SierraTheme.surface, SierraTheme.surface.opacity(0.92)],
-                    startPoint: .top,
-                    endPoint: .bottom
-                ),
-                in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-            )
+            .background {
+                if reduceTransparency {
+                    shape.fill(SierraTheme.surface)
+                } else {
+                    ZStack {
+                        shape.fill(.ultraThinMaterial)
+                        shape.fill(SierraTheme.glassFill)
+                    }
+                }
+            }
             .overlay(
-                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .strokeBorder(
-                        LinearGradient(
-                            colors: highlighted
-                                ? [SierraTheme.accent.opacity(0.75), SierraTheme.accent.opacity(0.35)]
-                                : [SierraTheme.topSpecular, SierraTheme.borderSubtle],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        ),
-                        lineWidth: highlighted ? 1.25 : 1
-                    )
+                shape.strokeBorder(
+                    LinearGradient(
+                        colors: highlighted
+                            ? [SierraTheme.accent.opacity(0.9), SierraTheme.accent.opacity(0.4)]
+                            : (highContrast
+                                ? [Color.primary.opacity(0.35), Color.primary.opacity(0.22)]
+                                : [SierraTheme.glassBorderTop, SierraTheme.glassBorderBottom]),
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: highlighted ? 1.35 : (highContrast ? 1.25 : 1)
+                )
             )
+            .shadow(color: SierraTheme.cardShadow, radius: isDark ? 12 : 3, y: isDark ? 5 : 1)
     }
 }
 
 extension View {
-    func raycastCard(cornerRadius: CGFloat = 13, highlighted: Bool = false) -> some View {
+    func raycastCard(cornerRadius: CGFloat = 16, highlighted: Bool = false) -> some View {
         modifier(RaycastCardModifier(cornerRadius: cornerRadius, highlighted: highlighted))
+    }
+}
+
+// MARK: - Ambient Deep Sapphire Backdrop (Gemini-Inspired Soft Nebula Glow for Terminal Deck)
+
+struct TerminalAmbientBackdrop: View {
+    @Environment(\.colorScheme) private var colorScheme
+
+    private var isDark: Bool {
+        colorScheme == .dark
+    }
+
+    var body: some View {
+        ZStack {
+            // Deep obsidian or clean porcelain base
+            (isDark
+                ? Color(red: 0x0A/255, green: 0x0B/255, blue: 0x0E/255)
+                : Color(red: 0xF5/255, green: 0xF6/255, blue: 0xF9/255))
+
+            GeometryReader { geo in
+                let w = geo.size.width
+                let h = geo.size.height
+                let diag = max(w, h)
+
+                ZStack {
+                    if isDark {
+                        // Primary lower-center midnight sapphire glow (matches reference screenshot)
+                        RadialGradient(
+                            stops: [
+                                .init(color: Color(red: 0x1A/255, green: 0x3B/255, blue: 0x9C/255).opacity(0.42), location: 0.0),
+                                .init(color: Color(red: 0x0D/255, green: 0x22/255, blue: 0x64/255).opacity(0.32), location: 0.36),
+                                .init(color: Color(red: 0x08/255, green: 0x14/255, blue: 0x3A/255).opacity(0.14), location: 0.68),
+                                .init(color: .clear, location: 1.0)
+                            ],
+                            center: UnitPoint(x: 0.52, y: 0.72),
+                            startRadius: 10,
+                            endRadius: diag * 0.62
+                        )
+
+                        // Soft secondary royal-indigo bloom behind the prompt dock
+                        RadialGradient(
+                            stops: [
+                                .init(color: Color(red: 0x22/255, green: 0x4C/255, blue: 0xBF/255).opacity(0.24), location: 0.0),
+                                .init(color: Color(red: 0x08/255, green: 0x24/255, blue: 0x52/255).opacity(0.14), location: 0.50),
+                                .init(color: .clear, location: 1.0)
+                            ],
+                            center: UnitPoint(x: 0.44, y: 0.52),
+                            startRadius: 10,
+                            endRadius: diag * 0.46
+                        )
+
+                        // Subtle deep-blue vignette whisper in lower-right
+                        RadialGradient(
+                            stops: [
+                                .init(color: Color(red: 0x11/255, green: 0x24/255, blue: 0x60/255).opacity(0.22), location: 0.0),
+                                .init(color: .clear, location: 1.0)
+                            ],
+                            center: UnitPoint(x: 0.85, y: 0.88),
+                            startRadius: 5,
+                            endRadius: diag * 0.42
+                        )
+                    } else {
+                        // Light Mode: Fresh, airy sapphire & ice-blue ambient bloom so white glass cards shine
+                        RadialGradient(
+                            stops: [
+                                .init(color: Color(red: 0x1D/255, green: 0x63/255, blue: 0xED/255).opacity(0.20), location: 0.0),
+                                .init(color: Color(red: 0x38/255, green: 0xBD/255, blue: 0xF8/255).opacity(0.16), location: 0.40),
+                                .init(color: Color(red: 0x08/255, green: 0x24/255, blue: 0x52/255).opacity(0.06), location: 0.72),
+                                .init(color: .clear, location: 1.0)
+                            ],
+                            center: UnitPoint(x: 0.52, y: 0.74),
+                            startRadius: 10,
+                            endRadius: diag * 0.64
+                        )
+
+                        RadialGradient(
+                            stops: [
+                                .init(color: Color(red: 0x25/255, green: 0x63/255, blue: 0xEB/255).opacity(0.14), location: 0.0),
+                                .init(color: .clear, location: 1.0)
+                            ],
+                            center: UnitPoint(x: 0.25, y: 0.48),
+                            startRadius: 10,
+                            endRadius: diag * 0.44
+                        )
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -271,7 +420,9 @@ struct SierraMascotMarkView: View {
     }
 }
 
-/// Keeps the underlying NSWindow chrome seamlessly matched to #111110 (Dark) or #F6F6F4 (Light).
+/// Keeps the underlying NSWindow chrome seamlessly matched to #111110 (Dark) or #F6F6F4 (Light)
+/// and hides the cramped 28pt system traffic lights so our custom Gemini-aligned MacTrafficLightsView
+/// sits cleanly inside the floating glass sidebar without ever overlapping borders.
 struct WindowThemeSync: NSViewRepresentable {
     let preference: AppThemePreference
 
@@ -299,11 +450,137 @@ struct WindowThemeSync: NSViewRepresentable {
         case .system:
             window.appearance = nil
         }
+
+        window.isOpaque = true
+        window.titlebarAppearsTransparent = true
+        window.titleVisibility = .hidden
+        // Keep false so clicks on translucent SwiftUI buttons are never swallowed by window dragging
+        window.isMovableByWindowBackground = false
         window.backgroundColor = NSColor(name: nil) { appearance in
             let isDark = appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
             return isDark
                 ? NSColor(srgbRed: 0x11 / 255.0, green: 0x11 / 255.0, blue: 0x10 / 255.0, alpha: 1.0)
                 : NSColor(srgbRed: 0xF6 / 255.0, green: 0xF6 / 255.0, blue: 0xF4 / 255.0, alpha: 1.0)
+        }
+
+        // Hide default cramped 28pt titlebar buttons so MacTrafficLightsView renders cleanly in-layout
+        let types: [NSWindow.ButtonType] = [.closeButton, .miniaturizeButton, .zoomButton]
+        for type in types {
+            window.standardWindowButton(type)?.isHidden = true
+        }
+    }
+}
+
+// MARK: - Native-Feel macOS Traffic Lights (Gemini-Aligned, Group Hover Glyphs)
+
+struct MacTrafficLightsView: View {
+    @State private var isGroupHovered: Bool = false
+
+    var body: some View {
+        HStack(spacing: 8) {
+            trafficDot(
+                color: Color(red: 0xFF/255, green: 0x5F/255, blue: 0x57/255),
+                stroke: Color(red: 0xE0/255, green: 0x44/255, blue: 0x3E/255),
+                symbol: "xmark",
+                help: "Close Window"
+            ) {
+                NSApp.keyWindow?.performClose(nil)
+            }
+
+            trafficDot(
+                color: Color(red: 0xFE/255, green: 0xBC/255, blue: 0x2E/255),
+                stroke: Color(red: 0xD8/255, green: 0x9E/255, blue: 0x24/255),
+                symbol: "minus",
+                help: "Minimize Window"
+            ) {
+                NSApp.keyWindow?.miniaturize(nil)
+            }
+
+            trafficDot(
+                color: Color(red: 0x28/255, green: 0xC8/255, blue: 0x40/255),
+                stroke: Color(red: 0x1A/255, green: 0xA8/255, blue: 0x2E/255),
+                symbol: "plus",
+                help: "Toggle Full Screen"
+            ) {
+                NSApp.keyWindow?.toggleFullScreen(nil)
+            }
+        }
+        .padding(.vertical, 4)
+        .padding(.horizontal, 2)
+        .contentShape(Rectangle())
+        .onHover { hovering in
+            withAnimation(.easeInOut(duration: 0.12)) {
+                isGroupHovered = hovering
+            }
+        }
+    }
+
+    private func trafficDot(color: Color, stroke: Color, symbol: String, help: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            ZStack {
+                Circle()
+                    .fill(color)
+                    .frame(width: 12, height: 12)
+                    .overlay(Circle().strokeBorder(stroke.opacity(0.65), lineWidth: 0.6))
+                if isGroupHovered {
+                    Image(systemName: symbol)
+                        .font(.system(size: 7, weight: .bold))
+                        .foregroundStyle(Color.black.opacity(0.65))
+                }
+            }
+            .frame(width: 16, height: 16) // generous 16×16 hit target around 12×12 visual dot
+            .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .help(help)
+        .accessibilityLabel(help)
+    }
+}
+
+// MARK: - Window Drag Handle (Allows Dragging Window From Empty Top Bar Space)
+
+struct WindowDragArea: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView {
+        DragHostView()
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {}
+
+    private final class DragHostView: NSView {
+        override func mouseDown(with event: NSEvent) {
+            window?.performDrag(with: event)
+        }
+    }
+}
+
+// MARK: - Tactile Interactive Button Style (Hover Highlight + Subtle Press Scale)
+
+struct TactileGlassButtonStyle: ButtonStyle {
+    var cornerRadius: CGFloat = 10
+
+    func makeBody(configuration: Configuration) -> some View {
+        TactileGlassButtonBody(configuration: configuration, cornerRadius: cornerRadius)
+    }
+
+    private struct TactileGlassButtonBody: View {
+        let configuration: Configuration
+        let cornerRadius: CGFloat
+        @State private var isHovered: Bool = false
+        @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+        var body: some View {
+            configuration.label
+                .background(
+                    isHovered ? SierraTheme.rowHover : Color.clear,
+                    in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                )
+                .scaleEffect((configuration.isPressed && !reduceMotion) ? 0.98 : 1.0)
+                .animation(reduceMotion ? nil : .easeOut(duration: 0.10), value: configuration.isPressed)
+                .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: isHovered)
+                .contentShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+                .onHover { hovering in
+                    isHovered = hovering
+                }
         }
     }
 }

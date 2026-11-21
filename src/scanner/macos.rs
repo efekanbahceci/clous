@@ -13,7 +13,7 @@ struct PsMetadata {
 
 /// Scan active TCP/UDP sockets on macOS using `lsof` + batched `ps` enrichment.
 pub fn scan_system_ports() -> Result<Vec<PortEntry>, String> {
-    let output = Command::new("lsof")
+    let output = Command::new("/usr/sbin/lsof")
         .args(["-nP", "-iTCP", "-iUDP"])
         .output()
         .map_err(|e| format!("Failed to execute lsof: {e}"))?;
@@ -117,7 +117,7 @@ pub fn get_process_ancestry(start_pid: u32) -> Vec<ProcessAncestor> {
     let mut current = start_pid;
 
     while current > 0 && visited.insert(current) && chain.len() < 16 {
-        let Ok(output) = Command::new("ps")
+        let Ok(output) = Command::new("/bin/ps")
             .args(["-o", "pid=,ppid=,rss=,user=,args=", "-p", &current.to_string()])
             .output()
         else {
@@ -160,7 +160,7 @@ fn fetch_ps_metadata(pids: &HashSet<u32>) -> HashMap<u32, PsMetadata> {
         .collect::<Vec<_>>()
         .join(",");
 
-    let Ok(output) = Command::new("ps")
+    let Ok(output) = Command::new("/bin/ps")
         .args(["-o", "pid=,ppid=,rss=,user=,args=", "-p", &pid_list])
         .output()
     else {
@@ -221,9 +221,9 @@ fn fetch_ps_metadata(pids: &HashSet<u32>) -> HashMap<u32, PsMetadata> {
     map
 }
 
-fn parse_ps_ancestry_line(
-    line: &str,
-) -> Option<(u32, Option<u32>, Option<u64>, String, String)> {
+type PsAncestryEntry = (u32, Option<u32>, Option<u64>, String, String);
+
+fn parse_ps_ancestry_line(line: &str) -> Option<PsAncestryEntry> {
     let trimmed = line.trim();
     let pid_s = trimmed.split_whitespace().next()?;
     let rest = trimmed[pid_s.len()..].trim_start();

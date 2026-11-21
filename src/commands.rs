@@ -9,6 +9,7 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use crate::audit::{AuditOptions, AuditProfile, run_audit_with_options};
 use crate::cli::{GlobalOptions, KillTarget, SnapshotAction};
+use crate::display;
 use crate::display::{
     Theme, port_entry_to_json, print_audit_report, print_diff_report, print_inspect_report,
     print_ports_compact, print_ports_csv, print_ports_json, print_ports_table, print_probe_results,
@@ -145,10 +146,10 @@ pub fn run_watch(
                         let plain_line = format!(
                             "{{\"time\":\"{ts}\",\"event\":\"OPEN\",\"protocol\":\"{}\",\"endpoint\":\"{}\",\"scope\":\"{}\",\"pid\":\"{}\",\"process\":\"{}\"}}",
                             entry.protocol,
-                            entry.local_endpoint(),
+                            display::json_escape(&entry.local_endpoint()),
                             entry.bind_scope().as_str(),
                             pid_str,
-                            proc_str
+                            display::json_escape(proc_str)
                         );
                         append_log_line(path, &plain_line);
                     }
@@ -176,9 +177,9 @@ pub fn run_watch(
                         let plain_line = format!(
                             "{{\"time\":\"{ts}\",\"event\":\"CLOSED\",\"protocol\":\"{}\",\"endpoint\":\"{}\",\"pid\":\"{}\",\"process\":\"{}\"}}",
                             entry.protocol,
-                            entry.local_endpoint(),
+                            display::json_escape(&entry.local_endpoint()),
                             pid_str,
-                            proc_str
+                            display::json_escape(proc_str)
                         );
                         append_log_line(path, &plain_line);
                     }
@@ -302,10 +303,10 @@ pub fn run_stream(filter: &FilterOptions, interval_ms: u64) -> Result<(), String
                         "{{\"time\":\"{ts}\",\"kind\":\"OPEN\",\"protocol\":\"{}\",\"port\":{},\"endpoint\":\"{}\",\"scope\":\"{}\",\"pid\":{},\"process\":\"{}\"}}",
                         entry.protocol.as_str(),
                         entry.local_port,
-                        entry.local_endpoint(),
+                        display::json_escape(&entry.local_endpoint()),
                         entry.bind_scope().as_str(),
                         pid_json,
-                        proc_str.replace('"', "\\\"")
+                        display::json_escape(proc_str)
                     ));
                 }
             }
@@ -321,10 +322,10 @@ pub fn run_stream(filter: &FilterOptions, interval_ms: u64) -> Result<(), String
                         "{{\"time\":\"{ts}\",\"kind\":\"CLOSED\",\"protocol\":\"{}\",\"port\":{},\"endpoint\":\"{}\",\"scope\":\"{}\",\"pid\":{},\"process\":\"{}\"}}",
                         entry.protocol.as_str(),
                         entry.local_port,
-                        entry.local_endpoint(),
+                        display::json_escape(&entry.local_endpoint()),
                         entry.bind_scope().as_str(),
                         pid_json,
-                        proc_str.replace('"', "\\\"")
+                        display::json_escape(proc_str)
                     ));
                 }
             }
@@ -679,6 +680,9 @@ pub fn run_kill(
             }
         }
         KillTarget::Pid(pid) => {
+            if *pid <= 1 || *pid > i32::MAX as u32 || *pid == std::process::id() {
+                return Err(format!("Refusing to terminate invalid, system, or self PID {pid}"));
+            }
             let mut ports = Vec::new();
             let mut pname = "unknown".to_string();
             for e in &all {
@@ -694,7 +698,10 @@ pub fn run_kill(
             port_map.insert(*pid, (pname, ports));
         }
         KillTarget::Process(needle) => {
-            let needle_lc = needle.to_ascii_lowercase();
+            let needle_lc = needle.trim().to_ascii_lowercase();
+            if needle_lc.is_empty() {
+                return Err("Refusing to match empty --proc pattern".to_string());
+            }
             for e in &all {
                 let matched = e
                     .process_name
@@ -823,7 +830,21 @@ fn push_event(events: &mut VecDeque<String>, msg: String) {
 }
 
 fn append_log_line(path: &str, line: &str) {
-    if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(path) {
+    let mut opts = OpenOptions::new();
+    opts.create(true).append(true);
+    #[cfg(target_os = "macos")]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        opts.custom_flags(0x0100).mode(0o600);
+    }
+    #[cfg(target_os = "linux")]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        opts.custom_flags(0x20000).mode(0o600);
+    }
+    if let Ok(mut file) = opts.open(path)
+        && file.metadata().map(|m| m.is_file()).unwrap_or(false)
+    {
         let _ = writeln!(file, "{line}");
     }
 }

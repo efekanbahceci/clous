@@ -53,7 +53,7 @@ final class QuickLauncherController: NSObject, NSWindowDelegate {
             p.isOpaque = false
             p.backgroundColor = .clear
             p.hasShadow = true
-            p.isMovableByWindowBackground = true
+            p.isMovableByWindowBackground = false
             p.hidesOnDeactivate = false
             p.delegate = self
             self.panel = p
@@ -125,6 +125,7 @@ final class QuickLauncherController: NSObject, NSWindowDelegate {
                 mainWin.deminiaturize(nil)
             }
             mainWin.makeKeyAndOrderFront(nil)
+            mainWin.orderFrontRegardless()
         }
     }
 

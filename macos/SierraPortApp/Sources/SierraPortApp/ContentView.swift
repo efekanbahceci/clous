@@ -6,111 +6,102 @@ struct ContentView: View {
     @Binding var themeRaw: String
     let onEditShortcut: () -> Void
     @FocusState private var isCommandFocused: Bool
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @State private var isSidebarVisible: Bool = true
+
+    private var isDark: Bool {
+        colorScheme == .dark
+    }
 
     private var themePref: AppThemePreference {
         AppThemePreference(rawValue: themeRaw) ?? .dark
     }
 
+    private var showEmptyTerminalBackdrop: Bool {
+        vm.selectedTab == .terminal && vm.blocks.isEmpty
+    }
+
     var body: some View {
-        NavigationSplitView {
-            sidebar
-                .background(SierraTheme.sidebar)
-        } detail: {
-            VStack(spacing: 0) {
-                ZStack(alignment: .bottom) {
-                    mainDetail
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .background(SierraTheme.canvas)
+        ZStack {
+            // Classic solid canvas (#111110 Dark / #F6F6F4 Light) for Live Watch, Audit, Analytics & Active Deck
+            SierraTheme.canvas
+                .ignoresSafeArea()
 
-                    if let msg = vm.statusMessage {
-                        Text(msg)
-                            .font(SierraFont.ui(12, weight: .medium))
+            HStack(spacing: 0) {
+                // Floating Apple Liquid Glass Sidebar (collapsible via top-right icon or ⌘\)
+                if isSidebarVisible {
+                    floatingGlassSidebar
+                        .padding(.top, 8)
+                        .padding(.leading, 8)
+                        .padding(.bottom, 8)
+                        .transition(.move(edge: .leading).combined(with: .opacity))
+                }
+
+                // Right Main Detail Stage
+                ZStack {
+                    // Deep Sapphire Ambient Gradient ONLY on empty Terminal Deck (before any command is run)
+                    if showEmptyTerminalBackdrop {
+                        TerminalAmbientBackdrop()
+                            .ignoresSafeArea()
+                            .transition(.opacity)
+                    }
+
+                    VStack(spacing: 0) {
+                        // Top-Right Floating Glass Status & Action Pills (aligned with traffic lights)
+                        topFloatingToolbar
+                            .padding(.horizontal, 18)
+                            .padding(.top, 12)
+                            .padding(.bottom, 6)
+
+                        ZStack(alignment: .bottom) {
+                            mainDetail
+                                .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+                            if let msg = vm.statusMessage {
+                                Text(msg)
+                                    .font(SierraFont.ui(12, weight: .medium))
+                                    .padding(.horizontal, 14)
+                                    .padding(.vertical, 8)
+                                    .background(.ultraThinMaterial, in: Capsule())
+                                    .background(SierraTheme.glassFillElevated, in: Capsule())
+                                    .overlay(
+                                        Capsule().strokeBorder(
+                                            LinearGradient(
+                                                colors: [SierraTheme.glassBorderTop, SierraTheme.glassBorderBottom],
+                                                startPoint: .top,
+                                                endPoint: .bottom
+                                            ),
+                                            lineWidth: 1
+                                        )
+                                    )
+                                    .shadow(color: .black.opacity(0.24), radius: 10, y: 4)
+                                    .padding(.bottom, 14)
+                                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                            }
+                        }
+
+                        // Frosted Glass Bottom Action Bar
+                        raycastFooterBar
                             .padding(.horizontal, 14)
-                            .padding(.vertical, 8)
-                            .background(SierraTheme.surfaceElevated, in: Capsule())
-                            .overlay(Capsule().strokeBorder(SierraTheme.border, lineWidth: 1))
-                            .shadow(color: .black.opacity(0.25), radius: 8, y: 4)
-                            .padding(.bottom, 14)
-                            .transition(.move(edge: .bottom).combined(with: .opacity))
+                            .padding(.bottom, 10)
                     }
                 }
-                .background(SierraTheme.canvas)
-
-                // Raycast-style persistent Bottom Action Bar
-                Divider().opacity(0.45)
-                raycastFooterBar
+                .animation(.easeInOut(duration: 0.35), value: showEmptyTerminalBackdrop)
+                .animation(.spring(response: 0.3, dampingFraction: 0.85), value: vm.statusMessage)
+                .inspector(isPresented: $vm.showingInspector) {
+                    inspectorDrawer
+                        .inspectorColumnWidth(min: 320, ideal: 360, max: 440)
+                }
             }
-            .animation(.spring(response: 0.3, dampingFraction: 0.85), value: vm.statusMessage)
-            .inspector(isPresented: $vm.showingInspector) {
-                inspectorDrawer
-                    .inspectorColumnWidth(min: 320, ideal: 360, max: 440)
-            }
-        }
-        .navigationSplitViewStyle(.balanced)
-        .toolbar {
-            ToolbarItemGroup(placement: .automatic) {
-                if let tick = vm.latestTick {
-                    HStack(spacing: 10) {
-                        HStack(spacing: 5) {
-                            Circle()
-                                .fill(vm.isStreaming ? Color.green : Color.secondary)
-                                .frame(width: 7, height: 7)
-                            Text("\(tick.active) active")
-                                .font(.system(size: 11, weight: .medium, design: .monospaced))
-                                .contentTransition(.numericText())
-                        }
-                        if tick.exposed > 0 {
-                            Text("\(tick.exposed) exposed")
-                                .font(.system(size: 11, weight: .medium, design: .monospaced))
-                                .foregroundStyle(.orange)
-                                .contentTransition(.numericText())
-                        }
-                        Text("\(tick.scanMs)ms")
-                            .font(.system(size: 11, design: .monospaced))
-                            .foregroundStyle(.secondary)
-                            .contentTransition(.numericText())
-                    }
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 4)
-                    .background(.primary.opacity(0.05), in: Capsule())
-                }
-
-                Button {
-                    isCommandFocused = true
-                    vm.selectedTab = .terminal
-                } label: {
-                    Label("Command", systemImage: "terminal")
-                }
-                .keyboardShortcut("k", modifiers: .command)
-                .help("Focus SierraPort Command Bar (⌘K)")
-
-                Button {
-                    Task {
-                        await vm.refreshAudit()
-                        await vm.refreshStats()
-                    }
-                } label: {
-                    Label("Refresh", systemImage: "arrow.clockwise")
-                }
-                .keyboardShortcut("r", modifiers: .command)
-                .help("Refresh Metrics (⌘R)")
-
-                Button {
-                    withAnimation(.spring(response: 0.28, dampingFraction: 0.85)) {
-                        vm.showingInspector.toggle()
-                    }
-                } label: {
-                    Label("Inspector", systemImage: "sidebar.right")
-                }
-                .keyboardShortcut("i", modifiers: [.command, .option])
-                .help("Toggle Forensic Inspector (⌥⌘I)")
-            }
+            .ignoresSafeArea(.container, edges: .top)
+            .animation(.spring(response: 0.34, dampingFraction: 0.88), value: isSidebarVisible)
         }
         .onAppear {
             isCommandFocused = true
         }
         .background {
-            // Hidden global keyboard shortcuts for mouse-free tab switching (⌘1–⌘4)
+            // Hidden global keyboard shortcuts for mouse-free tab switching (⌘1–⌘4, ⌘K, ⌘R, ⌥⌘I, ⌘\)
             Group {
                 Button("") { vm.selectedTab = .terminal; isCommandFocused = true }
                     .keyboardShortcut("1", modifiers: .command)
@@ -120,13 +111,154 @@ struct ContentView: View {
                     .keyboardShortcut("3", modifiers: .command)
                 Button("") { vm.selectedTab = .stats }
                     .keyboardShortcut("4", modifiers: .command)
+                Button("") { vm.selectedTab = .terminal; isCommandFocused = true }
+                    .keyboardShortcut("k", modifiers: .command)
+                Button("") {
+                    withAnimation(.spring(response: 0.34, dampingFraction: 0.88)) {
+                        isSidebarVisible.toggle()
+                    }
+                }
+                .keyboardShortcut("\\", modifiers: .command)
+                Button("") {
+                    Task {
+                        await vm.refreshAudit()
+                        await vm.refreshStats()
+                    }
+                }
+                .keyboardShortcut("r", modifiers: .command)
+                Button("") {
+                    withAnimation(.spring(response: 0.28, dampingFraction: 0.85)) {
+                        vm.showingInspector.toggle()
+                    }
+                }
+                .keyboardShortcut("i", modifiers: [.command, .option])
             }
             .opacity(0)
             .frame(width: 0, height: 0)
         }
     }
 
-    // MARK: - Raycast Signature Bottom Action Bar
+    // MARK: - Top-Right Floating Glass Toolbar
+
+    private var topFloatingToolbar: some View {
+        HStack(spacing: 10) {
+            if !isSidebarVisible {
+                HStack(spacing: 10) {
+                    MacTrafficLightsView()
+
+                    Button {
+                        withAnimation(.spring(response: 0.34, dampingFraction: 0.88)) {
+                            isSidebarVisible = true
+                        }
+                    } label: {
+                        Image(systemName: "sidebar.left")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(.primary.opacity(0.85))
+                            .frame(width: 32, height: 28)
+                    }
+                    .buttonStyle(TactileGlassButtonStyle(cornerRadius: 14))
+                    .background(.ultraThinMaterial, in: Capsule())
+                    .background(SierraTheme.glassFill, in: Capsule())
+                    .overlay(Capsule().strokeBorder(SierraTheme.glassBorderBottom, lineWidth: 1))
+                    .help("Show Sidebar (⌘\\)")
+                    .accessibilityLabel("Show Sidebar")
+                }
+                .transition(.opacity.combined(with: .move(edge: .leading)))
+            }
+
+            // Empty space acts as a clean window drag handle without stealing clicks from buttons
+            WindowDragArea()
+                .frame(height: 30)
+
+            if let tick = vm.latestTick {
+                HStack(spacing: 10) {
+                    HStack(spacing: 5) {
+                        Circle()
+                            .fill(vm.isStreaming ? Color.green : Color.secondary)
+                            .frame(width: 7, height: 7)
+                        Text("\(tick.active) active")
+                            .font(SierraFont.mono(11, weight: .medium))
+                            .contentTransition(.numericText())
+                    }
+                    if tick.exposed > 0 {
+                        Text("\(tick.exposed) exposed")
+                            .font(SierraFont.mono(11, weight: .medium))
+                            .foregroundStyle(.orange)
+                            .contentTransition(.numericText())
+                    }
+                    Text("\(tick.scanMs)ms")
+                        .font(SierraFont.mono(11))
+                        .foregroundStyle(.secondary)
+                        .contentTransition(.numericText())
+                }
+                .padding(.horizontal, 12)
+                .frame(height: 30)
+                .background(.ultraThinMaterial, in: Capsule())
+                .background(SierraTheme.glassFill, in: Capsule())
+                .overlay(
+                    Capsule().strokeBorder(
+                        LinearGradient(
+                            colors: [SierraTheme.glassBorderTop, SierraTheme.glassBorderBottom],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        ),
+                        lineWidth: 1
+                    )
+                )
+            }
+
+            HStack(spacing: 2) {
+                toolbarGlassIconButton(icon: "terminal", help: "Focus Command Bar (⌘K)") {
+                    isCommandFocused = true
+                    vm.selectedTab = .terminal
+                }
+                toolbarGlassIconButton(icon: "arrow.clockwise", help: "Refresh Metrics (⌘R)") {
+                    Task {
+                        await vm.refreshAudit()
+                        await vm.refreshStats()
+                    }
+                }
+                toolbarGlassIconButton(
+                    icon: "sidebar.right",
+                    active: vm.showingInspector,
+                    help: "Toggle Forensic Inspector (⌥⌘I)"
+                ) {
+                    withAnimation(.spring(response: 0.28, dampingFraction: 0.85)) {
+                        vm.showingInspector.toggle()
+                    }
+                }
+            }
+            .padding(3)
+            .background(.ultraThinMaterial, in: Capsule())
+            .background(SierraTheme.glassFill, in: Capsule())
+            .overlay(
+                Capsule().strokeBorder(
+                    LinearGradient(
+                        colors: [SierraTheme.glassBorderTop, SierraTheme.glassBorderBottom],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    ),
+                    lineWidth: 1
+                )
+            )
+        }
+    }
+
+    private func toolbarGlassIconButton(icon: String, active: Bool = false, help: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: icon)
+                .font(.system(size: 12.5, weight: .medium))
+                .foregroundStyle(active ? SierraTheme.accent : .primary.opacity(0.85))
+                .frame(width: 32, height: 26)
+                .background(active ? SierraTheme.selectionFill : Color.clear, in: Capsule())
+                .contentShape(Capsule())
+        }
+        .buttonStyle(TactileGlassButtonStyle(cornerRadius: 13))
+        .help(help)
+        .accessibilityLabel(help)
+    }
+
+    // MARK: - Frosted Glass Bottom Action Bar
 
     private var raycastFooterBar: some View {
         HStack(spacing: 12) {
@@ -180,45 +312,132 @@ struct ContentView: View {
                 }
             }
         }
-        .padding(.horizontal, 16)
+        .padding(.horizontal, 14)
         .padding(.vertical, 8)
-        .background(SierraTheme.sidebar)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .background(SierraTheme.glassFill, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .strokeBorder(
+                    LinearGradient(
+                        colors: [SierraTheme.glassBorderTop, SierraTheme.glassBorderBottom],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    ),
+                    lineWidth: 1
+                )
+        )
     }
 
-    // MARK: - Sidebar
+    // MARK: - Floating Apple Liquid Glass Sidebar
 
-    private var sidebar: some View {
+    private var floatingGlassSidebar: some View {
         VStack(alignment: .leading, spacing: 0) {
+            // Gemini-style Top Row: Traffic Lights on Left + Search & Collapse Sidebar on Right
+            HStack(spacing: 4) {
+                MacTrafficLightsView()
+
+                WindowDragArea()
+                    .frame(height: 28)
+
+                Button {
+                    vm.selectedTab = .terminal
+                    isCommandFocused = true
+                } label: {
+                    Image(systemName: "magnifyingglass")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 30, height: 28)
+                }
+                .buttonStyle(TactileGlassButtonStyle(cornerRadius: 8))
+                .help("Focus Command Deck (⌘K)")
+                .accessibilityLabel("Focus Command Deck")
+
+                Button {
+                    withAnimation(.spring(response: 0.34, dampingFraction: 0.88)) {
+                        isSidebarVisible = false
+                    }
+                } label: {
+                    Image(systemName: "sidebar.left")
+                        .font(.system(size: 13.5, weight: .medium))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 30, height: 28)
+                }
+                .buttonStyle(TactileGlassButtonStyle(cornerRadius: 8))
+                .help("Hide Sidebar (⌘\\)")
+                .accessibilityLabel("Hide Sidebar")
+            }
+            .padding(.horizontal, 12)
+            .padding(.top, 10)
+            .padding(.bottom, 10)
+
+            // Brand Header
             HStack(spacing: 10) {
-                SierraAppIconView(size: 32)
+                SierraAppIconView(size: 28)
                 VStack(alignment: .leading, spacing: 1) {
                     HStack(spacing: 0) {
                         Text("Sierra")
-                            .font(.system(size: 18, weight: .semibold, design: .default))
+                            .font(SierraFont.display(17, weight: .semibold))
                         Text("Port")
-                            .font(.system(size: 18, weight: .light, design: .default))
+                            .font(SierraFont.display(17, weight: .light))
                             .foregroundStyle(.secondary)
                     }
                     Text("PORT MONITOR")
-                        .font(.system(size: 8.5, weight: .semibold))
-                        .tracking(1.1)
+                        .font(SierraFont.ui(10, weight: .semibold))
+                        .tracking(0.9)
                         .foregroundStyle(.secondary)
                 }
+                Spacer()
             }
             .padding(.horizontal, 14)
-            .padding(.top, 12)
             .padding(.bottom, 14)
 
-            List(AppTab.allCases, selection: $vm.selectedTab) { tab in
-                Label(tab.rawValue, systemImage: tab.icon)
-                    .tag(tab)
+            // Uniform Capsule Navigation Items (Gemini-style translucent active pill + generous 38pt hit height)
+            VStack(spacing: 4) {
+                ForEach(AppTab.allCases) { tab in
+                    let isSelected = vm.selectedTab == tab
+                    Button {
+                        withAnimation(.spring(response: 0.28, dampingFraction: 0.86)) {
+                            vm.selectedTab = tab
+                        }
+                    } label: {
+                        HStack(spacing: 10) {
+                            Image(systemName: tab.icon)
+                                .font(.system(size: 13.5, weight: isSelected ? .semibold : .regular))
+                                .foregroundStyle(isSelected ? Color.primary : Color.secondary)
+                                .frame(width: 18)
+                            Text(tab.rawValue)
+                                .font(SierraFont.ui(13, weight: isSelected ? .semibold : .regular))
+                                .foregroundStyle(isSelected ? Color.primary : Color.primary.opacity(0.84))
+                            Spacer()
+                        }
+                        .padding(.horizontal, 12)
+                        .frame(height: 38)
+                        .background(
+                            isSelected ? SierraTheme.glassFillElevated : Color.clear,
+                            in: Capsule()
+                        )
+                        .overlay(
+                            Capsule()
+                                .strokeBorder(
+                                    isSelected ? SierraTheme.glassBorderTop : Color.clear,
+                                    lineWidth: 1
+                                )
+                        )
+                        .contentShape(Capsule())
+                    }
+                    .buttonStyle(TactileGlassButtonStyle(cornerRadius: 19))
+                }
             }
-            .listStyle(.sidebar)
-            .scrollContentBackground(.hidden)
+            .padding(.horizontal, 10)
 
-            Divider().opacity(0.4)
+            Spacer()
 
-            // Global Hotkey Pill + Theme Switcher
+            Divider()
+                .opacity(0.28)
+                .padding(.horizontal, 12)
+
+            // Uniform Glass Bottom Controls (Quick Launch + Theme Switcher + Core Status)
             VStack(alignment: .leading, spacing: 8) {
                 Button {
                     onEditShortcut()
@@ -226,32 +445,32 @@ struct ContentView: View {
                     HStack(spacing: 6) {
                         Image(systemName: "command")
                             .font(.system(size: 10, weight: .semibold))
-                            .foregroundStyle(.cyan)
+                            .foregroundStyle(SierraTheme.accent)
                         Text("Quick Launch")
-                            .font(.system(size: 11, weight: .medium))
+                            .font(SierraFont.ui(11.5, weight: .medium))
                         Spacer()
                         Text(hotkeyManager.currentHotkey?.displayString ?? "Set")
-                            .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                            .font(SierraFont.mono(10, weight: .semibold))
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
-                            .background(SierraTheme.surfaceElevated, in: RoundedRectangle(cornerRadius: 5))
-                            .overlay(RoundedRectangle(cornerRadius: 5).strokeBorder(SierraTheme.border, lineWidth: 1))
+                            .background(SierraTheme.glassFillElevated, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+                            .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous).strokeBorder(SierraTheme.glassBorderBottom, lineWidth: 1))
                             .foregroundStyle(hotkeyManager.isRegistered ? .primary : .secondary)
                     }
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 6)
-                    .background(SierraTheme.canvas.opacity(0.55), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(SierraTheme.borderSubtle, lineWidth: 1))
-                    .contentShape(Rectangle())
+                    .padding(.horizontal, 10)
+                    .frame(height: 36)
+                    .background(SierraTheme.glassFill, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(SierraTheme.glassBorderBottom, lineWidth: 1))
+                    .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(TactileGlassButtonStyle(cornerRadius: 12))
                 .help("Customize system-wide Raycast-style Quick Launcher hotkey")
 
-                HStack(spacing: 4) {
+                HStack(spacing: 3) {
                     ForEach(AppThemePreference.allCases) { pref in
                         let isSelected = themePref == pref
                         Button {
-                            withAnimation(.easeInOut(duration: 0.18)) {
+                            withAnimation(.easeInOut(duration: 0.22)) {
                                 themeRaw = pref.rawValue
                             }
                         } label: {
@@ -259,41 +478,73 @@ struct ContentView: View {
                                 Image(systemName: pref.icon)
                                     .font(.system(size: 9))
                                 Text(pref.rawValue)
-                                    .font(.system(size: 10, weight: isSelected ? .semibold : .regular))
+                                    .font(SierraFont.ui(10, weight: isSelected ? .semibold : .regular))
                             }
                             .frame(maxWidth: .infinity)
-                            .padding(.vertical, 5)
+                            .frame(height: 28)
                             .background(
-                                isSelected ? SierraTheme.surfaceElevated : Color.clear,
-                                in: RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                isSelected ? SierraTheme.glassFillElevated : Color.clear,
+                                in: RoundedRectangle(cornerRadius: 8, style: .continuous)
                             )
                             .overlay(
-                                RoundedRectangle(cornerRadius: 6, style: .continuous)
-                                    .strokeBorder(isSelected ? SierraTheme.border : Color.clear, lineWidth: 1)
+                                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                    .strokeBorder(isSelected ? SierraTheme.glassBorderTop : Color.clear, lineWidth: 1)
                             )
                             .foregroundStyle(isSelected ? .primary : .secondary)
+                            .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(TactileGlassButtonStyle(cornerRadius: 8))
                     }
                 }
                 .padding(3)
-                .background(SierraTheme.canvas.opacity(0.6), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .frame(height: 36)
+                .background(SierraTheme.glassFill, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(SierraTheme.glassBorderBottom, lineWidth: 1))
 
-                HStack(spacing: 6) {
+                HStack(spacing: 8) {
                     Circle()
                         .fill(vm.bridge.binaryPath != nil ? Color.green : Color.red)
                         .frame(width: 7, height: 7)
-                    Text(vm.bridge.binaryPath != nil ? "Rust Core Ready" : "Binary Missing")
-                        .font(.system(size: 11, weight: .medium))
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(vm.bridge.binaryPath != nil ? "Rust Core Ready" : "Binary Missing")
+                            .font(SierraFont.ui(11, weight: .medium))
+                        Text(vm.isStreaming ? "Live stream · \(vm.streamIntervalMs)ms" : "Stream paused")
+                            .font(SierraFont.mono(10))
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
                 }
-                Text(vm.isStreaming ? "Live stream: \(vm.streamIntervalMs)ms" : "Stream paused")
-                    .font(.system(size: 10, design: .monospaced))
-                    .foregroundStyle(.secondary)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 7)
+                .background(SierraTheme.glassFill, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(SierraTheme.glassBorderBottom, lineWidth: 1))
             }
             .padding(12)
         }
-        .background(SierraTheme.sidebar)
-        .navigationSplitViewColumnWidth(min: 195, ideal: 215, max: 245)
+        .frame(width: 224)
+        .background {
+            let shape = RoundedRectangle(cornerRadius: 18, style: .continuous)
+            if reduceTransparency {
+                shape.fill(SierraTheme.sidebar)
+            } else {
+                ZStack {
+                    shape.fill(.ultraThinMaterial)
+                    shape.fill(SierraTheme.sidebarGlassFill)
+                }
+            }
+        }
+        .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .strokeBorder(
+                    LinearGradient(
+                        colors: [SierraTheme.glassBorderTop, SierraTheme.glassBorderBottom],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 1
+                )
+        )
+        .shadow(color: SierraTheme.cardShadow, radius: isDark ? 14 : 3, y: isDark ? 6 : 1)
     }
 
     // MARK: - Main Detail Switcher
@@ -362,7 +613,6 @@ struct ContentView: View {
             // Centered, Narrower Command Input Box (Positioned Lower)
             commandInputField
                 .frame(maxWidth: 600)
-                .shadow(color: .black.opacity(0.12), radius: 14, y: 6)
 
             // Quick Command Chips Below Input
             VStack(alignment: .leading, spacing: 8) {
@@ -378,7 +628,13 @@ struct ContentView: View {
                 }
                 .padding(.horizontal, 4)
 
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 240), spacing: 8)], spacing: 8) {
+                LazyVGrid(
+                    columns: [
+                        GridItem(.flexible(), spacing: 10),
+                        GridItem(.flexible(), spacing: 10)
+                    ],
+                    spacing: 10
+                ) {
                     ForEach(Array(vm.autocompleteSuggestions.enumerated()), id: \.offset) { idx, suggestion in
                         suggestionChipButton(
                             suggestion,
@@ -417,51 +673,92 @@ struct ContentView: View {
 
                     HStack(spacing: 8) {
                         if vm.activeResultCount > 0 && vm.commandInput.isEmpty && vm.inputError == nil {
-                            Text(vm.focusedResultIndex != nil ? "⏎ inspect · Tab/↑↓ row · Esc back" : "Tab / ↓ browse rows")
-                                .font(.system(size: 10, design: .monospaced))
-                                .foregroundStyle(vm.focusedResultIndex != nil ? .cyan : .secondary)
-                                .padding(.horizontal, 7)
-                                .padding(.vertical, 3)
-                                .background(
-                                    vm.focusedResultIndex != nil ? Color.cyan.opacity(0.12) : SierraTheme.surface,
-                                    in: Capsule()
+                            HStack(spacing: 6) {
+                                if vm.focusedResultIndex != nil {
+                                    RaycastKeycap(key: "⏎")
+                                    Text("Inspect")
+                                        .font(SierraFont.ui(10.5, weight: .medium))
+                                        .foregroundStyle(SierraTheme.accent)
+                                    Text("·")
+                                        .foregroundStyle(.secondary.opacity(0.6))
+                                    RaycastKeycap(key: "Esc")
+                                    Text("Back")
+                                        .font(SierraFont.ui(10.5, weight: .medium))
+                                        .foregroundStyle(.secondary)
+                                } else {
+                                    RaycastKeycap(key: "Tab")
+                                    Text("Browse \(vm.activeResultCount) rows")
+                                        .font(SierraFont.ui(10.5, weight: .medium))
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                            .padding(.horizontal, 9)
+                            .frame(height: 28)
+                            .background(.ultraThinMaterial, in: Capsule())
+                            .background(
+                                vm.focusedResultIndex != nil ? SierraTheme.selectionFill : SierraTheme.glassFill,
+                                in: Capsule()
+                            )
+                            .overlay(
+                                Capsule().strokeBorder(
+                                    vm.focusedResultIndex != nil ? SierraTheme.accent.opacity(0.45) : SierraTheme.glassBorderBottom,
+                                    lineWidth: 1
                                 )
+                            )
+                            .transition(.opacity.combined(with: .scale(scale: 0.96)))
                         }
 
-                        Button {
-                            withAnimation(.spring(response: 0.28, dampingFraction: 0.85)) {
-                                vm.expandAllBlocks()
+                        HStack(spacing: 2) {
+                            Button {
+                                withAnimation(.spring(response: 0.28, dampingFraction: 0.85)) {
+                                    vm.expandAllBlocks()
+                                }
+                            } label: {
+                                Image(systemName: "rectangle.expand.vertical")
+                                    .font(.system(size: 11.5, weight: .medium))
+                                    .frame(width: 30, height: 24)
+                                    .contentShape(Capsule())
                             }
-                        } label: {
-                            Image(systemName: "rectangle.expand.vertical")
-                                .font(.system(size: 11))
-                        }
-                        .buttonStyle(.borderless)
-                        .help("Expand All Command Blocks")
+                            .buttonStyle(TactileGlassButtonStyle(cornerRadius: 12))
+                            .help("Expand All Command Blocks")
+                            .accessibilityLabel("Expand All Command Blocks")
 
-                        Button {
-                            withAnimation(.spring(response: 0.28, dampingFraction: 0.85)) {
-                                vm.collapseAllBlocks()
+                            Button {
+                                withAnimation(.spring(response: 0.28, dampingFraction: 0.85)) {
+                                    vm.collapseAllBlocks()
+                                }
+                            } label: {
+                                Image(systemName: "rectangle.compress.vertical")
+                                    .font(.system(size: 11.5, weight: .medium))
+                                    .frame(width: 30, height: 24)
+                                    .contentShape(Capsule())
                             }
-                        } label: {
-                            Image(systemName: "rectangle.compress.vertical")
-                                .font(.system(size: 11))
-                        }
-                        .buttonStyle(.borderless)
-                        .help("Collapse All Command Blocks")
+                            .buttonStyle(TactileGlassButtonStyle(cornerRadius: 12))
+                            .help("Collapse All Command Blocks")
+                            .accessibilityLabel("Collapse All Command Blocks")
 
-                        Button {
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
-                                vm.blocks.removeAll()
+                            Button {
+                                withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                                    vm.blocks.removeAll()
+                                }
+                            } label: {
+                                Image(systemName: "trash")
+                                    .font(.system(size: 11.5, weight: .medium))
+                                    .frame(width: 30, height: 24)
+                                    .contentShape(Capsule())
                             }
-                        } label: {
-                            Image(systemName: "trash")
-                                .font(.system(size: 11))
+                            .buttonStyle(TactileGlassButtonStyle(cornerRadius: 12))
+                            .help("Clear Terminal Deck")
+                            .accessibilityLabel("Clear Terminal Deck")
                         }
-                        .buttonStyle(.borderless)
-                        .help("Clear Terminal Deck")
+                        .padding(.horizontal, 4)
+                        .frame(height: 30)
+                        .background(.ultraThinMaterial, in: Capsule())
+                        .background(SierraTheme.glassFill, in: Capsule())
+                        .overlay(Capsule().strokeBorder(SierraTheme.glassBorderBottom, lineWidth: 1))
                     }
                     .foregroundStyle(.secondary)
+                    .animation(.easeInOut(duration: 0.18), value: vm.focusedResultIndex)
                 }
             }
             .padding(16)
@@ -556,19 +853,28 @@ struct ContentView: View {
                 .controlSize(.small)
                 .disabled(vm.commandInput.trimmingCharacters(in: .whitespaces).isEmpty)
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 11)
-            .background(SierraTheme.surfaceElevated, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .padding(.horizontal, 16)
+            .padding(.vertical, 13)
+            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .background(SierraTheme.glassFill, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
             .overlay(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
                     .strokeBorder(
                         hasError
-                            ? Color.red.opacity(0.75)
-                            : (isCommandFocused ? SierraTheme.accent.opacity(0.65) : SierraTheme.topSpecular),
-                        lineWidth: hasError ? 1.5 : 1
+                            ? LinearGradient(colors: [Color.red.opacity(0.85), Color.red.opacity(0.45)], startPoint: .top, endPoint: .bottom)
+                            : (isCommandFocused
+                                ? LinearGradient(colors: [SierraTheme.accent.opacity(0.85), SierraTheme.glassBorderBottom], startPoint: .topLeading, endPoint: .bottomTrailing)
+                                : LinearGradient(colors: [SierraTheme.glassBorderTop, SierraTheme.glassBorderBottom], startPoint: .topLeading, endPoint: .bottomTrailing)),
+                        lineWidth: hasError ? 1.5 : 1.15
                     )
             )
-            .shadow(color: .black.opacity(0.14), radius: 10, y: 4)
+            .shadow(
+                color: isCommandFocused
+                    ? SierraTheme.accent.opacity(isDark ? 0.16 : 0.08)
+                    : SierraTheme.cardShadow,
+                radius: isDark ? 14 : 3,
+                y: isDark ? 5 : 1
+            )
             .modifier(ShakeEffect(animatableData: vm.inputShakeTrigger))
 
             if let err = vm.inputError {
@@ -620,23 +926,26 @@ struct ContentView: View {
                         .foregroundStyle(.cyan)
                 }
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, fullWidth ? 8 : 5)
+            .padding(.horizontal, 12)
+            .frame(height: fullWidth ? 42 : 30)
             .frame(maxWidth: fullWidth ? .infinity : nil, alignment: .leading)
+            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: fullWidth ? 12 : 15, style: .continuous))
             .background(
-                (isHighlighted ? SierraTheme.selectionFill : SierraTheme.surface),
-                in: RoundedRectangle(cornerRadius: fullWidth ? 9 : 14, style: .continuous)
+                (isHighlighted ? SierraTheme.selectionFill : SierraTheme.glassFill),
+                in: RoundedRectangle(cornerRadius: fullWidth ? 12 : 15, style: .continuous)
             )
             .overlay(
-                RoundedRectangle(cornerRadius: fullWidth ? 9 : 14, style: .continuous)
+                RoundedRectangle(cornerRadius: fullWidth ? 12 : 15, style: .continuous)
                     .strokeBorder(
-                        isHighlighted ? SierraTheme.accent.opacity(0.7) : SierraTheme.border,
+                        isHighlighted
+                            ? LinearGradient(colors: [SierraTheme.accent.opacity(0.8), SierraTheme.accent.opacity(0.35)], startPoint: .top, endPoint: .bottom)
+                            : LinearGradient(colors: [SierraTheme.glassBorderTop, SierraTheme.glassBorderBottom], startPoint: .topLeading, endPoint: .bottomTrailing),
                         lineWidth: isKeyboardFocused ? 1.25 : 1
                     )
             )
-            .contentShape(Rectangle())
+            .contentShape(RoundedRectangle(cornerRadius: fullWidth ? 12 : 15, style: .continuous))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(TactileGlassButtonStyle(cornerRadius: fullWidth ? 12 : 15))
     }
 
     private func commandBlockCard(_ block: CommandBlock) -> some View {
@@ -802,7 +1111,7 @@ struct ContentView: View {
                 .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
-        .raycastCard(cornerRadius: 14, highlighted: isNewlyOpened)
+        .raycastCard(cornerRadius: 16, highlighted: isNewlyOpened)
         .animation(.easeInOut(duration: 0.25), value: isNewlyOpened)
     }
 
@@ -828,14 +1137,14 @@ struct ContentView: View {
                 .pickerStyle(.segmented)
                 .frame(width: 220)
                 .onChange(of: vm.streamIntervalMs) { _, _ in
-                    vm.restartStreamWithSettings()
+                    vm.restartStreamWithSettings(resetHistory: false)
                 }
 
                 Toggle("All States", isOn: $vm.streamAllStates)
                     .toggleStyle(.switch)
                     .controlSize(.small)
                     .onChange(of: vm.streamAllStates) { _, _ in
-                        vm.restartStreamWithSettings()
+                        vm.restartStreamWithSettings(resetHistory: true)
                     }
 
                 Spacer()

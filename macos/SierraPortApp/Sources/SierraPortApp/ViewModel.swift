@@ -38,13 +38,18 @@ final class SierraPortViewModel: ObservableObject {
 
     // Dedicated tabs state
     @Published var auditReport: AuditReport? = nil
-    @Published var auditProfile: AuditProfileOption = .developer
+    @Published var auditProfile: AuditProfileOption = .developer {
+        didSet {
+            UserDefaults.standard.set(auditProfile.rawValue, forKey: "sierraport_audit_profile")
+        }
+    }
     @Published var auditDeepScan: Bool = false
     @Published var allowlistedKeys: Set<String> = []
     @Published var statsReport: StatsReport? = nil
     @Published var isLoadingAudit: Bool = false
     @Published var isLoadingStats: Bool = false
     @Published var liveAnalyticsEnabled: Bool = true
+    private var terminationObserver: NSObjectProtocol? = nil
 
     // Slide-over Forensic Inspector
     @Published var selectedPort: Int? = nil
@@ -61,8 +66,21 @@ final class SierraPortViewModel: ObservableObject {
     }
 
     init() {
+        if let savedProfile = UserDefaults.standard.string(forKey: "sierraport_audit_profile"),
+           let parsedProfile = AuditProfileOption(rawValue: savedProfile) {
+            self.auditProfile = parsedProfile
+        }
         if let saved = UserDefaults.standard.stringArray(forKey: "sierraport_audit_allowlist") {
             self.allowlistedKeys = Set(saved)
+        }
+        terminationObserver = NotificationCenter.default.addObserver(
+            forName: NSApplication.willTerminateNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.stopLiveStream()
+            }
         }
         startLiveStream()
         Task {
@@ -72,6 +90,9 @@ final class SierraPortViewModel: ObservableObject {
     }
 
     deinit {
+        if let obs = terminationObserver {
+            NotificationCenter.default.removeObserver(obs)
+        }
         streamProcess?.terminate()
     }
 
@@ -140,7 +161,7 @@ final class SierraPortViewModel: ObservableObject {
             (["stat", "chart", "graph", "summary", "analytic", "istatistik", "grafik", "özet", "ozet", "analiz"],
              ["stats", "list --wide --sort mem --desc"]),
             (["diff", "snap", "baseline", "drift", "fark", "karşılaştır", "karsilastir", "yedek"],
-             ["snapshot save /tmp/sierraport_base.json", "diff /tmp/sierraport_base.json"]),
+             ["snapshot save ~/sierraport_base.json", "diff ~/sierraport_base.json"]),
             (["all", "conn", "socket", "tüm", "tum", "hepsi", "bütün", "bağlantı", "baglanti"],
              ["list --all", "list --all --state ESTABLISHED", "list --all --state CLOSE_WAIT"]),
             (["tcp", "udp", "ipv4", "ipv6"],
@@ -173,8 +194,8 @@ final class SierraPortViewModel: ObservableObject {
             "stats",
             "watch -i 500",
             "free --range 8000-8999 --count 3",
-            "snapshot save /tmp/sierraport_base.json",
-            "diff /tmp/sierraport_base.json",
+            "snapshot save ~/sierraport_base.json",
+            "diff ~/sierraport_base.json",
             "help",
             "clear"
         ]
@@ -205,7 +226,7 @@ final class SierraPortViewModel: ObservableObject {
                 ("stats", "stats"),
                 ("watch", "watch -i 500"),
                 ("free", "free --range 8000-8999 --count 3"),
-                ("diff", "diff /tmp/sierraport_base.json"),
+                ("diff", "diff ~/sierraport_base.json"),
                 ("help", "help")
             ]
             let close = verbMap
@@ -737,24 +758,33 @@ final class SierraPortViewModel: ObservableObject {
 
     // MARK: - Live Stream
 
-    func startLiveStream() {
+    private var historySeq: Int = 0
+    private var streamGeneration: Int = 0
+
+    func startLiveStream(resetHistory: Bool = false) {
         stopLiveStream()
+        streamGeneration += 1
+        let gen = streamGeneration
+        if resetHistory {
+            tickHistory.removeAll()
+        }
         let extra = streamAllStates ? ["--all"] : []
         streamProcess = bridge.startStream(intervalMs: streamIntervalMs, extraArgs: extra) { [weak self] tick in
             Task { @MainActor [weak self] in
-                guard let self else { return }
+                guard let self, self.streamGeneration == gen else { return }
                 self.latestTick = tick
+                self.historySeq += 1
                 self.tickHistory.append(
                     TickHistoryPoint(
-                        tick: tick.tick,
+                        tick: self.historySeq,
                         time: tick.timestampUtc,
                         active: tick.active,
                         exposed: tick.exposed,
                         scanMs: tick.scanMs
                     )
                 )
-                if self.tickHistory.count > 36 {
-                    self.tickHistory.removeFirst(self.tickHistory.count - 36)
+                if self.tickHistory.count > 45 {
+                    self.tickHistory.removeFirst(self.tickHistory.count - 45)
                 }
                 if !tick.events.isEmpty {
                     self.recentEvents.insert(contentsOf: tick.events.reversed(), at: 0)
@@ -763,7 +793,7 @@ final class SierraPortViewModel: ObservableObject {
                     }
                 }
                 // Periodically refresh full Analytics when user is viewing Analytics tab
-                if self.selectedTab == .stats && self.liveAnalyticsEnabled && tick.tick % 3 == 0 {
+                if self.selectedTab == .stats && self.liveAnalyticsEnabled && tick.tick % 2 == 0 {
                     Task { await self.refreshStats() }
                 }
             }
@@ -772,14 +802,17 @@ final class SierraPortViewModel: ObservableObject {
     }
 
     func stopLiveStream() {
+        streamGeneration += 1
         streamProcess?.terminate()
         streamProcess = nil
         isStreaming = false
     }
 
-    func restartStreamWithSettings() {
+    func restartStreamWithSettings(resetHistory: Bool = false) {
         if isStreaming {
-            startLiveStream()
+            startLiveStream(resetHistory: resetHistory)
+        } else if resetHistory {
+            tickHistory.removeAll()
         }
     }
 
@@ -841,15 +874,22 @@ final class SierraPortViewModel: ObservableObject {
             md += "- **Host Posture:** Firewall `\(fw)` · Stealth Mode `\(st)` · Verified Binaries `\(p.verifiedBinaries)` · Unsigned `\(p.unsignedBinaries)`\n"
         }
 
+        let sanitizeMd: (String) -> String = { raw in
+            raw.replacingOccurrences(of: "\r", with: " ")
+                .replacingOccurrences(of: "\n", with: " ")
+                .replacingOccurrences(of: "|", with: "\\|")
+                .replacingOccurrences(of: "`", with: "'")
+        }
+
         md += "\n## Active Findings (\(activeFindings.count))\n\n"
         if activeFindings.isEmpty {
             md += "No active security findings.\n"
         } else {
             for f in activeFindings {
-                md += "### [\(f.severity)] `\(f.code)` — \(f.title)\n"
-                md += "- **Recommendation:** \(f.recommendation)\n"
+                md += "### [\(f.severity)] `\(sanitizeMd(f.code))` — \(sanitizeMd(f.title))\n"
+                md += "- **Recommendation:** \(sanitizeMd(f.recommendation))\n"
                 if let cmd = f.remediationCmd {
-                    md += "- **Remediation:** `\(cmd)`\n"
+                    md += "- **Remediation:** `\(sanitizeMd(cmd))`\n"
                 }
                 md += "\n"
             }
@@ -860,7 +900,7 @@ final class SierraPortViewModel: ObservableObject {
             md += "| Process | Trust | Authority | Ports | Path |\n|---|---|---|---|---|\n"
             for b in trusts {
                 let portsStr = b.ports.map(String.init).joined(separator: ", ")
-                md += "| `\(b.process)` | `\(b.trust)` | \(b.authority ?? "-") | `\(portsStr)` | `\(b.path)` |\n"
+                md += "| `\(sanitizeMd(b.process))` | `\(sanitizeMd(b.trust))` | \(sanitizeMd(b.authority ?? "-")) | `\(portsStr)` | `\(sanitizeMd(b.path))` |\n"
             }
         }
 

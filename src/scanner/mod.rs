@@ -161,8 +161,9 @@ fn inspect_banner(
     let probe: &[u8] = if port == 6379 {
         b"PING\r\n"
     } else {
-        // Safe HTTP HEAD probe
-        let req = format!("HEAD / HTTP/1.0\r\nHost: {host}\r\nUser-Agent: SierraPort\r\n\r\n");
+        // Safe HTTP HEAD probe (sanitize host against CRLF injection)
+        let safe_host: String = host.chars().filter(|c| !c.is_control()).collect();
+        let req = format!("HEAD / HTTP/1.0\r\nHost: {safe_host}\r\nUser-Agent: SierraPort\r\n\r\n");
         if stream.write_all(req.as_bytes()).is_ok()
             && let Ok(n) = stream.read(&mut buf)
             && n > 0
@@ -198,11 +199,18 @@ fn classify_banner(raw: &[u8]) -> (Option<String>, Option<String>) {
         return (Some(first_line), Some("SSH".to_string()));
     }
     if first_line.starts_with("HTTP/") {
-        // Also try to grab Server header if present
+        // Also try to grab Server header if present (strip control chars & cap length)
         let server = text
             .lines()
             .find(|l| l.to_ascii_lowercase().starts_with("server:"))
-            .map(|l| l[7..].trim().to_string());
+            .map(|l| {
+                l[7..]
+                    .trim()
+                    .chars()
+                    .filter(|c| !c.is_control())
+                    .take(64)
+                    .collect::<String>()
+            });
         let summary = match server {
             Some(srv) if !srv.is_empty() => format!("{first_line} ({srv})"),
             _ => first_line,
@@ -310,10 +318,22 @@ pub fn wait_for_port(
 
 /// Terminate a process by PID in a cross-platform way.
 pub fn terminate_pid(pid: u32, force: bool) -> Result<(), String> {
+    if pid <= 1 || pid > i32::MAX as u32 {
+        return Err(format!("Refusing to signal invalid or system PID {pid}"));
+    }
+    if pid == std::process::id() {
+        return Err(format!("Refusing to terminate SierraPort itself (PID {pid})"));
+    }
+
     #[cfg(unix)]
     {
         let signal = if force { "-9" } else { "-15" };
-        let status = Command::new("kill")
+        let kill_bin = if std::path::Path::new("/bin/kill").exists() {
+            "/bin/kill"
+        } else {
+            "kill"
+        };
+        let status = Command::new(kill_bin)
             .args([signal, &pid.to_string()])
             .status()
             .map_err(|e| format!("Failed to invoke kill: {e}"))?;
