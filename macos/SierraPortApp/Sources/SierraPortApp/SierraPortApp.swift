@@ -53,7 +53,9 @@ struct SierraPortDesktopApp: App {
                 }
             }
             .frame(minWidth: 960, minHeight: 620)
+            .ignoresSafeArea()
             .font(SierraFont.ui(13))
+            .tint(SierraTheme.accent)
             .background(WindowThemeSync(preference: themePref))
             .preferredColorScheme(themePref.colorScheme)
             .onAppear {
@@ -107,6 +109,7 @@ struct SierraPortDesktopApp: App {
 
         MenuBarExtra {
             MenuBarView(vm: vm, hotkeyManager: hotkeyManager)
+                .tint(SierraTheme.accent)
                 .preferredColorScheme(themePref.colorScheme)
         } label: {
             if let menuImg = SierraTheme.menuBarTemplateImage {

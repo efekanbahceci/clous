@@ -85,7 +85,7 @@ struct ShortcutOnboardingView: View {
 
                 // Brand Mascot Mark (white in Dark Mode, obsidian in Light Mode)
                 SierraMascotMarkView(size: 64)
-                    .shadow(color: isDark ? .black.opacity(0.35) : Color(red: 0x08/255, green: 0x24/255, blue: 0x52/255).opacity(0.18), radius: 14, y: 5)
+                    .shadow(color: isDark ? .black.opacity(0.35) : Color(red: 0xEB/255, green: 0x00/255, blue: 0x20/255).opacity(0.14), radius: 14, y: 5)
                     .scaleEffect(appeared ? 1.0 : 0.84)
                     .opacity(appeared ? 1.0 : 0.0)
                     .padding(.bottom, 16)
@@ -222,9 +222,9 @@ struct ShortcutOnboardingView: View {
             }
 
             HStack(spacing: 14) {
-                themeCard(.dark, title: "Dark", subtitle: "Obsidian #111110", previewBg: Color(red: 0x11/255, green: 0x11/255, blue: 0x10/255), previewCard: Color(red: 0x1E/255, green: 0x1E/255, blue: 0x1C/255), previewText: .white)
-                themeCard(.light, title: "Light", subtitle: "Porcelain #F6F6F4", previewBg: Color(red: 0xF6/255, green: 0xF6/255, blue: 0xF4/255), previewCard: .white, previewText: Color(red: 0x11/255, green: 0x11/255, blue: 0x10/255))
-                themeCard(.system, title: "System", subtitle: "Follows macOS", previewBg: Color(red: 0x18/255, green: 0x18/255, blue: 0x17/255), previewCard: Color(red: 0x28/255, green: 0x28/255, blue: 0x26/255), previewText: .white, isSplit: true)
+                themeCard(.dark, title: "Dark", subtitle: "Obsidian #07080A", previewBg: Color(red: 0x07/255, green: 0x08/255, blue: 0x0A/255), previewCard: Color(red: 0x18/255, green: 0x1A/255, blue: 0x20/255), previewText: .white)
+                themeCard(.light, title: "Light", subtitle: "Pure White #FFFFFF", previewBg: .white, previewCard: Color(red: 0xF3/255, green: 0xF4/255, blue: 0xF6/255), previewText: Color(red: 0x07/255, green: 0x08/255, blue: 0x0A/255))
+                themeCard(.system, title: "System", subtitle: "Follows macOS", previewBg: Color(red: 0x0C/255, green: 0x0D/255, blue: 0x10/255), previewCard: Color(red: 0x1E/255, green: 0x20/255, blue: 0x26/255), previewText: .white, isSplit: true)
             }
             .frame(maxWidth: 580)
 
@@ -259,8 +259,8 @@ struct ShortcutOnboardingView: View {
                 ZStack {
                     if isSplit {
                         HStack(spacing: 0) {
-                            Color(red: 0x11/255, green: 0x11/255, blue: 0x10/255)
-                            Color(red: 0xF6/255, green: 0xF6/255, blue: 0xF4/255)
+                            Color(red: 0x07/255, green: 0x08/255, blue: 0x0A/255)
+                            Color.white
                         }
                     } else {
                         previewBg
@@ -641,10 +641,10 @@ struct ThermalEclipseBackground: View {
 
     var body: some View {
         ZStack {
-            // Base canvas
+            // Base canvas (#07080A Dark, pure #FFFFFF Light)
             (isDark
-                ? Color(red: 0x0C/255, green: 0x0D/255, blue: 0x10/255)
-                : Color(red: 0xF5/255, green: 0xF6/255, blue: 0xF8/255))
+                ? Color(red: 0x07/255, green: 0x08/255, blue: 0x0A/255)
+                : Color.white)
 
             // GPU-accelerated Canvas — pauses motion automatically when macOS Reduce Motion is enabled
             TimelineView(.animation(paused: reduceMotion)) { timeline in
@@ -657,21 +657,21 @@ struct ThermalEclipseBackground: View {
                     if isDark {
                         drawDarkThermalSweep(ctx: &ctx, w: w, h: h, diag: diag, t: t)
                     } else {
-                        drawLightBlueThermalSweep(ctx: &ctx, w: w, h: h, diag: diag, t: t)
+                        drawLightCrimsonThermalSweep(ctx: &ctx, w: w, h: h, diag: diag, t: t)
                     }
                 }
             }
 
-            // Static top-right corner calm fade (keeps ~68% partial sweep feeling without washing out colors)
+            // Static top-right corner calm fade
             LinearGradient(
                 colors: isDark
                     ? [
-                        Color(red: 0x0C/255, green: 0x0D/255, blue: 0x10/255).opacity(0.72),
-                        Color(red: 0x0C/255, green: 0x0D/255, blue: 0x10/255).opacity(0.14),
+                        Color(red: 0x07/255, green: 0x08/255, blue: 0x0A/255).opacity(0.80),
+                        Color(red: 0x07/255, green: 0x08/255, blue: 0x0A/255).opacity(0.22),
                         Color.clear
                     ]
                     : [
-                        Color(red: 0xF5/255, green: 0xF6/255, blue: 0xF8/255).opacity(0.55),
+                        Color.white.opacity(0.75),
                         Color.clear,
                         Color.clear
                     ],
@@ -683,120 +683,120 @@ struct ThermalEclipseBackground: View {
             if let grain = ProceduralGrain.sharedImage {
                 Image(nsImage: grain)
                     .resizable(resizingMode: .tile)
-                    .opacity(isDark ? 0.048 : 0.028)
+                    .opacity(isDark ? 0.048 : 0.025)
                     .blendMode(.overlay)
                     .allowsHitTesting(false)
             }
         }
     }
 
-    // Ultra-slow-motion Dark Mode: Deep Sapphire + Electric Cyan + Thermal Magenta + Solar Amber
+    // Ultra-slow-motion Dark Mode: Deep Crimson (#EB0020 -> #A30016 -> #47000A) & Luminous Ruby (#FF2E4A -> #FF5C72)
     private func drawDarkThermalSweep(ctx: inout GraphicsContext, w: CGFloat, h: CGFloat, diag: CGFloat, t: TimeInterval) {
-        // Layer 1: Deep Ocean Sapphire outer sweep (#082452 -> #0052D4)
+        // Layer 1: Primary Crimson outer sweep (#EB0020 -> #A30016 -> #47000A)
         drawSoftEllipse(
             ctx: &ctx,
             center: CGPoint(x: w * (0.42 + 0.06 * sin(t * 0.045)), y: h * (0.74 + 0.05 * cos(t * 0.038))),
             rx: diag * 0.68, ry: diag * 0.40,
             angleDeg: -23 + 3.5 * sin(t * 0.042),
             stops: [
-                .init(color: Color(red: 0x00/255, green: 0x52/255, blue: 0xD4/255).opacity(0.58), location: 0.0),
-                .init(color: Color(red: 0x08/255, green: 0x24/255, blue: 0x52/255).opacity(0.42), location: 0.48),
-                .init(color: Color(red: 0x08/255, green: 0x24/255, blue: 0x52/255).opacity(0.14), location: 0.78),
+                .init(color: Color(red: 0xEB/255, green: 0x00/255, blue: 0x20/255).opacity(0.46), location: 0.0),
+                .init(color: Color(red: 0xA3/255, green: 0x00/255, blue: 0x16/255).opacity(0.36), location: 0.48),
+                .init(color: Color(red: 0x47/255, green: 0x00/255, blue: 0x0A/255).opacity(0.18), location: 0.78),
                 .init(color: .clear, location: 1.0)
             ]
         )
 
-        // Layer 2: Electric Cyan Horizon Ribbon
+        // Layer 2: Electric Coral-Crimson Horizon Ribbon (#FF2E4A -> #D1001C)
         drawSoftEllipse(
             ctx: &ctx,
             center: CGPoint(x: w * (0.34 + 0.07 * cos(t * 0.040 + 0.6)), y: h * (0.84 + 0.04 * sin(t * 0.046))),
             rx: diag * 0.52, ry: diag * 0.24,
             angleDeg: -17 + 4.0 * cos(t * 0.035 + 1.0),
             stops: [
-                .init(color: Color(red: 0x00/255, green: 0xB8/255, blue: 0xFF/255).opacity(0.42), location: 0.0),
-                .init(color: Color(red: 0x00/255, green: 0x70/255, blue: 0xF3/255).opacity(0.20), location: 0.52),
+                .init(color: Color(red: 0xFF/255, green: 0x2E/255, blue: 0x4A/255).opacity(0.36), location: 0.0),
+                .init(color: Color(red: 0xD1/255, green: 0x00/255, blue: 0x1C/255).opacity(0.18), location: 0.52),
                 .init(color: .clear, location: 1.0)
             ]
         )
 
-        // Layer 3: Thermal Violet-Magenta Core
+        // Layer 3: Rose-Crimson Core (#FF5C72 -> #750010)
         drawSoftEllipse(
             ctx: &ctx,
             center: CGPoint(x: w * (0.24 + 0.06 * sin(t * 0.036 + 1.8)), y: h * (0.76 + 0.05 * cos(t * 0.044 + 1.2))),
             rx: diag * 0.42, ry: diag * 0.30,
             angleDeg: -30 + 3.0 * sin(t * 0.048 + 2.1),
             stops: [
-                .init(color: Color(red: 0xD9/255, green: 0x30/255, blue: 0x8A/255).opacity(0.36), location: 0.0),
-                .init(color: Color(red: 0x5B/255, green: 0x2C/255, blue: 0xC6/255).opacity(0.22), location: 0.52),
+                .init(color: Color(red: 0xFF/255, green: 0x5C/255, blue: 0x72/255).opacity(0.28), location: 0.0),
+                .init(color: Color(red: 0x75/255, green: 0x00/255, blue: 0x10/255).opacity(0.24), location: 0.52),
                 .init(color: .clear, location: 1.0)
             ]
         )
 
-        // Layer 4: Solar Thermal Amber Rim
+        // Layer 4: Soft Velvet-Bordeaux Rim (#D1001C -> #47000A)
         drawSoftEllipse(
             ctx: &ctx,
             center: CGPoint(x: w * (0.58 + 0.07 * cos(t * 0.034 + 2.4)), y: h * (0.64 + 0.05 * sin(t * 0.042 + 1.7))),
             rx: diag * 0.42, ry: diag * 0.22,
             angleDeg: -26 + 4.0 * cos(t * 0.040 + 0.4),
             stops: [
-                .init(color: Color(red: 0xF5/255, green: 0x8A/255, blue: 0x29/255).opacity(0.34), location: 0.0),
-                .init(color: Color(red: 0xE2/255, green: 0x4E/255, blue: 0x1B/255).opacity(0.15), location: 0.50),
+                .init(color: Color(red: 0xD1/255, green: 0x00/255, blue: 0x1C/255).opacity(0.28), location: 0.0),
+                .init(color: Color(red: 0x47/255, green: 0x00/255, blue: 0x0A/255).opacity(0.16), location: 0.50),
                 .init(color: .clear, location: 1.0)
             ]
         )
     }
 
-    // Ultra-slow-motion Light Mode: Rich, clearly visible Ocean Sapphire & Luminous Cobalt Thermal Sweep
-    private func drawLightBlueThermalSweep(ctx: inout GraphicsContext, w: CGFloat, h: CGFloat, diag: CGFloat, t: TimeInterval) {
-        // Layer 1: Deep Ocean Sapphire sweep (#082452 -> #155DFC) — unmistakably visible on porcelain canvas
+    // Ultra-slow-motion Light Mode: Pure White base with luminous Crimson & Rose-Blush Thermal Sweep
+    private func drawLightCrimsonThermalSweep(ctx: inout GraphicsContext, w: CGFloat, h: CGFloat, diag: CGFloat, t: TimeInterval) {
+        // Layer 1: Primary Crimson sweep (#EB0020 -> #FF5C72 -> #FFE6E9)
         drawSoftEllipse(
             ctx: &ctx,
             center: CGPoint(x: w * (0.40 + 0.06 * sin(t * 0.045)), y: h * (0.76 + 0.05 * cos(t * 0.038))),
             rx: diag * 0.72, ry: diag * 0.44,
             angleDeg: -22 + 3.5 * sin(t * 0.042),
             stops: [
-                .init(color: Color(red: 0x08/255, green: 0x24/255, blue: 0x52/255).opacity(0.42), location: 0.0),
-                .init(color: Color(red: 0x0E/255, green: 0x52/255, blue: 0xD8/255).opacity(0.34), location: 0.42),
-                .init(color: Color(red: 0x3B/255, green: 0x82/255, blue: 0xF6/255).opacity(0.16), location: 0.74),
+                .init(color: Color(red: 0xEB/255, green: 0x00/255, blue: 0x20/255).opacity(0.28), location: 0.0),
+                .init(color: Color(red: 0xFF/255, green: 0x5C/255, blue: 0x72/255).opacity(0.24), location: 0.42),
+                .init(color: Color(red: 0xFF/255, green: 0xE6/255, blue: 0xE9/255).opacity(0.32), location: 0.74),
                 .init(color: .clear, location: 1.0)
             ]
         )
 
-        // Layer 2: Electric Sky-Cyan Luminous Band
+        // Layer 2: Soft Rose-Coral Luminous Band (#FF2E4A -> #FF8A99)
         drawSoftEllipse(
             ctx: &ctx,
             center: CGPoint(x: w * (0.32 + 0.07 * cos(t * 0.040 + 0.6)), y: h * (0.86 + 0.04 * sin(t * 0.046))),
             rx: diag * 0.56, ry: diag * 0.28,
             angleDeg: -16 + 4.0 * cos(t * 0.035 + 1.0),
             stops: [
-                .init(color: Color(red: 0x00/255, green: 0xA8/255, blue: 0xFF/255).opacity(0.46), location: 0.0),
-                .init(color: Color(red: 0x38/255, green: 0xBD/255, blue: 0xF8/255).opacity(0.24), location: 0.50),
+                .init(color: Color(red: 0xFF/255, green: 0x2E/255, blue: 0x4A/255).opacity(0.28), location: 0.0),
+                .init(color: Color(red: 0xFF/255, green: 0x8A/255, blue: 0x99/255).opacity(0.20), location: 0.50),
                 .init(color: .clear, location: 1.0)
             ]
         )
 
-        // Layer 3: Royal Cobalt-Indigo Thermal Core
+        // Layer 3: Deep Ruby Core (#D1001C -> #FFB8C1)
         drawSoftEllipse(
             ctx: &ctx,
             center: CGPoint(x: w * (0.20 + 0.06 * sin(t * 0.036 + 1.8)), y: h * (0.72 + 0.05 * cos(t * 0.044 + 1.2))),
             rx: diag * 0.44, ry: diag * 0.32,
             angleDeg: -28 + 3.0 * sin(t * 0.048 + 2.1),
             stops: [
-                .init(color: Color(red: 0x1D/255, green: 0x4E/255, blue: 0xD8/255).opacity(0.36), location: 0.0),
-                .init(color: Color(red: 0x4F/255, green: 0x46/255, blue: 0xE5/255).opacity(0.18), location: 0.52),
+                .init(color: Color(red: 0xD1/255, green: 0x00/255, blue: 0x1C/255).opacity(0.24), location: 0.0),
+                .init(color: Color(red: 0xFF/255, green: 0xB8/255, blue: 0xC1/255).opacity(0.20), location: 0.52),
                 .init(color: .clear, location: 1.0)
             ]
         )
 
-        // Layer 4: Fresh Glacier-Teal & Soft Sapphire Rim on the right arc
+        // Layer 4: Delicate Blush-Rose Rim on the right arc (#FF8A99 -> #FFE6E9)
         drawSoftEllipse(
             ctx: &ctx,
             center: CGPoint(x: w * (0.64 + 0.07 * cos(t * 0.034 + 2.4)), y: h * (0.68 + 0.05 * sin(t * 0.042 + 1.7))),
             rx: diag * 0.44, ry: diag * 0.26,
             angleDeg: -24 + 4.0 * cos(t * 0.040 + 0.4),
             stops: [
-                .init(color: Color(red: 0x06/255, green: 0xB6/255, blue: 0xD4/255).opacity(0.32), location: 0.0),
-                .init(color: Color(red: 0x25/255, green: 0x63/255, blue: 0xEB/255).opacity(0.14), location: 0.54),
+                .init(color: Color(red: 0xFF/255, green: 0x8A/255, blue: 0x99/255).opacity(0.22), location: 0.0),
+                .init(color: Color(red: 0xFF/255, green: 0xE6/255, blue: 0xE9/255).opacity(0.24), location: 0.54),
                 .init(color: .clear, location: 1.0)
             ]
         )

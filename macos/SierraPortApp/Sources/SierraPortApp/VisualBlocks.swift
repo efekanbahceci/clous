@@ -172,7 +172,7 @@ struct LiveSparklineView: View {
                     HStack(spacing: 12) {
                         if metric == .combined || metric == .active {
                             HStack(spacing: 4) {
-                                Circle().fill(.cyan).frame(width: 6, height: 6)
+                                Circle().fill(SierraTheme.accent).frame(width: 6, height: 6)
                                 Text("Active: \(pt.active)")
                             }
                         }
@@ -226,7 +226,7 @@ struct LiveSparklineView: View {
                             .interpolationMethod(.catmullRom)
                             .foregroundStyle(
                                 LinearGradient(
-                                    colors: [Color.cyan.opacity(0.24), Color.cyan.opacity(0.01)],
+                                    colors: [SierraTheme.accent.opacity(0.28), SierraTheme.accent.opacity(0.01)],
                                     startPoint: .top,
                                     endPoint: .bottom
                                 )
@@ -238,7 +238,7 @@ struct LiveSparklineView: View {
                                 series: .value("Series", "Active")
                             )
                             .interpolationMethod(.catmullRom)
-                            .foregroundStyle(.cyan)
+                            .foregroundStyle(SierraTheme.accent)
                             .lineStyle(StrokeStyle(lineWidth: 2, lineCap: .round))
 
                             LineMark(
@@ -252,7 +252,7 @@ struct LiveSparklineView: View {
                         }
                         if let last = ordered.last {
                             PointMark(x: .value("Tick", last.tick), y: .value("Active", last.active))
-                                .foregroundStyle(.cyan)
+                                .foregroundStyle(SierraTheme.accent)
                                 .symbolSize(36)
                         }
 
@@ -267,7 +267,7 @@ struct LiveSparklineView: View {
                             .interpolationMethod(.catmullRom)
                             .foregroundStyle(
                                 LinearGradient(
-                                    colors: [Color.cyan.opacity(0.28), Color.cyan.opacity(0.02)],
+                                    colors: [SierraTheme.accent.opacity(0.32), SierraTheme.accent.opacity(0.02)],
                                     startPoint: .top,
                                     endPoint: .bottom
                                 )
@@ -279,12 +279,12 @@ struct LiveSparklineView: View {
                                 series: .value("Series", "ActiveOnly")
                             )
                             .interpolationMethod(.catmullRom)
-                            .foregroundStyle(.cyan)
+                            .foregroundStyle(SierraTheme.accent)
                             .lineStyle(StrokeStyle(lineWidth: 2.2, lineCap: .round))
                         }
                         if let last = ordered.last {
                             PointMark(x: .value("Tick", last.tick), y: .value("Active", last.active))
-                                .foregroundStyle(.cyan)
+                                .foregroundStyle(SierraTheme.accent)
                                 .symbolSize(40)
                         }
 
@@ -544,7 +544,7 @@ struct PortTableView: View {
                 if sortCol == col {
                     Image(systemName: sortAsc ? "chevron.up" : "chevron.down")
                         .font(.system(size: 8, weight: .bold))
-                        .foregroundStyle(.cyan)
+                        .foregroundStyle(SierraTheme.accent)
                 }
             }
             .frame(width: width, alignment: alignment)
@@ -573,7 +573,7 @@ struct PortRowView: View {
 
             Text("\(entry.localPort)")
                 .font(.system(size: 12, weight: .semibold, design: .monospaced))
-                .foregroundStyle(.cyan)
+                .foregroundStyle(.primary)
                 .lineLimit(1)
                 .frame(width: 58, alignment: .leading)
                 .clipped()
@@ -636,14 +636,14 @@ struct PortRowView: View {
                 if isKeyboardFocused {
                     Text("⏎")
                         .font(.system(size: 11, weight: .bold, design: .monospaced))
-                        .foregroundStyle(.cyan)
+                        .foregroundStyle(SierraTheme.accentBright)
                 }
                 Button {
                     onInspect(entry.localPort)
                 } label: {
                     Image(systemName: "sparkle.magnifyingglass")
                         .font(.system(size: 12))
-                        .foregroundStyle((isSelected || isKeyboardFocused) ? .cyan : .secondary)
+                        .foregroundStyle((isSelected || isKeyboardFocused) ? SierraTheme.accentBright : .secondary)
                 }
                 .buttonStyle(.borderless)
                 .help("Deep Inspect & Probe Port \(entry.localPort)")

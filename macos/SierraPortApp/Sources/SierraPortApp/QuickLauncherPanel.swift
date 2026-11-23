@@ -72,6 +72,7 @@ final class QuickLauncherController: NSObject, NSWindowDelegate {
             }
         )
         .font(SierraFont.ui(13))
+        .tint(SierraTheme.accent)
         .preferredColorScheme(colorSchemeProvider?())
 
         let hosting = NSHostingView(rootView: rootView)

@@ -43,6 +43,14 @@ Bu doküman, **SierraPort** projesinde yapılan tüm geliştirmeleri **gün, tar
 | Cumartesi, 21 Kasım 2026 | `11:16` | *(push bekliyor)* | Tam Sistem Hata Taraması & 7 Düzeltme: Eşzamanlı Pipe Okuma, `NSLock` Akış Tamponu, Çıkışta Alt Süreç Temizliği, Güvenlik Profili Kalıcılığı, Quick Launcher Tıklama ve Clippy Sıfırlama |
 | Cumartesi, 21 Kasım 2026 | `11:40` | *(push bekliyor)* | Güvenlik Denetimi İyileştirmeleri (8 Doğrulanmış Bulgu + Sertleştirme): `codesign --verify --strict`, POSIX Tek-Tırnak `remediation_cmd`, `ZeroTrust` LAN Denetimi, `O_NOFOLLOW`/`0o600` Dosya Güvenliği, ANSI/NDJSON/JSONL/Markdown Kaçışı ve `#if DEBUG` İkili Arama |
 | Cumartesi, 21 Kasım 2026 | `11:44` | *(push bekliyor)* | Skill Klasörlerinin Tek Çatı Altında (`.agents/skills/`) Birleştirilmesi ve 10 Yinelemeli Symlink Klasörünün Temizlenmesi |
+| Cumartesi, 21 Kasım 2026 | `15:05` | *(push bekliyor)* | Kapalı Sol Menü Trafik Işıkları Cam Kapsülü Düzeltmesi, `14pt` Büyütülmüş Pencere Düğmeleri ve `22pt` Yumuşak Pencere Köşeleri |
+| Cumartesi, 21 Kasım 2026 | `15:09` | *(push bekliyor)* | Apple HIG Pencere Üst Kenar Kırpma & Çift Çerçeve Düzeltmesi (`fullSizeContentView` + Kök `.ignoresSafeArea()`) |
+| Cumartesi, 21 Kasım 2026 | `15:11` | *(push bekliyor)* | Kapalı Sol Menü Üst Çubuğunun Doğal macOS Başlık Hizasına Yukarı Çekilmesi (`top: 6pt`, `height: 30pt`) |
+| Cumartesi, 21 Kasım 2026 | `15:14` | *(push bekliyor)* | Sabit Konumlu `MacTrafficLightsView` Overlay — Sol Menü Açık/Kapalı Durumda Birebir Aynı `(x: 20, y: 18)` Piksel Hizası |
+| Cumartesi, 21 Kasım 2026 | `15:18` | *(push bekliyor)* | Kapalı Sol Menü `sidebar.left` Düğmesinin Trafik Işıklarıyla Aynı Üst Overlay Satırına (`y = 25pt` merkez) Hizalanması |
+| Cumartesi, 21 Kasım 2026 | `15:22` | *(push bekliyor)* | Terminal Deck & Sol Menü Başlığında Monokrom Maskot Logosu (`SierraMascotMarkView` — Dark: Beyaz, Light: Siyah) ve Sol Menü Metninin Kaldırılması |
+| Pazartesi, 23 Kasım 2026 | `21:36` | *(push bekliyor)* | Apple HIG Crimson Tema Paleti (`#EB0020` Ana Renk, `#1A0003` Dark Arka Plan, `#FFFFFF` Light Arka Plan + Liquid Glass, Grafikler ve Onboarding Uyumu) |
+| Pazartesi, 23 Kasım 2026 | `21:40` | *(push bekliyor)* | Nötr Karanlık Zemin (`#07080A`) ve Dengeli `#EB0020` Vurgu Optimizasyonu (Aşırı Kırmızı Tonların Kaldırılması) |
 
 ---
 
@@ -390,6 +398,80 @@ Bu doküman, **SierraPort** projesinde yapılan tüm geliştirmeleri **gün, tar
 
 - Proje kökünde `npx skills` tarafından oluşturulan ve tamamı `.agents/skills/` dizinine işaret eden 10 yinelemeli symlink klasörü (`.augment`, `.autohand`, `.bob`, `.claude`, `.commandcode`, `.continue`, `.cortex`, `.goose`, `.kimchi`, `/skills`) silinip Git indeksinden çıkarıldı.
 - Tüm 16 skill yalnızca tek kanonik klasör olan `.agents/skills/` altında korundu (Antigravity'nin skill keşif mekanizması kesintisiz çalışmaya devam eder) ve yinelemeli symlink klasörleri `.gitignore` dosyasına eklendi.
+
+---
+
+## Cumartesi, 21 Kasım 2026 — `15:05` · Commit: *(push bekliyor)*
+### Kapalı Kenar Çubuğu Trafik Işıkları Düzeltmesi, `14pt` Pencere Düğmeleri ve `22pt` Yumuşak Çerçeve
+**Etkilenen Modüller:** `macos/SierraPortApp/Sources/SierraPortApp/{Theme,SierraPortApp,ContentView}.swift`
+
+- **Kapalı Sol Menü Trafik Işıkları Hizalaması (`ContentView.swift`):** Sol menü kapatıldığında `WindowDragArea`'nın trafik ışıklarını sıkıştırması `layoutPriority(-1)` + `.fixedSize()` ile giderildi; trafik ışıkları ve kenar çubuğu açma düğmesi üst sağdaki haplarla uyumlu tek bir `34pt` yüksekliğinde yüzen Apple Glass kapsülüne alındı.
+- **Daha Büyük Pencere Düğmeleri (`Theme.swift`):** `MacTrafficLightsView` kırmızı/sarı/yeşil düğmeleri `12pt → 14pt` (tıklama alanı `18×18pt`, hover simgeleri `8pt`) olarak büyütüldü.
+- **Yumuşatılmış Pencere Köşeleri (`SierraPortApp.swift`, `Theme.swift`):** `NSThemeFrame`'e dokunmadan şeffaf pencere zemini üzerinde `22pt` sürekli (`continuous`) yuvarlatılmış çerçeve ve ince `1px` cam kenarlık eklendi.
+
+---
+
+## Cumartesi, 21 Kasım 2026 — `15:09` · Commit: *(push bekliyor)*
+### Pencere Üst Çubuk Kırpması ve Çift Çerçeve Düzeltmesi (Apple HIG)
+**Etkilenen Modüller:** `macos/SierraPortApp/Sources/SierraPortApp/{SierraPortApp,Theme,ContentView}.swift`
+
+- **Üst 28pt Boşluk & Kesilen Kontroller Düzeltildi:** Kök `ZStack` üzerindeki `.clipShape` 28pt güvenli alanın altından başladığı için üst kenardaki trafik ışıkları ve durum haplarını yarıdan kesiyor ve üstte şeffaf boşluk bırakıyordu. Kök `ZStack`'e `.ignoresSafeArea()` eklenip çakışan ikinci `.clipShape`/`.overlay` çerçevesi kaldırıldı.
+- **Native macOS Pencere Kompozisyonu (`Theme.swift`):** `window.styleMask.insert(.fullSizeContentView)` + opak tema eşleşmeli zeminle macOS'un kendi donanım hızlandırmalı yuvarlatılmış pencere çerçevesi ve gölgesi tek parça, sıfır kırpma ve maksimum GPU verimliliğiyle çalışacak hale getirildi.
+
+---
+
+## Cumartesi, 21 Kasım 2026 — `15:11` · Commit: *(push bekliyor)*
+### Kapalı Sol Menü Üst Çubuğunun Doğal Pencere Hizasına Yükseltilmesi
+**Etkilenen Modüller:** `macos/SierraPortApp/Sources/SierraPortApp/ContentView.swift`
+
+- `topFloatingToolbar` üst boşluğu `14pt → 6pt`, yatay boşluğu `16pt → 12pt` ve kapalı sol menü trafik ışıkları kapsül yüksekliği `34pt → 30pt` olarak sıkılaştırıldı; sol menü kapalıyken pencere düğmeleri doğrudan doğal macOS pencere üst kenarına hizalanır.
+
+---
+
+## Cumartesi, 21 Kasım 2026 — `15:14` · Commit: *(push bekliyor)*
+### Sol Menü Açık/Kapalı Sabit Konumlu Trafik Işıkları (`overlay(alignment: .topLeading)`)
+**Etkilenen Modüller:** `macos/SierraPortApp/Sources/SierraPortApp/ContentView.swift`
+
+- `MacTrafficLightsView` tek bir kalıcı `.overlay(alignment: .topLeading)` katmanına (`x: 20pt, y: 18pt`) sabitlendi; sol menü açılıp kapatıldığında kırmızı/sarı/yeşil pencere düğmeleri 1 piksel bile yerinden oynamadan daima birebir aynı yükseklik ve yatay hizada kalır.
+
+---
+
+## Cumartesi, 21 Kasım 2026 — `15:18` · Commit: *(push bekliyor)*
+### Kapalı Sol Menü Düğmesinin Trafik Işıklarıyla Aynı Satıra Hizalanması
+**Etkilenen Modüller:** `macos/SierraPortApp/Sources/SierraPortApp/ContentView.swift`
+
+- Sol menü kapalıyken (`!isSidebarVisible`) görünen `sidebar.left` düğmesi, `topFloatingToolbar` içinden çıkarılıp doğrudan `MacTrafficLightsView` ile aynı `.overlay(alignment: .topLeading)` içindeki sabit `26pt` yükseklikli (`top: 12pt`, dikey merkez `y = 25pt`) `HStack(alignment: .center, spacing: 12)` satırına taşındı.
+- Böylece hem trafik ışıkları sol menü açılıp kapandığında 1 piksel bile kaymıyor (`y = 18pt`), hem de sol menü açma düğmesi aşağı düşmeden trafik ışıklarının hemen yanında tam aynı yatay eksende hizalanıyor.
+- `topFloatingToolbar` sol tarafında yalnızca `118pt` tıklama geçirmeyen bir boşluk bırakılarak `WindowDragArea` sürükleme alanının overlay düğmesinin tıklamasını engellemesi önlendi.
+
+---
+
+## Cumartesi, 21 Kasım 2026 — `15:22` · Commit: *(push bekliyor)*
+### Terminal Deck ve Sol Menü Başlığında Monokrom Maskot Logosu
+**Etkilenen Modüller:** `macos/SierraPortApp/Sources/SierraPortApp/{Theme,ContentView}.swift`
+
+- `SierraMascotMarkView` bileşeni `@Environment(\.colorScheme)` ile açıkça **Dark Mod'da saf beyaz (`.white`), Light Mod'da saf siyah (`.black`)** olacak şekilde güncellendi.
+- **Terminal Deck (`emptyTerminalHeroView`):** `SierraPort` başlığının üzerindeki mavi kareli uygulama ikonu (`SierraAppIconView`) yerine yalın monokrom maskot (`SierraMascotMarkView(size: 72)`) yerleştirildi.
+- **Sol Menü Başlığı:** Sol menü üstündeki `SierraPort` / `PORT MONITOR` yazıları ve mavi kareli ikon kaldırılarak yerine yalnızca temaya duyarlı monokrom maskot (`SierraMascotMarkView(size: 32)`) bırakıldı.
+
+---
+
+## Pazartesi, 23 Kasım 2026 — `21:36` · Commit: *(push bekliyor)*
+### Apple HIG Crimson Tema Paleti (`#EB0020` / `#1A0003` Dark / `#FFFFFF` Light)
+**Etkilenen Modüller:** `macos/SierraPortApp/Sources/SierraPortApp/{Theme,SierraPortApp,QuickLauncherPanel,ShortcutOnboardingView,ContentView,VisualBlocks}.swift`
+
+- **Yeni Renk Sistemi (`Theme.swift`):** Eski mavi/safir tema yerine yüklenen Crimson renk skalası (`#FFE6E9` → `#EB0020` → `#1A0003`) uygulandı. Dark Mod ana tuvali ve pencere arka planı birebir **`#1A0003`**, Light Mod ana tuvali ve pencere arka planı saf **`#FFFFFF`**, ana marka vurgu rengi **`#EB0020`** (`accent`) ve yüksek kontrastlı metin/grafik tonu (`accentBright`: Dark `#FF5C72`, Light `#D1001C`) olarak tanımlandı (Apple HIG `color.md` & `dark-mode.md` kontrast standartlarına uygun).
+- **Liquid Glass, Ambient & Onboarding Uyumu:** `glassFill`, `glassFillElevated`, `sidebarGlassFill`, `selectionFill`, `TerminalAmbientBackdrop` ve `ThermalEclipseBackground` (GPU slow-motion gradyan) UX/UI düzenini hiç bozmadan yeni Crimson paletine uyarlandı.
+- **Sistem Kontrolleri ve Grafikler:** Kök pencere, `MenuBarView` ve `QuickLauncherPanel` üzerinde `.tint(SierraTheme.accent)` tanımlandı; `ContentView` komut çubuğu, çipler, canlı port tabloları ve `LiveSparklineView` grafikleri eski camgöbeği/mavi yerine `#EB0020` / `accentBright` vurgularına geçirildi.
+
+---
+
+## Pazartesi, 23 Kasım 2026 — `21:40` · Commit: *(push bekliyor)*
+### Nötr Karanlık Zemin (`#07080A`) ve Dengeli `#EB0020` Vurgu Optimizasyonu
+**Etkilenen Modüller:** `macos/SierraPortApp/Sources/SierraPortApp/{Theme,ShortcutOnboardingView,ContentView,VisualBlocks}.swift`
+
+- **Nötr `#07080A` Zemin ve Saf Cam Yüzeyler (`Theme.swift`):** Dark Mod ana arka planı ve pencere zemini saf nötr **`#07080A`**, kenar çubuğu `#0C0D10`, kart yüzeyleri `#111317`, tüm kenarlıklar, seçimler ve Liquid Glass katmanları kırmızı tondan arındırılmış saf nötr cam olarak güncellendi. Light Mod saf `#FFFFFF` korundu.
+- **Ölçülü `#EB0020` Kullanımı (Apple HIG):** Kırmızı ton yalnızca ana odak noktalarında (birincil `Run`/`Continue` butonları, aktif komut çubuğu odak halkası, `❯` istemi, canlı grafik çizgisi ve aktif aksiyonlar) bırakıldı; port tablosu numaraları, öneri çipi ikonları, özet kapsülleri ve `TCP/UDP` göstergeleri sakin nötr tipografiye (`.primary` / `.secondary`) çekildi; `TerminalAmbientBackdrop` ortam ışığı çok hafif bir fısıltı (`0.13` Dark / `0.38` blush Light) seviyesine indirildi.
 
 ---
 

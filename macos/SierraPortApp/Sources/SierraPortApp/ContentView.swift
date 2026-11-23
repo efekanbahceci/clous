@@ -48,10 +48,10 @@ struct ContentView: View {
                     }
 
                     VStack(spacing: 0) {
-                        // Top-Right Floating Glass Status & Action Pills (aligned with traffic lights)
+                        // Top-Right Floating Glass Status & Action Pills (aligned with fixed traffic lights at y: 18)
                         topFloatingToolbar
-                            .padding(.horizontal, 18)
-                            .padding(.top, 12)
+                            .padding(.horizontal, 16)
+                            .padding(.top, 15)
                             .padding(.bottom, 6)
 
                         ZStack(alignment: .bottom) {
@@ -96,6 +96,48 @@ struct ContentView: View {
             }
             .ignoresSafeArea(.container, edges: .top)
             .animation(.spring(response: 0.34, dampingFraction: 0.88), value: isSidebarVisible)
+        }
+        // Single persistent Traffic Lights (+ collapsed Show Sidebar button on the exact same row)
+        // pinned at fixed height 26 & top 12 so the 14pt circles ALWAYS sit at y = 18 (center y = 25)
+        // and NEVER shift by even 1 pixel when opening or closing the sidebar.
+        .overlay(alignment: .topLeading) {
+            HStack(alignment: .center, spacing: 12) {
+                MacTrafficLightsView()
+
+                if !isSidebarVisible {
+                    Button {
+                        withAnimation(.spring(response: 0.34, dampingFraction: 0.88)) {
+                            isSidebarVisible = true
+                        }
+                    } label: {
+                        Image(systemName: "sidebar.left")
+                            .font(.system(size: 13.5, weight: .medium))
+                            .foregroundStyle(.primary.opacity(0.85))
+                            .frame(width: 30, height: 26)
+                    }
+                    .buttonStyle(TactileGlassButtonStyle(cornerRadius: 13))
+                    .background(.ultraThinMaterial, in: Capsule())
+                    .background(SierraTheme.glassFill, in: Capsule())
+                    .overlay(
+                        Capsule().strokeBorder(
+                            LinearGradient(
+                                colors: [SierraTheme.glassBorderTop, SierraTheme.glassBorderBottom],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            ),
+                            lineWidth: 1
+                        )
+                    )
+                    .help("Show Sidebar (⌘\\)")
+                    .accessibilityLabel("Show Sidebar")
+                    .transition(.opacity)
+                }
+            }
+            .frame(height: 26)
+            .padding(.leading, 20)
+            .padding(.top, 12)
+            .ignoresSafeArea(.container, edges: .top)
+            .animation(.spring(response: 0.30, dampingFraction: 0.86), value: isSidebarVisible)
         }
         .onAppear {
             isCommandFocused = true
@@ -143,32 +185,17 @@ struct ContentView: View {
     private var topFloatingToolbar: some View {
         HStack(spacing: 10) {
             if !isSidebarVisible {
-                HStack(spacing: 10) {
-                    MacTrafficLightsView()
-
-                    Button {
-                        withAnimation(.spring(response: 0.34, dampingFraction: 0.88)) {
-                            isSidebarVisible = true
-                        }
-                    } label: {
-                        Image(systemName: "sidebar.left")
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundStyle(.primary.opacity(0.85))
-                            .frame(width: 32, height: 28)
-                    }
-                    .buttonStyle(TactileGlassButtonStyle(cornerRadius: 14))
-                    .background(.ultraThinMaterial, in: Capsule())
-                    .background(SierraTheme.glassFill, in: Capsule())
-                    .overlay(Capsule().strokeBorder(SierraTheme.glassBorderBottom, lineWidth: 1))
-                    .help("Show Sidebar (⌘\\)")
-                    .accessibilityLabel("Show Sidebar")
-                }
-                .transition(.opacity.combined(with: .move(edge: .leading)))
+                // Reserve width for the persistent top-left Traffic Lights + Show Sidebar overlay
+                // so WindowDragArea never intercepts clicks on the overlay controls.
+                Color.clear
+                    .frame(width: 118, height: 26)
+                    .allowsHitTesting(false)
             }
 
-            // Empty space acts as a clean window drag handle without stealing clicks from buttons
+            // Empty space acts as a clean window drag handle without compressing left/right pills
             WindowDragArea()
-                .frame(height: 30)
+                .frame(minWidth: 20, maxWidth: .infinity, minHeight: 30, maxHeight: 30)
+                .layoutPriority(-1)
 
             if let tick = vm.latestTick {
                 HStack(spacing: 10) {
@@ -333,12 +360,15 @@ struct ContentView: View {
 
     private var floatingGlassSidebar: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Gemini-style Top Row: Traffic Lights on Left + Search & Collapse Sidebar on Right
+            // Gemini-style Top Row: Reserved space for fixed Traffic Lights + Search & Collapse Sidebar on Right
             HStack(spacing: 4) {
-                MacTrafficLightsView()
+                Color.clear
+                    .frame(width: 74, height: 24)
+                    .allowsHitTesting(false)
 
                 WindowDragArea()
-                    .frame(height: 28)
+                    .frame(minWidth: 12, maxWidth: .infinity, minHeight: 28, maxHeight: 28)
+                    .layoutPriority(-1)
 
                 Button {
                     vm.selectedTab = .terminal
@@ -371,26 +401,14 @@ struct ContentView: View {
             .padding(.top, 10)
             .padding(.bottom, 10)
 
-            // Brand Header
-            HStack(spacing: 10) {
-                SierraAppIconView(size: 28)
-                VStack(alignment: .leading, spacing: 1) {
-                    HStack(spacing: 0) {
-                        Text("Sierra")
-                            .font(SierraFont.display(17, weight: .semibold))
-                        Text("Port")
-                            .font(SierraFont.display(17, weight: .light))
-                            .foregroundStyle(.secondary)
-                    }
-                    Text("PORT MONITOR")
-                        .font(SierraFont.ui(10, weight: .semibold))
-                        .tracking(0.9)
-                        .foregroundStyle(.secondary)
-                }
+            // Minimalist Monochrome Mascot Mark (White in Dark Mode, Black in Light Mode)
+            HStack {
+                SierraMascotMarkView(size: 32)
+                    .accessibilityLabel("SierraPort")
                 Spacer()
             }
-            .padding(.horizontal, 14)
-            .padding(.bottom, 14)
+            .padding(.horizontal, 16)
+            .padding(.bottom, 12)
 
             // Uniform Capsule Navigation Items (Gemini-style translucent active pill + generous 38pt hit height)
             VStack(spacing: 4) {
@@ -582,8 +600,8 @@ struct ContentView: View {
 
             // Minimalist Apple-Style Brand Header & Info
             VStack(spacing: 14) {
-                SierraAppIconView(size: 76)
-                    .shadow(color: .black.opacity(0.32), radius: 14, y: 6)
+                SierraMascotMarkView(size: 72)
+                    .shadow(color: isDark ? .black.opacity(0.28) : .clear, radius: 12, y: 5)
 
                 VStack(spacing: 4) {
                     HStack(spacing: 0) {
@@ -799,7 +817,7 @@ struct ContentView: View {
             HStack(spacing: 10) {
                 Text("❯")
                     .font(.system(size: 16, weight: .bold, design: .monospaced))
-                    .foregroundStyle(hasError ? .red : .cyan)
+                    .foregroundStyle(hasError ? .red : SierraTheme.accent)
 
                 TextField("Type a command or plain English (e.g. 5000, close 3000, exposed, security scan, free port)...", text: $vm.commandInput)
                     .textFieldStyle(.plain)
@@ -849,7 +867,7 @@ struct ContentView: View {
                     vm.submitCommand()
                 }
                 .buttonStyle(.borderedProminent)
-                .tint(hasError ? .red : .accentColor)
+                .tint(hasError ? .red : SierraTheme.accent)
                 .controlSize(.small)
                 .disabled(vm.commandInput.trimmingCharacters(in: .whitespaces).isEmpty)
             }
@@ -910,7 +928,7 @@ struct ContentView: View {
                 } else {
                     Image(systemName: isKeyboardFocused ? "return" : "play.fill")
                         .font(.system(size: isKeyboardFocused ? 9 : 8, weight: .bold))
-                        .foregroundStyle(isKeyboardFocused ? .cyan : .cyan.opacity(0.8))
+                        .foregroundStyle(isKeyboardFocused ? SierraTheme.accent : .secondary)
                 }
                 Text(suggestion)
                     .font(.system(size: 11, weight: isHighlighted ? .semibold : .regular, design: .monospaced))
@@ -923,7 +941,7 @@ struct ContentView: View {
                 if isKeyboardFocused && !isRunningThis {
                     Text("⏎")
                         .font(.system(size: 10, weight: .bold, design: .monospaced))
-                        .foregroundStyle(.cyan)
+                        .foregroundStyle(SierraTheme.accentBright)
                 }
             }
             .padding(.horizontal, 12)
@@ -955,14 +973,14 @@ struct ContentView: View {
             HStack(spacing: 8) {
                 Image(systemName: "chevron.right")
                     .font(.system(size: 10, weight: .bold))
-                    .foregroundStyle(isNewlyOpened ? .cyan : .secondary)
+                    .foregroundStyle(isNewlyOpened ? SierraTheme.accent : .secondary)
                     .rotationEffect(.degrees(block.isExpanded ? 90 : 0))
                     .animation(.spring(response: 0.25, dampingFraction: 0.8), value: block.isExpanded)
                     .frame(width: 14)
 
                 Text("❯")
                     .font(.system(size: 12, weight: .bold, design: .monospaced))
-                    .foregroundStyle(.cyan)
+                    .foregroundStyle(SierraTheme.accent)
 
                 if let origin = block.originalInput {
                     Text(origin)
@@ -984,8 +1002,8 @@ struct ContentView: View {
                     .font(.system(size: 10, weight: .semibold, design: .monospaced))
                     .padding(.horizontal, 7)
                     .padding(.vertical, 2)
-                    .foregroundStyle(.cyan)
-                    .background(.cyan.opacity(0.12), in: Capsule())
+                    .foregroundStyle(.secondary)
+                    .background(SierraTheme.glassFillElevated, in: Capsule())
                     .lineLimit(1)
 
                 if isNewlyOpened {
@@ -1162,7 +1180,7 @@ struct ContentView: View {
             if let tick = vm.latestTick {
                 HStack(spacing: 10) {
                     KpiPill(title: "Active", value: "\(tick.active)", tint: .primary, icon: "network")
-                    KpiPill(title: "TCP / UDP", value: "\(tick.tcp) / \(tick.udp)", tint: .cyan, icon: "arrow.left.arrow.right")
+                    KpiPill(title: "TCP / UDP", value: "\(tick.tcp) / \(tick.udp)", tint: .primary, icon: "arrow.left.arrow.right")
                     KpiPill(title: "Exposed", value: "\(tick.exposed)", tint: tick.exposed > 0 ? .orange : .green, icon: "globe")
                     KpiPill(title: "Opened", value: "+\(tick.openedTotal)", tint: .green, icon: "plus.circle")
                     KpiPill(title: "Closed", value: "-\(tick.closedTotal)", tint: .red, icon: "minus.circle")
@@ -1448,7 +1466,7 @@ struct MenuBarView: View {
                     HStack(spacing: 8) {
                         Text(":\(e.localPort)")
                             .font(.system(size: 12, weight: .semibold, design: .monospaced))
-                            .foregroundStyle(.cyan)
+                            .foregroundStyle(.primary)
                             .frame(width: 52, alignment: .leading)
                         Text(e.process ?? "-")
                             .font(.system(size: 12))
