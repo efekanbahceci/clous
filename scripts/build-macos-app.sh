@@ -3,6 +3,9 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 APP_NAME="SierraPort"
+APP_VERSION="${APP_VERSION:-0.2.0}"
+APP_BUILD="${APP_BUILD:-2}"
+UPDATE_REPO="${UPDATE_REPO:-efekanbahceci/SierraPort}"
 BUNDLE_DIR="$ROOT_DIR/dist/${APP_NAME}.app"
 
 echo "==> [1/3] Building Rust core binary (sierraport --release)..."
@@ -34,7 +37,7 @@ if [ -d "$ROOT_DIR/assets/fonts" ]; then
 fi
 chmod +x "$BUNDLE_DIR/Contents/MacOS/$APP_NAME" "$BUNDLE_DIR/Contents/Resources/sierraport"
 
-cat > "$BUNDLE_DIR/Contents/Info.plist" << 'EOF'
+cat > "$BUNDLE_DIR/Contents/Info.plist" << EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -42,7 +45,7 @@ cat > "$BUNDLE_DIR/Contents/Info.plist" << 'EOF'
     <key>CFBundleDevelopmentRegion</key>
     <string>en</string>
     <key>CFBundleExecutable</key>
-    <string>SierraPort</string>
+    <string>${APP_NAME}</string>
     <key>CFBundleIconFile</key>
     <string>AppIcon</string>
     <key>CFBundleIdentifier</key>
@@ -50,15 +53,17 @@ cat > "$BUNDLE_DIR/Contents/Info.plist" << 'EOF'
     <key>CFBundleInfoDictionaryVersion</key>
     <string>6.0</string>
     <key>CFBundleName</key>
-    <string>SierraPort</string>
+    <string>${APP_NAME}</string>
     <key>CFBundleDisplayName</key>
-    <string>SierraPort</string>
+    <string>${APP_NAME}</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
-    <string>0.2.0</string>
+    <string>${APP_VERSION}</string>
     <key>CFBundleVersion</key>
-    <string>2</string>
+    <string>${APP_BUILD}</string>
+    <key>SierraPortUpdateRepo</key>
+    <string>${UPDATE_REPO}</string>
     <key>LSMinimumSystemVersion</key>
     <string>14.0</string>
     <key>NSHighResolutionCapable</key>

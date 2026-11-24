@@ -1,6 +1,6 @@
 /target
 /dist
-macos/SierraPortApp/
+macos/SierraPortApp
 Cargo.lock
 **/*.rs.bk
 *.pdb

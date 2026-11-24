@@ -3,6 +3,7 @@ import SwiftUI
 struct ContentView: View {
     @ObservedObject var vm: SierraPortViewModel
     @ObservedObject var hotkeyManager: GlobalHotkeyManager
+    @ObservedObject var updateManager: UpdateManager
     @Binding var themeRaw: String
     let onEditShortcut: () -> Void
     @FocusState private var isCommandFocused: Bool
@@ -204,6 +205,8 @@ struct ContentView: View {
                 .frame(minWidth: 20, maxWidth: .infinity, minHeight: 30, maxHeight: 30)
                 .layoutPriority(-1)
 
+            restartUpdatePill
+
             if let tick = vm.latestTick {
                 HStack(spacing: 10) {
                     HStack(spacing: 5) {
@@ -290,6 +293,99 @@ struct ContentView: View {
         .buttonStyle(TactileGlassButtonStyle(cornerRadius: 13))
         .help(help)
         .accessibilityLabel(help)
+    }
+
+    @ViewBuilder
+    private var restartUpdatePill: some View {
+        switch updateManager.installState {
+        case .downloading, .verifying, .installing:
+            HStack(spacing: 7) {
+                ProgressView()
+                    .controlSize(.mini)
+                    .scaleEffect(0.75)
+                Text(updateStatusLabel)
+                    .font(SierraFont.ui(11, weight: .semibold))
+                    .foregroundStyle(.primary)
+            }
+            .padding(.horizontal, 12)
+            .frame(height: 30)
+            .background(.ultraThinMaterial, in: Capsule())
+            .background(SierraTheme.glassFill, in: Capsule())
+            .overlay(Capsule().strokeBorder(SierraTheme.accent.opacity(0.55), lineWidth: 1))
+            .transition(.opacity.combined(with: .scale(scale: 0.94)))
+
+        case .upToDate:
+            HStack(spacing: 6) {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.green)
+                Text("Up to date (v\(updateManager.currentVersion))")
+                    .font(SierraFont.ui(11, weight: .medium))
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, 12)
+            .frame(height: 30)
+            .background(.ultraThinMaterial, in: Capsule())
+            .background(SierraTheme.glassFill, in: Capsule())
+            .overlay(Capsule().strokeBorder(SierraTheme.glassBorderBottom, lineWidth: 1))
+            .transition(.opacity)
+
+        case .failed(let msg):
+            HStack(spacing: 6) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.orange)
+                Text(msg)
+                    .font(SierraFont.ui(10.5, weight: .medium))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+            .padding(.horizontal, 12)
+            .frame(height: 30)
+            .frame(maxWidth: 260)
+            .background(.ultraThinMaterial, in: Capsule())
+            .background(SierraTheme.glassFill, in: Capsule())
+            .overlay(Capsule().strokeBorder(Color.orange.opacity(0.4), lineWidth: 1))
+            .transition(.opacity)
+
+        default:
+            if let update = updateManager.availableUpdate {
+                Button {
+                    updateManager.restartAndUpdate()
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "arrow.triangle.2.circlepath")
+                            .font(.system(size: 11, weight: .bold))
+                        Text("Restart Update")
+                            .font(SierraFont.ui(11.5, weight: .semibold))
+                        Text("v\(update.version)")
+                            .font(SierraFont.mono(10, weight: .semibold))
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 1)
+                            .background(Color.white.opacity(0.22), in: Capsule())
+                    }
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 12)
+                    .frame(height: 30)
+                    .background(SierraTheme.accent, in: Capsule())
+                    .overlay(Capsule().strokeBorder(Color.white.opacity(0.22), lineWidth: 1))
+                    .shadow(color: SierraTheme.accent.opacity(0.32), radius: 8, y: 2)
+                }
+                .buttonStyle(.plain)
+                .help("Download \(update.tagName) from GitHub Releases and restart automatically")
+                .accessibilityLabel("Restart Update to version \(update.version)")
+                .transition(.opacity.combined(with: .scale(scale: 0.92)))
+            }
+        }
+    }
+
+    private var updateStatusLabel: String {
+        switch updateManager.installState {
+        case .downloading: return "Downloading update…"
+        case .verifying: return "Verifying SHA-256…"
+        case .installing: return "Restarting…"
+        default: return "Updating…"
+        }
     }
 
     // MARK: - Frosted Glass Bottom Action Bar

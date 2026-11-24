@@ -52,6 +52,7 @@ Bu doküman, **SierraPort** projesinde yapılan tüm geliştirmeleri **gün, tar
 | Pazartesi, 23 Kasım 2026 | `21:36` | *(push bekliyor)* | Apple HIG Crimson Tema Paleti (`#EB0020` Ana Renk, `#1A0003` Dark Arka Plan, `#FFFFFF` Light Arka Plan + Liquid Glass, Grafikler ve Onboarding Uyumu) |
 | Pazartesi, 23 Kasım 2026 | `21:40` | *(push bekliyor)* | Nötr Karanlık Zemin (`#07080A`) ve Dengeli `#EB0020` Vurgu Optimizasyonu (Aşırı Kırmızı Tonların Kaldırılması) |
 | Salı, 24 Kasım 2026 | `11:09` | *(push bekliyor)* | Terminal Deck Tüm CLI Komut Kartları İçin Slow-Motion Akıcı Açılma Animasyonu (`SlowMotionBlockReveal` + `timingCurve(0.22, 1, 0.36, 1)`) |
+| Salı, 24 Kasım 2026 | `11:21` | *(push bekliyor)* | Sıfır Maliyetli & Sıfır Bağımlılıklı GitHub Releases Canlı Güncelleme Sistemi (`UpdateManager.swift`, `Restart Update` Butonu, `package-release.sh` DMG/ZIP/SHA-256) |
 
 ---
 
@@ -482,6 +483,16 @@ Bu doküman, **SierraPort** projesinde yapılan tüm geliştirmeleri **gün, tar
 
 - **Yumuşak Slow-Motion Eğrisi (`blockExpandAnimation`):** `stats`, `list`, `audit`, `inspect`, `probe`, `diff`, `free` ve ham çıktı dahil Terminal Deck'teki tüm CLI komut kartlarının açılma/kapanma animasyonu sert `.spring(response: 0.28)` yerine `0.62 sn` süreli yumuşak yavaşlamalı `.timingCurve(0.22, 1.0, 0.36, 1.0)` eğrisine geçirildi (Expand All / Collapse All ve chevron ikonu dahil).
 - **İçerik Süzülme Katmanı (`SlowMotionBlockReveal`):** Kart genişlerken grafik, tablo ve metriklerin başlığın üstüne taşmadan (`.clipped()`) yumuşakça süzülmesi için `0.68 sn` süreli kademeli opaklık (`0 → 1`), dikey kayma (`-10pt → 0`) ve mikro ölçek (`0.985 → 1.0`) geçişi eklendi; macOS `Reduce Motion` ayarına tam uyumlu.
+
+---
+
+## Salı, 24 Kasım 2026 — `11:21` · Commit: *(push bekliyor)*
+### Sıfır Maliyetli GitHub Releases Canlı Güncelleme Sistemi (`Restart Update`)
+**Etkilenen Modüller:** `macos/SierraPortApp/Sources/SierraPortApp/{UpdateManager,SierraPortApp,ContentView}.swift`, `scripts/{build-macos-app,package-release}.sh`
+
+- **0 Bağımlılıklı Native Güncelleyici (`UpdateManager.swift`):** Harici kütüphane olmadan (`Foundation` + Apple `CryptoKit`) GitHub Releases API (`releases/latest`) üzerinden açılışta ve her 6 saatte bir yeni sürüm denetler; yalnızca güvenilir HTTPS GitHub adreslerinden indirir, `checksums.txt` varsa SHA-256 doğrulaması yapar, hem `.zip` (`ditto`) hem `.dmg` (`hdiutil`) paketlerini destekler ve rollback korumalı atomik değişimle uygulamayı otomatik yeniden başlatır.
+- **Otomatik `Restart Update` Butonu (`ContentView.swift` & `SierraPortApp.swift`):** GitHub'da daha yeni bir sürüm yayınlandığında üst araç çubuğunda otomatik olarak **`Restart Update · vX.Y.Z`** düğmesi belirir; ayrıca macOS `Actions` menüsüne manuel **Check for Updates…** komutu eklendi.
+- **Tek Komutla DMG/ZIP Yayın Paketleyici (`scripts/package-release.sh`):** `./scripts/package-release.sh <sürüm>` komutuyla sürüm gömülü `.app`, web sitesi için sürükle-bırak `.dmg`, uygulama içi güncelleme için `.zip` ve `checksums.txt` dosyalarını tek seferde üretir.
 
 ---
 

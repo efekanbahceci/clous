@@ -5,6 +5,7 @@ import AppKit
 struct SierraPortDesktopApp: App {
     @StateObject private var vm = SierraPortViewModel()
     @StateObject private var hotkeyManager = GlobalHotkeyManager.shared
+    @StateObject private var updateManager = UpdateManager.shared
     @AppStorage("sierraport_theme") private var themeRaw: String = AppThemePreference.dark.rawValue
     @AppStorage("sierraport_setup_wizard_done_v2") private var onboardingDone: Bool = false
     @State private var showingShortcutEditor: Bool = false
@@ -42,6 +43,7 @@ struct SierraPortDesktopApp: App {
                     ContentView(
                         vm: vm,
                         hotkeyManager: hotkeyManager,
+                        updateManager: updateManager,
                         themeRaw: $themeRaw,
                         onEditShortcut: {
                             withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) {
@@ -65,6 +67,7 @@ struct SierraPortDesktopApp: App {
                 GlobalHotkeyManager.shared.onTrigger = {
                     QuickLauncherController.shared.toggle()
                 }
+                updateManager.startPeriodicChecks()
             }
         }
         .windowStyle(.hiddenTitleBar)
@@ -102,6 +105,11 @@ struct SierraPortDesktopApp: App {
                 Button("Configure Global Shortcut…") {
                     withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) {
                         showingShortcutEditor = true
+                    }
+                }
+                Button("Check for Updates…") {
+                    Task {
+                        await updateManager.checkForUpdates(userInitiated: true)
                     }
                 }
             }
