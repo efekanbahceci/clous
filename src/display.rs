@@ -534,7 +534,7 @@ pub fn print_stats(entries: &[PortEntry], theme: &Theme, json: bool) {
         return;
     }
 
-    println!("{}", theme.bold("SierraPort — Socket Statistics"));
+    println!("{}", theme.bold("Clous — Socket Statistics"));
     println!("{}", theme.dim(&"─".repeat(58)));
     println!(
         "Total sockets: {}\n",
@@ -662,7 +662,7 @@ pub fn print_audit_report(report: &AuditReport, theme: &Theme, json: bool) {
 
     println!(
         "{} {}",
-        theme.bold("SierraPort — Security & Binary Trust Audit"),
+        theme.bold("Clous — Security & Binary Trust Audit"),
         theme.dim(&format!(
             "(profile: {}{})",
             report.profile.as_str(),
@@ -778,7 +778,7 @@ pub fn print_diff_report(report: &DiffReport, theme: &Theme, json: bool) {
         return;
     }
 
-    println!("{}", theme.bold("SierraPort — Baseline Drift Diff"));
+    println!("{}", theme.bold("Clous — Baseline Drift Diff"));
     println!("{}", theme.dim(&"─".repeat(60)));
     if !report.has_drift() {
         println!(
@@ -900,7 +900,7 @@ pub fn print_inspect_report(
     let svc = well_known_service(port).unwrap_or("Unknown");
     println!(
         "{} {} {}",
-        theme.bold("SierraPort Deep Inspect — Port"),
+        theme.bold("Clous Deep Inspect — Port"),
         theme.cyan(&port.to_string()),
         theme.dim(&format!("({svc})"))
     );

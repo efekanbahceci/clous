@@ -99,7 +99,7 @@ fn main() -> ExitCode {
             Ok(())
         }
         Command::Version => {
-            println!("sierraport {}", env!("CARGO_PKG_VERSION"));
+            println!("clous {}", env!("CARGO_PKG_VERSION"));
             Ok(())
         }
     };

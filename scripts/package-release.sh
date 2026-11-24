@@ -2,11 +2,11 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-APP_NAME="SierraPort"
+APP_NAME="Clous"
 VERSION="${1:-0.2.0}"
 VERSION="${VERSION#v}"
 BUILD_NUM="${2:-$(date +%Y%m%d%H)}"
-UPDATE_REPO="${UPDATE_REPO:-efekanbahceci/SierraPort}"
+UPDATE_REPO="${UPDATE_REPO:-efekanbahceci/clous}"
 
 DIST_DIR="$ROOT_DIR/dist"
 APP_BUNDLE="$DIST_DIR/${APP_NAME}.app"

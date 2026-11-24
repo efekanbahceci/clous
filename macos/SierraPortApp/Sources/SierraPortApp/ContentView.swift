@@ -507,7 +507,7 @@ struct ContentView: View {
             // Minimalist Monochrome Mascot Mark (White in Dark Mode, Black in Light Mode)
             HStack {
                 SierraMascotMarkView(size: 32)
-                    .accessibilityLabel("SierraPort")
+                    .accessibilityLabel("Clous")
                 Spacer()
             }
             .padding(.horizontal, 16)
@@ -707,22 +707,16 @@ struct ContentView: View {
                     .shadow(color: isDark ? .black.opacity(0.28) : .clear, radius: 12, y: 5)
 
                 VStack(spacing: 4) {
-                    HStack(spacing: 0) {
-                        Text("Sierra")
-                            .font(SierraFont.display(36, weight: .semibold))
-                            .tracking(-1.0)
-                        Text("Port")
-                            .font(SierraFont.display(36, weight: .light))
-                            .tracking(-1.0)
-                            .foregroundStyle(.secondary)
-                    }
+                    Text("Clous")
+                        .font(SierraFont.display(38, weight: .semibold))
+                        .tracking(-1.0)
                     Text("COMMAND DECK")
                         .font(SierraFont.ui(10.5, weight: .semibold))
                         .tracking(2.2)
                         .foregroundStyle(.secondary)
                 }
 
-                Text("Run any SierraPort CLI command to inspect listening ports, audit external exposure, trace process ancestry, or grab live protocol banners — rendered as clean, collapsible visual cards.")
+                Text("Run any Clous CLI command to inspect listening ports, audit external exposure, trace process ancestry, or grab live protocol banners — rendered as clean, collapsible visual cards.")
                     .font(SierraFont.ui(13))
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
@@ -1555,7 +1549,7 @@ struct MenuBarView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text("SierraPort")
+                Text("Clous")
                     .font(.system(size: 13, weight: .semibold))
                 Spacer()
                 if let tick = vm.latestTick {

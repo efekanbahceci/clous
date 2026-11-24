@@ -303,7 +303,7 @@ pub fn run_audit_with_options(entries: &[PortEntry], opts: AuditOptions) -> Audi
                         e.local_port, e.local_addr
                     ),
                     recommendation: "Bind local development servers to 127.0.0.1 unless LAN access is intentional.".to_string(),
-                    remediation_cmd: Some(format!("sierraport kill {} -y --wait", e.local_port)),
+                    remediation_cmd: Some(format!("clous kill {} -y --wait", e.local_port)),
                 });
             }
         } else if is_non_loopback
@@ -339,7 +339,7 @@ pub fn run_audit_with_options(entries: &[PortEntry], opts: AuditOptions) -> Audi
                     e.local_port
                 ),
                 recommendation: "Replace with an encrypted alternative (SFTP/SSH/LDAPS) or disable the service.".to_string(),
-                remediation_cmd: Some(format!("sierraport kill {} -y --wait", e.local_port)),
+                remediation_cmd: Some(format!("clous kill {} -y --wait", e.local_port)),
             });
         }
 
@@ -418,7 +418,7 @@ pub fn run_audit_with_options(entries: &[PortEntry], opts: AuditOptions) -> Audi
                         "Verify why '{}' is running from '{}' and terminate if unauthorized.",
                         proc_name, path
                     ),
-                    remediation_cmd: ports.first().map(|p| format!("sierraport kill {p} -f -y --wait")),
+                    remediation_cmd: ports.first().map(|p| format!("clous kill {p} -f -y --wait")),
                 });
             }
 
@@ -499,7 +499,7 @@ pub fn run_audit_with_options(entries: &[PortEntry], opts: AuditOptions) -> Audi
                                 p.port, banner
                             ),
                             recommendation: "Minimize Server header version disclosure and prefer TLS/HTTPS for exposed endpoints.".to_string(),
-                            remediation_cmd: Some(format!("sierraport inspect {} --probe", p.port)),
+                            remediation_cmd: Some(format!("clous inspect {} --probe", p.port)),
                         });
                     }
                 }
@@ -517,8 +517,8 @@ pub fn run_audit_with_options(entries: &[PortEntry], opts: AuditOptions) -> Audi
             title: format!(
                 "High CLOSE_WAIT socket count ({close_wait_count}) — possible connection leak"
             ),
-            recommendation: "Inspect processes with `sierraport list --all --state CLOSE_WAIT` and verify sockets are properly closed.".to_string(),
-            remediation_cmd: Some("sierraport list --all --state CLOSE_WAIT --sort process".to_string()),
+            recommendation: "Inspect processes with `clous list --all --state CLOSE_WAIT` and verify sockets are properly closed.".to_string(),
+            remediation_cmd: Some("clous list --all --state CLOSE_WAIT --sort process".to_string()),
         });
     }
 
@@ -533,7 +533,7 @@ pub fn run_audit_with_options(entries: &[PortEntry], opts: AuditOptions) -> Audi
                 "Elevated TIME_WAIT socket count ({time_wait_count}) — high connection churn"
             ),
             recommendation: "Consider HTTP keep-alive / connection pooling to reduce ephemeral port pressure.".to_string(),
-            remediation_cmd: Some("sierraport list --all --state TIME_WAIT".to_string()),
+            remediation_cmd: Some("clous list --all --state TIME_WAIT".to_string()),
         });
     }
 
@@ -547,8 +547,8 @@ pub fn run_audit_with_options(entries: &[PortEntry], opts: AuditOptions) -> Audi
             title: format!(
                 "{hidden_privileged} privileged listening socket(s) (<1024) have hidden PID/process metadata"
             ),
-            recommendation: "Run SierraPort with elevated privileges (sudo / Administrator) for complete visibility.".to_string(),
-            remediation_cmd: Some("sudo sierraport audit --deep".to_string()),
+            recommendation: "Run Clous with elevated privileges (sudo / Administrator) for complete visibility.".to_string(),
+            remediation_cmd: Some("sudo clous audit --deep".to_string()),
         });
     }
 

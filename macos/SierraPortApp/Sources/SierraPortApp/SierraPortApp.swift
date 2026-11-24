@@ -23,7 +23,7 @@ struct SierraPortDesktopApp: App {
     }
 
     var body: some Scene {
-        WindowGroup("SierraPort") {
+        WindowGroup("Clous") {
             ZStack {
                 if !onboardingDone || showingShortcutEditor {
                     ShortcutOnboardingView(

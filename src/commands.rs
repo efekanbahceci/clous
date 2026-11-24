@@ -199,7 +199,7 @@ pub fn run_watch(
         let _ = writeln!(
             raw_body,
             "{}  {}  {}",
-            theme.bold("SierraPort Live Watch"),
+            theme.bold("Clous Live Watch"),
             theme.dim(&format!(
                 "(refresh: {}ms | scan: {}ms | tick #{} | UTC {})",
                 interval_ms, scan_ms, tick, ts

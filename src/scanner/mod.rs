@@ -163,7 +163,7 @@ fn inspect_banner(
     } else {
         // Safe HTTP HEAD probe (sanitize host against CRLF injection)
         let safe_host: String = host.chars().filter(|c| !c.is_control()).collect();
-        let req = format!("HEAD / HTTP/1.0\r\nHost: {safe_host}\r\nUser-Agent: SierraPort\r\n\r\n");
+        let req = format!("HEAD / HTTP/1.0\r\nHost: {safe_host}\r\nUser-Agent: Clous\r\n\r\n");
         if stream.write_all(req.as_bytes()).is_ok()
             && let Ok(n) = stream.read(&mut buf)
             && n > 0
@@ -322,7 +322,7 @@ pub fn terminate_pid(pid: u32, force: bool) -> Result<(), String> {
         return Err(format!("Refusing to signal invalid or system PID {pid}"));
     }
     if pid == std::process::id() {
-        return Err(format!("Refusing to terminate SierraPort itself (PID {pid})"));
+        return Err(format!("Refusing to terminate Clous itself (PID {pid})"));
     }
 
     #[cfg(unix)]

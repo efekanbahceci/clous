@@ -53,6 +53,7 @@ Bu doküman, **SierraPort** projesinde yapılan tüm geliştirmeleri **gün, tar
 | Pazartesi, 23 Kasım 2026 | `21:40` | *(push bekliyor)* | Nötr Karanlık Zemin (`#07080A`) ve Dengeli `#EB0020` Vurgu Optimizasyonu (Aşırı Kırmızı Tonların Kaldırılması) |
 | Salı, 24 Kasım 2026 | `11:09` | *(push bekliyor)* | Terminal Deck Tüm CLI Komut Kartları İçin Slow-Motion Akıcı Açılma Animasyonu (`SlowMotionBlockReveal` + `timingCurve(0.22, 1, 0.36, 1)`) |
 | Salı, 24 Kasım 2026 | `11:21` | *(push bekliyor)* | Sıfır Maliyetli & Sıfır Bağımlılıklı GitHub Releases Canlı Güncelleme Sistemi (`UpdateManager.swift`, `Restart Update` Butonu, `package-release.sh` DMG/ZIP/SHA-256) |
+| Salı, 24 Kasım 2026 | `11:27` | *(push bekliyor)* | Tam Marka Geçişi (**Clous**) & GitHub Repo Bağlantısının `efekanbahceci/clous` Olarak Güncellenmesi (`Clous.app`, `Clous.dmg`, `Clous.zip`, CLI & UI) |
 
 ---
 
@@ -493,6 +494,16 @@ Bu doküman, **SierraPort** projesinde yapılan tüm geliştirmeleri **gün, tar
 - **0 Bağımlılıklı Native Güncelleyici (`UpdateManager.swift`):** Harici kütüphane olmadan (`Foundation` + Apple `CryptoKit`) GitHub Releases API (`releases/latest`) üzerinden açılışta ve her 6 saatte bir yeni sürüm denetler; yalnızca güvenilir HTTPS GitHub adreslerinden indirir, `checksums.txt` varsa SHA-256 doğrulaması yapar, hem `.zip` (`ditto`) hem `.dmg` (`hdiutil`) paketlerini destekler ve rollback korumalı atomik değişimle uygulamayı otomatik yeniden başlatır.
 - **Otomatik `Restart Update` Butonu (`ContentView.swift` & `SierraPortApp.swift`):** GitHub'da daha yeni bir sürüm yayınlandığında üst araç çubuğunda otomatik olarak **`Restart Update · vX.Y.Z`** düğmesi belirir; ayrıca macOS `Actions` menüsüne manuel **Check for Updates…** komutu eklendi.
 - **Tek Komutla DMG/ZIP Yayın Paketleyici (`scripts/package-release.sh`):** `./scripts/package-release.sh <sürüm>` komutuyla sürüm gömülü `.app`, web sitesi için sürükle-bırak `.dmg`, uygulama içi güncelleme için `.zip` ve `checksums.txt` dosyalarını tek seferde üretir.
+
+---
+
+## Salı, 24 Kasım 2026 — `11:27` · Commit: *(push bekliyor)*
+### Tam Marka Geçişi: Clous & `efekanbahceci/clous` GitHub Entegrasyonu
+**Etkilenen Modüller:** `scripts/{build-macos-app,package-release,test-onboarding}.sh`, `macos/SierraPortApp/Sources/SierraPortApp/{UpdateManager,SierraPortApp,ContentView,ShortcutOnboardingView,ViewModel}.swift`, `src/{display,commands,audit,cli,main,scanner/mod}.rs`
+
+- **GitHub & Canlı Güncelleme Bağlantısı:** `git remote origin` adresi `https://github.com/efekanbahceci/clous.git`, `UpdateManager` varsayılan deposu ve `Info.plist` (`ClousUpdateRepo`) `efekanbahceci/clous` olarak güncellendi.
+- **Uygulama Paketi & Dağıtım:** Paket adı `Clous.app` (`dev.clous.macos`), kurulum imajı `dist/Clous.dmg`, güncelleme arşivi `dist/Clous.zip` ve kalıcı web sitesi indirme bağlantısı `https://github.com/efekanbahceci/clous/releases/latest/download/Clous.dmg` olarak güncellendi.
+- **Tüm UI ve CLI Metinleri:** Terminal Deck ana başlığı, Menü Çubuğu, İlk Kurulum Sihirbazı, Markdown güvenlik raporu dışa aktarımı, Rust CLI başlıkları (`Clous Live Watch`, `Clous Deep Inspect`, `clous --help`) ve komut örnekleri tamamen **Clous** markasına geçirildi. `cargo test` (9/9) ve tam release paketleme hatasız doğrulandı.
 
 ---
 

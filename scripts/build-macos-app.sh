@@ -2,10 +2,10 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-APP_NAME="SierraPort"
+APP_NAME="Clous"
 APP_VERSION="${APP_VERSION:-0.2.0}"
 APP_BUILD="${APP_BUILD:-2}"
-UPDATE_REPO="${UPDATE_REPO:-efekanbahceci/SierraPort}"
+UPDATE_REPO="${UPDATE_REPO:-efekanbahceci/clous}"
 BUNDLE_DIR="$ROOT_DIR/dist/${APP_NAME}.app"
 
 echo "==> [1/3] Building Rust core binary (sierraport --release)..."
@@ -49,7 +49,7 @@ cat > "$BUNDLE_DIR/Contents/Info.plist" << EOF
     <key>CFBundleIconFile</key>
     <string>AppIcon</string>
     <key>CFBundleIdentifier</key>
-    <string>dev.sierraport.macos</string>
+    <string>dev.clous.macos</string>
     <key>CFBundleInfoDictionaryVersion</key>
     <string>6.0</string>
     <key>CFBundleName</key>
@@ -62,7 +62,7 @@ cat > "$BUNDLE_DIR/Contents/Info.plist" << EOF
     <string>${APP_VERSION}</string>
     <key>CFBundleVersion</key>
     <string>${APP_BUILD}</string>
-    <key>SierraPortUpdateRepo</key>
+    <key>ClousUpdateRepo</key>
     <string>${UPDATE_REPO}</string>
     <key>LSMinimumSystemVersion</key>
     <string>14.0</string>

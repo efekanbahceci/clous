@@ -213,7 +213,7 @@ struct ShortcutOnboardingView: View {
     private var themeStepView: some View {
         VStack(spacing: 24) {
             VStack(spacing: 6) {
-                Text("Welcome to SierraPort")
+                Text("Welcome to Clous")
                     .font(SierraFont.display(28, weight: .semibold))
                     .tracking(-0.6)
                 Text("Choose your preferred interface appearance. You can switch anytime.")
@@ -333,7 +333,7 @@ struct ShortcutOnboardingView: View {
                 Text("Default Security Posture")
                     .font(SierraFont.display(26, weight: .semibold))
                     .tracking(-0.5)
-                Text("Tailor how strictly SierraPort evaluates exposed ports, firewall state, and binary signatures.")
+                Text("Tailor how strictly Clous evaluates exposed ports, firewall state, and binary signatures.")
                     .font(SierraFont.ui(13.5))
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
@@ -422,7 +422,7 @@ struct ShortcutOnboardingView: View {
                 Text(isFirstLaunch ? "Set Your Global Hotkey" : "Global Quick Launcher Shortcut")
                     .font(SierraFont.display(26, weight: .semibold))
                     .tracking(-0.5)
-                Text("Summon SierraPort from any app on your Mac — just like Raycast or Spotlight.")
+                Text("Summon Clous from any app on your Mac — just like Raycast or Spotlight.")
                     .font(SierraFont.ui(13.5))
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)

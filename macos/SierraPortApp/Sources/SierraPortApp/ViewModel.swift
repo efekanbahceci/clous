@@ -161,7 +161,7 @@ final class SierraPortViewModel: ObservableObject {
             (["stat", "chart", "graph", "summary", "analytic", "istatistik", "grafik", "özet", "ozet", "analiz"],
              ["stats", "list --wide --sort mem --desc"]),
             (["diff", "snap", "baseline", "drift", "fark", "karşılaştır", "karsilastir", "yedek"],
-             ["snapshot save ~/sierraport_base.json", "diff ~/sierraport_base.json"]),
+             ["snapshot save ~/clous_base.json", "diff ~/clous_base.json"]),
             (["all", "conn", "socket", "tüm", "tum", "hepsi", "bütün", "bağlantı", "baglanti"],
              ["list --all", "list --all --state ESTABLISHED", "list --all --state CLOSE_WAIT"]),
             (["tcp", "udp", "ipv4", "ipv6"],
@@ -194,8 +194,8 @@ final class SierraPortViewModel: ObservableObject {
             "stats",
             "watch -i 500",
             "free --range 8000-8999 --count 3",
-            "snapshot save ~/sierraport_base.json",
-            "diff ~/sierraport_base.json",
+            "snapshot save ~/clous_base.json",
+            "diff ~/clous_base.json",
             "help",
             "clear"
         ]
@@ -226,7 +226,7 @@ final class SierraPortViewModel: ObservableObject {
                 ("stats", "stats"),
                 ("watch", "watch -i 500"),
                 ("free", "free --range 8000-8999 --count 3"),
-                ("diff", "diff ~/sierraport_base.json"),
+                ("diff", "diff ~/clous_base.json"),
                 ("help", "help")
             ]
             let close = verbMap
@@ -629,7 +629,7 @@ final class SierraPortViewModel: ObservableObject {
     /// Returns `nil` for unknown commands, typos, or Turkish phrases so the UI shakes and suggests matches.
     private func resolveStrictCommand(_ input: String) -> (command: String, wasTranslated: Bool)? {
         let stripped = input
-            .replacingOccurrences(of: "^(sierraport|sp)\\s+", with: "", options: [.regularExpression, .caseInsensitive])
+            .replacingOccurrences(of: "^(clous|sierraport|sp)\\s+", with: "", options: [.regularExpression, .caseInsensitive])
             .trimmingCharacters(in: .whitespacesAndNewlines)
 
         let tokens = tokenize(stripped)
@@ -851,8 +851,8 @@ final class SierraPortViewModel: ObservableObject {
     func exportAuditMarkdown() {
         guard let report = auditReport else { return }
         let panel = NSSavePanel()
-        panel.title = "Export SierraPort Security Audit Report"
-        panel.nameFieldStringValue = "sierraport-security-audit.md"
+        panel.title = "Export Clous Security Audit Report"
+        panel.nameFieldStringValue = "clous-security-audit.md"
         panel.allowedContentTypes = [.plainText]
 
         guard panel.runModal() == .OK, let url = panel.url else { return }
@@ -861,7 +861,7 @@ final class SierraPortViewModel: ObservableObject {
         let penalty = activeFindings.reduce(0) { $0 + $1.penalty }
         let effectiveScore = max(0, 100 - penalty)
 
-        var md = "# SierraPort Security & Binary Trust Audit Report\n\n"
+        var md = "# Clous Security & Binary Trust Audit Report\n\n"
         md += "- **Generated:** \(ISO8601DateFormatter().string(from: Date()))\n"
         md += "- **Profile:** `\(report.profile ?? auditProfile.rawValue)`\n"
         md += "- **Deep Active Probe:** `\(report.deepScan == true ? "Enabled" : "Disabled")`\n"

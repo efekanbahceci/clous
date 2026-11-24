@@ -2,8 +2,8 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-APP_BUNDLE="$ROOT_DIR/dist/SierraPort.app"
-BUNDLE_ID="dev.sierraport.macos"
+APP_BUNDLE="$ROOT_DIR/dist/Clous.app"
+BUNDLE_ID="dev.clous.macos"
 
 # Çalışan SierraPort örneğini kapat
 pkill -x SierraPort 2>/dev/null || true

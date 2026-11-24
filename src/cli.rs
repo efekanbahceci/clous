@@ -287,7 +287,7 @@ pub fn parse_args<I: IntoIterator<Item = String>>(args: I) -> Result<CliArgs, St
             }
             let ports_spec = positional
                 .first()
-                .ok_or_else(|| "Usage: sierraport check <port|range|list> [host]".to_string())?
+                .ok_or_else(|| "Usage: clous check <port|range|list> [host]".to_string())?
                 .clone();
             if let Some(h) = positional.get(1) {
                 host = h.clone();
@@ -327,7 +327,7 @@ pub fn parse_args<I: IntoIterator<Item = String>>(args: I) -> Result<CliArgs, St
                     }
                 }
             }
-            let port = port_opt.ok_or_else(|| "Usage: sierraport who <port>".to_string())?;
+            let port = port_opt.ok_or_else(|| "Usage: clous who <port>".to_string())?;
             Ok(CliArgs {
                 command: Command::Who { port },
                 global,
@@ -371,7 +371,7 @@ pub fn parse_args<I: IntoIterator<Item = String>>(args: I) -> Result<CliArgs, St
                 i += 1;
             }
             let port = port_opt
-                .ok_or_else(|| "Usage: sierraport inspect <port> [--probe]".to_string())?;
+                .ok_or_else(|| "Usage: clous inspect <port> [--probe]".to_string())?;
             Ok(CliArgs {
                 command: Command::Inspect {
                     port,
@@ -423,7 +423,7 @@ pub fn parse_args<I: IntoIterator<Item = String>>(args: I) -> Result<CliArgs, St
             let action = rest
                 .first()
                 .map(|s| s.as_str())
-                .ok_or_else(|| "Usage: sierraport snapshot <save|diff> <file>".to_string())?;
+                .ok_or_else(|| "Usage: clous snapshot <save|diff> <file>".to_string())?;
             let tail = &rest[1..];
             match action {
                 "save" => {
@@ -437,7 +437,7 @@ pub fn parse_args<I: IntoIterator<Item = String>>(args: I) -> Result<CliArgs, St
                         }
                     }
                     let path = path.ok_or_else(|| {
-                        "Usage: sierraport snapshot save <file>".to_string()
+                        "Usage: clous snapshot save <file>".to_string()
                     })?;
                     let filter = parse_filter_flags(&flag_args, &mut global, true)?;
                     Ok(CliArgs {
@@ -581,7 +581,7 @@ pub fn parse_args<I: IntoIterator<Item = String>>(args: I) -> Result<CliArgs, St
             }
             let port_s = positional
                 .first()
-                .ok_or_else(|| "Usage: sierraport wait <port> [host] [--until open|closed]".to_string())?;
+                .ok_or_else(|| "Usage: clous wait <port> [host] [--until open|closed]".to_string())?;
             let port: u16 = port_s
                 .parse()
                 .map_err(|_| format!("Invalid port number: '{port_s}'"))?;
@@ -647,7 +647,7 @@ pub fn parse_args<I: IntoIterator<Item = String>>(args: I) -> Result<CliArgs, St
                 i += 1;
             }
             let target = target.ok_or_else(|| {
-                "Usage: sierraport kill <port|range|list> | --pid <PID> | --proc <NAME> [-f] [-y] [--wait]"
+                "Usage: clous kill <port|range|list> | --pid <PID> | --proc <NAME> [-f] [-y] [--wait]"
                     .to_string()
             })?;
             Ok(CliArgs {
@@ -668,7 +668,7 @@ pub fn parse_args<I: IntoIterator<Item = String>>(args: I) -> Result<CliArgs, St
             })
         }
         other => Err(format!(
-            "Unknown command: '{other}'. Run 'sierraport --help' for usage."
+            "Unknown command: '{other}'. Run 'clous --help' for usage."
         )),
     }
 }
@@ -690,7 +690,7 @@ fn parse_diff_args(args: &[String], mut global: GlobalOptions) -> Result<CliArgs
             other => flag_args.push(other.to_string()),
         }
     }
-    let path = path.ok_or_else(|| "Usage: sierraport diff <snapshot.json> [--fail-on-drift]".to_string())?;
+    let path = path.ok_or_else(|| "Usage: clous diff <snapshot.json> [--fail-on-drift]".to_string())?;
     let filter = parse_filter_flags(&flag_args, &mut global, true)?;
     Ok(CliArgs {
         command: Command::Snapshot(SnapshotAction::Diff {
@@ -797,10 +797,10 @@ fn parse_filter_flags(
 }
 
 pub fn help_text() -> &'static str {
-    r#"SierraPort — Advanced terminal port monitoring, security audit & inspection system
+    r#"Clous — Advanced terminal port monitoring, security audit & inspection system
 
 USAGE:
-  sierraport [COMMAND] [OPTIONS]
+  clous [COMMAND] [OPTIONS]
 
 COMMANDS:
   list, ls                 List active ports with bind exposure & runtime tags
@@ -844,12 +844,12 @@ COMMAND-SPECIFIC OPTIONS:
   kill:     <PORT|RANGE> | --pid <PID> | --proc <NAME> | -f, --force | -y, --yes | --wait
 
 EXAMPLES:
-  sierraport list --wide --sort mem --desc
-  sierraport audit --strict
-  sierraport inspect 5432 --probe
-  sierraport check 1-1024 127.0.0.1 --open-only --banner
-  sierraport snapshot save baseline.json && sierraport diff baseline.json
-  sierraport free --range 8000-8999 --count 3 --plain
-  sierraport wait 3000 --until open --timeout 15000
-  sierraport watch -i 500 --log events.log --alert-new"#
+  clous list --wide --sort mem --desc
+  clous audit --strict
+  clous inspect 5432 --probe
+  clous check 1-1024 127.0.0.1 --open-only --banner
+  clous snapshot save baseline.json && clous diff baseline.json
+  clous free --range 8000-8999 --count 3 --plain
+  clous wait 3000 --until open --timeout 15000
+  clous watch -i 500 --log events.log --alert-new"#
 }
