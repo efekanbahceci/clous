@@ -57,6 +57,7 @@ Bu doküman, **SierraPort** projesinde yapılan tüm geliştirmeleri **gün, tar
 | Salı, 24 Kasım 2026 | `12:45` | *(push bekliyor)* | Alt Durum Kartında `"Rust Core Ready"` Yerine Dinamik Sürüm Göstergesi (`Clous v<CFBundleShortVersionString>`) |
 | Salı, 24 Kasım 2026 | `12:59` | *(push bekliyor)* | Yeni `#07080A → #EB0020` Degrade Masaüstü İkonu (`AppIcon.icns`), `codesign --deep` Paket Mühürleme ("Bozuk" Hatası Düzeltmesi) ve Özel Tasarımlı Retina `Clous.dmg` Kurulum Penceresi |
 | Salı, 24 Kasım 2026 | `13:04` | *(push bekliyor)* | Düz `#07080A` Zemin + `#EB0020` Maskotlu Masaüstü İkonu ve Metinsiz Kırmızı Degrade `Clous.dmg` Kurulum Ekranı |
+| Salı, 24 Kasım 2026 | `13:11` | *(push bekliyor)* | `UpdateManager` Aynı Sürüm Tekrar Güncelleme Döngüsü Koruması (`clous_installed_release_tag`) ve `v0.2.1` Paketlemesi |
 
 ---
 
@@ -534,6 +535,15 @@ Bu doküman, **SierraPort** projesinde yapılan tüm geliştirmeleri **gün, tar
 
 - **Masaüstü İkonu:** Degrade kaldırılarak düz `#07080A` siyah arka plan üzerinde birebir **`#EB0020`** marka kırmızısı Clous maskotu üretildi (`AppIcon.icns` ve `sierraport-app-icon.png`).
 - **DMG Kurulum Penceresi:** Üstteki `"Clous"` ve alt metinler tamamen kaldırıldı; yalnızca `#07080A → #47000A → #EB0020` kırmızı degrade zemin, ortalanmış cam bırakma alanları ve sade beyaz ok ile `Clous.app → Applications` (`y = 206`) düzeni paketlendi.
+
+---
+
+## Salı, 24 Kasım 2026 — `13:11` · Commit: *(push bekliyor)*
+### `UpdateManager` Aynı Sürüm Tekrar Güncelleme Döngüsü Düzeltmesi
+**Etkilenen Modüller:** `macos/SierraPortApp/Sources/SierraPortApp/UpdateManager.swift`
+
+- **Kök Neden:** `v0.2.0` ile paketlenmiş bir arşiv GitHub'da `v0.2.1` etiketiyle yayınlandığında, güncelleme sonrası yeni açılan uygulamanın `Info.plist` dosyası hâlâ `0.2.0` döndürdüğü için aynı `v0.2.1` güncellemesi yeniden teklif ediliyordu.
+- **Kalıcı Çözüm:** `UpdateManager` güncelleme tamamlanmadan hemen önce kurulan GitHub etiketini (`clous_installed_release_tag`) ve uygulama yolunu (`clous_installed_bundle_path`) `UserDefaults`'a kaydeder; yeniden açıldığında aynı etiket bir daha teklif edilmez ve `currentVersion` tutarlı görünür. Ayrıca `dist/Clous.*` paketleri doğrudan `v0.2.1` olarak yeniden oluşturuldu.
 
 ---
 
