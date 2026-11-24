@@ -627,7 +627,7 @@ struct ContentView: View {
                         .fill(vm.bridge.binaryPath != nil ? Color.green : Color.red)
                         .frame(width: 7, height: 7)
                     VStack(alignment: .leading, spacing: 1) {
-                        Text(vm.bridge.binaryPath != nil ? "Rust Core Ready" : "Binary Missing")
+                        Text(vm.bridge.binaryPath != nil ? "Clous v\(updateManager.currentVersion)" : "Binary Missing")
                             .font(SierraFont.ui(11, weight: .medium))
                         Text(vm.isStreaming ? "Live stream · \(vm.streamIntervalMs)ms" : "Stream paused")
                             .font(SierraFont.mono(10))

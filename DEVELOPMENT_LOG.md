@@ -54,6 +54,9 @@ Bu doküman, **SierraPort** projesinde yapılan tüm geliştirmeleri **gün, tar
 | Salı, 24 Kasım 2026 | `11:09` | *(push bekliyor)* | Terminal Deck Tüm CLI Komut Kartları İçin Slow-Motion Akıcı Açılma Animasyonu (`SlowMotionBlockReveal` + `timingCurve(0.22, 1, 0.36, 1)`) |
 | Salı, 24 Kasım 2026 | `11:21` | *(push bekliyor)* | Sıfır Maliyetli & Sıfır Bağımlılıklı GitHub Releases Canlı Güncelleme Sistemi (`UpdateManager.swift`, `Restart Update` Butonu, `package-release.sh` DMG/ZIP/SHA-256) |
 | Salı, 24 Kasım 2026 | `11:27` | *(push bekliyor)* | Tam Marka Geçişi (**Clous**) & GitHub Repo Bağlantısının `efekanbahceci/clous` Olarak Güncellenmesi (`Clous.app`, `Clous.dmg`, `Clous.zip`, CLI & UI) |
+| Salı, 24 Kasım 2026 | `12:45` | *(push bekliyor)* | Alt Durum Kartında `"Rust Core Ready"` Yerine Dinamik Sürüm Göstergesi (`Clous v<CFBundleShortVersionString>`) |
+| Salı, 24 Kasım 2026 | `12:59` | *(push bekliyor)* | Yeni `#07080A → #EB0020` Degrade Masaüstü İkonu (`AppIcon.icns`), `codesign --deep` Paket Mühürleme ("Bozuk" Hatası Düzeltmesi) ve Özel Tasarımlı Retina `Clous.dmg` Kurulum Penceresi |
+| Salı, 24 Kasım 2026 | `13:04` | *(push bekliyor)* | Düz `#07080A` Zemin + `#EB0020` Maskotlu Masaüstü İkonu ve Metinsiz Kırmızı Degrade `Clous.dmg` Kurulum Ekranı |
 
 ---
 
@@ -504,6 +507,33 @@ Bu doküman, **SierraPort** projesinde yapılan tüm geliştirmeleri **gün, tar
 - **GitHub & Canlı Güncelleme Bağlantısı:** `git remote origin` adresi `https://github.com/efekanbahceci/clous.git`, `UpdateManager` varsayılan deposu ve `Info.plist` (`ClousUpdateRepo`) `efekanbahceci/clous` olarak güncellendi.
 - **Uygulama Paketi & Dağıtım:** Paket adı `Clous.app` (`dev.clous.macos`), kurulum imajı `dist/Clous.dmg`, güncelleme arşivi `dist/Clous.zip` ve kalıcı web sitesi indirme bağlantısı `https://github.com/efekanbahceci/clous/releases/latest/download/Clous.dmg` olarak güncellendi.
 - **Tüm UI ve CLI Metinleri:** Terminal Deck ana başlığı, Menü Çubuğu, İlk Kurulum Sihirbazı, Markdown güvenlik raporu dışa aktarımı, Rust CLI başlıkları (`Clous Live Watch`, `Clous Deep Inspect`, `clous --help`) ve komut örnekleri tamamen **Clous** markasına geçirildi. `cargo test` (9/9) ve tam release paketleme hatasız doğrulandı.
+
+---
+
+## Salı, 24 Kasım 2026 — `12:45` · Commit: *(push bekliyor)*
+### Alt Durum Kartında Dinamik Sürüm Göstergesi
+**Etkilenen Modüller:** `macos/SierraPortApp/Sources/SierraPortApp/ContentView.swift`
+
+- Kenar çubuğu alt durum kartındaki `"Rust Core Ready"` metni, `Info.plist` üzerinden dinamik okunan **`Clous v\(updateManager.currentVersion)`** (ör. `Clous v0.2.0`) sürüm göstergesiyle değiştirildi; her yeni güncellemede sürüm numarası otomatik olarak güncellenir.
+
+---
+
+## Salı, 24 Kasım 2026 — `12:59` · Commit: *(push bekliyor)*
+### Yeni Degrade Masaüstü İkonu, `codesign` Paket Mühürleme ve Özel Tasarımlı DMG Kurulum Penceresi
+**Etkilenen Modüller:** `assets/{sierraport-app-icon.png,AppIcon.icns,dmg-background.png}`, `scripts/{build-macos-app,package-release}.sh`
+
+- **Yeni Tema İkonu (`AppIcon.icns` + `sierraport-app-icon.png`):** `#07080A` derin siyah zeminden `#47000A → #A30016 → #EB0020` kırmızı marka paletine yumuşak degrade geçişli, saf beyaz maskotlu 1024×1024 macOS squircle ikon ve 10 boyutlu Retina `.icns` paketi üretildi.
+- **"Bozuk (Damaged)" Hatası Kök Neden Düzeltmesi (`build-macos-app.sh`):** Derleme sonrası ikili dosya `Info.plist=not bound` ve `Sealed Resources=none` (mühürsüz) kaldığı için macOS tarafından bozuk işaretleniyordu. Derleme hattına `codesign --force --sign -` (gömülü Rust çekirdeği) + `codesign --force --deep --sign -` (`Clous.app`) + `codesign --verify --deep --strict` doğrulaması eklendi (`Identifier=dev.clous.macos`, `Info.plist entries=14`, `Sealed Resources version=2`).
+- **Özel Tasarımlı Retina DMG Penceresi (`package-release.sh` + `assets/dmg-background.png`):** `1320×840` (`@2x` 144 DPI) `#07080A` + `#EB0020` oklu özel kurulum arka planı, `.VolumeIcon.icns`, gizli araç çubuğu ve tam hizalı `Clous.app → Applications` sürükle-bırak yerleşimiyle profesyonel `dist/Clous.dmg` oluşturuldu.
+
+---
+
+## Salı, 24 Kasım 2026 — `13:04` · Commit: *(push bekliyor)*
+### Düz Siyah + `#EB0020` Maskot İkonu ve Metinsiz Kırmızı Degrade DMG Ekranı
+**Etkilenen Modüller:** `assets/{sierraport-app-icon.png,AppIcon.icns,dmg-background.png}`, `scripts/package-release.sh`
+
+- **Masaüstü İkonu:** Degrade kaldırılarak düz `#07080A` siyah arka plan üzerinde birebir **`#EB0020`** marka kırmızısı Clous maskotu üretildi (`AppIcon.icns` ve `sierraport-app-icon.png`).
+- **DMG Kurulum Penceresi:** Üstteki `"Clous"` ve alt metinler tamamen kaldırıldı; yalnızca `#07080A → #47000A → #EB0020` kırmızı degrade zemin, ortalanmış cam bırakma alanları ve sade beyaz ok ile `Clous.app → Applications` (`y = 206`) düzeni paketlendi.
 
 ---
 

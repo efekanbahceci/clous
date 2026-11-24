@@ -74,6 +74,12 @@ cat > "$BUNDLE_DIR/Contents/Info.plist" << EOF
 </plist>
 EOF
 
+echo "==> Signing app bundle (binding Info.plist & sealing Resources)..."
+/usr/bin/xattr -cr "$BUNDLE_DIR" 2>/dev/null || true
+/usr/bin/codesign --force --sign - "$BUNDLE_DIR/Contents/Resources/sierraport"
+/usr/bin/codesign --force --deep --sign - "$BUNDLE_DIR"
+/usr/bin/codesign --verify --deep --strict "$BUNDLE_DIR"
+
 echo ""
 echo "✓ Built standalone macOS app bundle:"
 echo "  $BUNDLE_DIR"
