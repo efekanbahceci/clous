@@ -8,7 +8,14 @@ struct ContentView: View {
     @FocusState private var isCommandFocused: Bool
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var isSidebarVisible: Bool = true
+
+    private var blockExpandAnimation: Animation {
+        reduceMotion
+            ? .easeInOut(duration: 0.14)
+            : .timingCurve(0.22, 1.0, 0.36, 1.0, duration: 0.62)
+    }
 
     private var isDark: Bool {
         colorScheme == .dark
@@ -728,7 +735,7 @@ struct ContentView: View {
 
                         HStack(spacing: 2) {
                             Button {
-                                withAnimation(.spring(response: 0.28, dampingFraction: 0.85)) {
+                                withAnimation(blockExpandAnimation) {
                                     vm.expandAllBlocks()
                                 }
                             } label: {
@@ -742,7 +749,7 @@ struct ContentView: View {
                             .accessibilityLabel("Expand All Command Blocks")
 
                             Button {
-                                withAnimation(.spring(response: 0.28, dampingFraction: 0.85)) {
+                                withAnimation(blockExpandAnimation) {
                                     vm.collapseAllBlocks()
                                 }
                             } label: {
@@ -975,7 +982,7 @@ struct ContentView: View {
                     .font(.system(size: 10, weight: .bold))
                     .foregroundStyle(isNewlyOpened ? SierraTheme.accent : .secondary)
                     .rotationEffect(.degrees(block.isExpanded ? 90 : 0))
-                    .animation(.spring(response: 0.25, dampingFraction: 0.8), value: block.isExpanded)
+                    .animation(blockExpandAnimation, value: block.isExpanded)
                     .frame(width: 14)
 
                 Text("❯")
@@ -1065,15 +1072,17 @@ struct ContentView: View {
             .padding(.vertical, 11)
             .contentShape(Rectangle())
             .onTapGesture {
-                withAnimation(.spring(response: 0.28, dampingFraction: 0.85)) {
+                withAnimation(blockExpandAnimation) {
                     vm.toggleExpand(for: block.id)
                 }
             }
 
             if block.isExpanded {
-                Divider().opacity(0.35)
+                VStack(alignment: .leading, spacing: 0) {
+                    Divider().opacity(0.35)
 
-                Group {
+                    SlowMotionBlockReveal {
+                        Group {
                     if block.showRaw {
                         ScrollView(.horizontal, showsIndicators: true) {
                             Text(block.rawOutput)
@@ -1124,12 +1133,17 @@ struct ContentView: View {
                                 .foregroundStyle(.red)
                         }
                     }
+                    }
+                    .padding(14)
                 }
-                .padding(14)
-                .transition(.opacity.combined(with: .move(edge: .top)))
+                }
+                .clipped()
+                .transition(.opacity)
             }
         }
+        .clipped()
         .raycastCard(cornerRadius: 16, highlighted: isNewlyOpened)
+        .animation(blockExpandAnimation, value: block.isExpanded)
         .animation(.easeInOut(duration: 0.25), value: isNewlyOpened)
     }
 
@@ -1510,5 +1524,29 @@ struct MenuBarView: View {
         }
         .padding(12)
         .frame(width: 300)
+    }
+}
+
+// MARK: - Slow-Motion Fluid Reveal for Terminal Deck Command Blocks
+
+private struct SlowMotionBlockReveal<Content: View>: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var revealed: Bool = false
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        content()
+            .opacity(revealed ? 1 : 0)
+            .offset(y: revealed ? 0 : -10)
+            .scaleEffect(revealed ? 1 : 0.985, anchor: .top)
+            .onAppear {
+                if reduceMotion {
+                    revealed = true
+                } else {
+                    withAnimation(.timingCurve(0.16, 1.0, 0.3, 1.0, duration: 0.68).delay(0.06)) {
+                        revealed = true
+                    }
+                }
+            }
     }
 }

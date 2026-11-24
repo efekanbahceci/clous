@@ -51,6 +51,7 @@ Bu doküman, **SierraPort** projesinde yapılan tüm geliştirmeleri **gün, tar
 | Cumartesi, 21 Kasım 2026 | `15:22` | *(push bekliyor)* | Terminal Deck & Sol Menü Başlığında Monokrom Maskot Logosu (`SierraMascotMarkView` — Dark: Beyaz, Light: Siyah) ve Sol Menü Metninin Kaldırılması |
 | Pazartesi, 23 Kasım 2026 | `21:36` | *(push bekliyor)* | Apple HIG Crimson Tema Paleti (`#EB0020` Ana Renk, `#1A0003` Dark Arka Plan, `#FFFFFF` Light Arka Plan + Liquid Glass, Grafikler ve Onboarding Uyumu) |
 | Pazartesi, 23 Kasım 2026 | `21:40` | *(push bekliyor)* | Nötr Karanlık Zemin (`#07080A`) ve Dengeli `#EB0020` Vurgu Optimizasyonu (Aşırı Kırmızı Tonların Kaldırılması) |
+| Salı, 24 Kasım 2026 | `11:09` | *(push bekliyor)* | Terminal Deck Tüm CLI Komut Kartları İçin Slow-Motion Akıcı Açılma Animasyonu (`SlowMotionBlockReveal` + `timingCurve(0.22, 1, 0.36, 1)`) |
 
 ---
 
@@ -472,6 +473,15 @@ Bu doküman, **SierraPort** projesinde yapılan tüm geliştirmeleri **gün, tar
 
 - **Nötr `#07080A` Zemin ve Saf Cam Yüzeyler (`Theme.swift`):** Dark Mod ana arka planı ve pencere zemini saf nötr **`#07080A`**, kenar çubuğu `#0C0D10`, kart yüzeyleri `#111317`, tüm kenarlıklar, seçimler ve Liquid Glass katmanları kırmızı tondan arındırılmış saf nötr cam olarak güncellendi. Light Mod saf `#FFFFFF` korundu.
 - **Ölçülü `#EB0020` Kullanımı (Apple HIG):** Kırmızı ton yalnızca ana odak noktalarında (birincil `Run`/`Continue` butonları, aktif komut çubuğu odak halkası, `❯` istemi, canlı grafik çizgisi ve aktif aksiyonlar) bırakıldı; port tablosu numaraları, öneri çipi ikonları, özet kapsülleri ve `TCP/UDP` göstergeleri sakin nötr tipografiye (`.primary` / `.secondary`) çekildi; `TerminalAmbientBackdrop` ortam ışığı çok hafif bir fısıltı (`0.13` Dark / `0.38` blush Light) seviyesine indirildi.
+
+---
+
+## Salı, 24 Kasım 2026 — `11:09` · Commit: *(push bekliyor)*
+### Terminal Deck Tüm Komut Kartları İçin Slow-Motion Açılma Animasyonu
+**Etkilenen Modüller:** `macos/SierraPortApp/Sources/SierraPortApp/ContentView.swift`
+
+- **Yumuşak Slow-Motion Eğrisi (`blockExpandAnimation`):** `stats`, `list`, `audit`, `inspect`, `probe`, `diff`, `free` ve ham çıktı dahil Terminal Deck'teki tüm CLI komut kartlarının açılma/kapanma animasyonu sert `.spring(response: 0.28)` yerine `0.62 sn` süreli yumuşak yavaşlamalı `.timingCurve(0.22, 1.0, 0.36, 1.0)` eğrisine geçirildi (Expand All / Collapse All ve chevron ikonu dahil).
+- **İçerik Süzülme Katmanı (`SlowMotionBlockReveal`):** Kart genişlerken grafik, tablo ve metriklerin başlığın üstüne taşmadan (`.clipped()`) yumuşakça süzülmesi için `0.68 sn` süreli kademeli opaklık (`0 → 1`), dikey kayma (`-10pt → 0`) ve mikro ölçek (`0.985 → 1.0`) geçişi eklendi; macOS `Reduce Motion` ayarına tam uyumlu.
 
 ---
 
