@@ -644,7 +644,7 @@ struct ContentView: View {
         }
         .frame(width: 224)
         .background {
-            let shape = RoundedRectangle(cornerRadius: 18, style: .continuous)
+            let shape = RoundedRectangle(cornerRadius: 12, style: .continuous)
             if reduceTransparency {
                 shape.fill(SierraTheme.sidebar)
             } else {
@@ -655,7 +655,7 @@ struct ContentView: View {
             }
         }
         .overlay(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .strokeBorder(
                     LinearGradient(
                         colors: [SierraTheme.glassBorderTop, SierraTheme.glassBorderBottom],

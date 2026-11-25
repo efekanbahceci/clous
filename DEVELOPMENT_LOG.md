@@ -58,6 +58,8 @@ Bu doküman, **SierraPort** projesinde yapılan tüm geliştirmeleri **gün, tar
 | Salı, 24 Kasım 2026 | `12:59` | *(push bekliyor)* | Yeni `#07080A → #EB0020` Degrade Masaüstü İkonu (`AppIcon.icns`), `codesign --deep` Paket Mühürleme ("Bozuk" Hatası Düzeltmesi) ve Özel Tasarımlı Retina `Clous.dmg` Kurulum Penceresi |
 | Salı, 24 Kasım 2026 | `13:04` | *(push bekliyor)* | Düz `#07080A` Zemin + `#EB0020` Maskotlu Masaüstü İkonu ve Metinsiz Kırmızı Degrade `Clous.dmg` Kurulum Ekranı |
 | Salı, 24 Kasım 2026 | `13:11` | *(push bekliyor)* | `UpdateManager` Aynı Sürüm Tekrar Güncelleme Döngüsü Koruması (`clous_installed_release_tag`) ve `v0.2.1` Paketlemesi |
+| Çarşamba, 25 Kasım 2026 | `15:12` | *(push bekliyor)* | Pencere Dış Köşelerinin Sol Menüyle Eş Merkezli `22pt` Continuous Apple Squircle Yumuşaklığına Uyarlanması |
+| Çarşamba, 25 Kasım 2026 | `15:14` | *(push bekliyor)* | `NSThemeFrame` & Kök `.clipShape` Pencere Kenar Bozulmasının Kaldırılması, Native macOS Pencere Kompozisyonu + `12pt` Uyumlu Sol Menü Köşesi |
 
 ---
 
@@ -544,6 +546,24 @@ Bu doküman, **SierraPort** projesinde yapılan tüm geliştirmeleri **gün, tar
 
 - **Kök Neden:** `v0.2.0` ile paketlenmiş bir arşiv GitHub'da `v0.2.1` etiketiyle yayınlandığında, güncelleme sonrası yeni açılan uygulamanın `Info.plist` dosyası hâlâ `0.2.0` döndürdüğü için aynı `v0.2.1` güncellemesi yeniden teklif ediliyordu.
 - **Kalıcı Çözüm:** `UpdateManager` güncelleme tamamlanmadan hemen önce kurulan GitHub etiketini (`clous_installed_release_tag`) ve uygulama yolunu (`clous_installed_bundle_path`) `UserDefaults`'a kaydeder; yeniden açıldığında aynı etiket bir daha teklif edilmez ve `currentVersion` tutarlı görünür. Ayrıca `dist/Clous.*` paketleri doğrudan `v0.2.1` olarak yeniden oluşturuldu.
+
+---
+
+## Çarşamba, 25 Kasım 2026 — `15:12` · Commit: *(push bekliyor)*
+### Pencere Dış Köşe Yumuşaklığının Sol Menüyle Eş Merkezli Hizalanması (`22pt`)
+**Etkilenen Modüller:** `macos/SierraPortApp/Sources/SierraPortApp/{Theme,SierraPortApp}.swift`
+
+- `WindowThemeSync` içinde `contentView` ve `themeFrame` katmanlarına `cornerRadius = 22` + `cornerCurve = .continuous` uygulanıp `SierraPortApp` kök `ZStack` üzerine `.ignoresSafeArea()` sonrası eşleşen `RoundedRectangle(cornerRadius: 22, style: .continuous)` kırpması ve ince `1pt` cam çerçeve eklendi.
+- Böylece pencerenin tüm dış köşeleri içteki `18pt` yüzen sol menüyle eş merkezli (concentric) ve aynı yumuşaklıkta görünür.
+
+---
+
+## Çarşamba, 25 Kasım 2026 — `15:14` · Commit: *(push bekliyor)*
+### Pencere Kenar Bozulması Kök Neden Düzeltmesi ve Native Kompozisyon
+**Etkilenen Modüller:** `macos/SierraPortApp/Sources/SierraPortApp/{Theme,SierraPortApp,ContentView}.swift`
+
+- **Kök Neden:** `.windowStyle(.hiddenTitleBar)` kullanan SwiftUI pencerelerinde kök `ZStack` üzerine `.clipShape` eklendiğinde kırpma 28pt güvenli alanın altından başlayarak üst şeridi kesiyor; `NSThemeFrame` katmanına `masksToBounds` + `isOpaque = false` vermek ise macOS WindowServer çerçevesini bozuyor.
+- **Düzeltme:** `NSThemeFrame` müdahalesi ve kök `.clipShape`/`.overlay` tamamen kaldırılarak donanım hızlandırmalı saf native `NSWindow` kompozisyonuna (`isOpaque = true`, `#07080A` / `#FFFFFF` zemin) dönüldü; sol yüzen menünün köşe yarıçapı da pencerenin doğal macOS köşe eğrisiyle birebir uyumlu olması için `12pt` continuous olarak hizalandı.
 
 ---
 
