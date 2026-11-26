@@ -1,21 +1,21 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 170" width="800" height="170" fill="none">
   <defs>
-    <linearGradient id="apple-light-wordmark" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" stop-color="#1D1D1F" />
-      <stop offset="100%" stop-color="#424245" />
+    <linearGradient id="clous-light-wordmark" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#07080A" />
+      <stop offset="100%" stop-color="#3A3A40" />
     </linearGradient>
   </defs>
 
   <text
     x="400"
-    y="96"
+    y="98"
     text-anchor="middle"
-    fill="url(#apple-light-wordmark)"
+    fill="url(#clous-light-wordmark)"
     font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Helvetica Neue', Inter, system-ui, sans-serif"
-    font-size="82"
+    font-size="84"
     font-weight="600"
-    letter-spacing="-3.2"
-  >Sierra<tspan font-weight="300" fill="#6E6E73">Port</tspan></text>
+    letter-spacing="-3.0"
+  >Clous<tspan fill="#EB0020">.</tspan></text>
 
   <text
     x="400"
@@ -23,8 +23,8 @@
     text-anchor="middle"
     fill="#6E6E73"
     font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', Inter, system-ui, sans-serif"
-    font-size="16"
-    font-weight="400"
-    letter-spacing="2.4"
+    font-size="15"
+    font-weight="500"
+    letter-spacing="2.8"
   >PORT MONITOR &amp; SECURITY INSPECTOR</text>
 </svg>

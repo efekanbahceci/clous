@@ -3,6 +3,19 @@ import SwiftUI
 import AppKit
 import UniformTypeIdentifiers
 
+struct PrivilegedActionRequest: Identifiable, Equatable {
+    let id = UUID()
+    let title: String
+    let commandPreview: String
+    let targetSummary: String?
+    let detail: String
+    let perform: @MainActor () -> Void
+
+    static func == (lhs: PrivilegedActionRequest, rhs: PrivilegedActionRequest) -> Bool {
+        lhs.id == rhs.id
+    }
+}
+
 @MainActor
 final class SierraPortViewModel: ObservableObject {
     let bridge = SierraPortBridge()
@@ -35,6 +48,7 @@ final class SierraPortViewModel: ObservableObject {
     @Published var recentEvents: [StreamEvent] = []
     @Published var watchSearch: String = ""
     private var streamProcess: Process? = nil
+    private var openedPortProcesses: [Int: Process] = [:]
 
     // Dedicated tabs state
     @Published var auditReport: AuditReport? = nil
@@ -61,6 +75,14 @@ final class SierraPortViewModel: ObservableObject {
     // Quick status toast
     @Published var statusMessage: String? = nil
 
+    // Privileged process-control permission gate (kill / terminate)
+    @Published var pendingPrivilegedAction: PrivilegedActionRequest? = nil
+    @Published var privilegedControlAuthorized: Bool = UserDefaults.standard.bool(forKey: "clous_privileged_control_authorized") {
+        didSet {
+            UserDefaults.standard.set(privilegedControlAuthorized, forKey: "clous_privileged_control_authorized")
+        }
+    }
+
     var binaryStatus: String {
         bridge.binaryPath ?? "Not found (run cargo build --release)"
     }
@@ -80,6 +102,7 @@ final class SierraPortViewModel: ObservableObject {
         ) { [weak self] _ in
             MainActor.assumeIsolated {
                 self?.stopLiveStream()
+                self?.stopAllOpenedPorts()
             }
         }
         startLiveStream()
@@ -470,8 +493,10 @@ final class SierraPortViewModel: ObservableObject {
         guard !cmd.isEmpty else { return }
 
         guard let resolved = resolveStrictCommand(cmd) else {
-            // Invalid command or Turkish phrase: shake input, show error, list related commands & pre-focus first suggestion!
-            inputError = "Unknown command: \"\(cmd)\" — press Tab / ↓ and Enter to run a suggestion"
+            inputError = L(
+                "No matching Clous command or permission for \"\(cmd)\" — press Tab / ↓ and Enter to run an available command",
+                "\"\(cmd)\" için eşleşen bir Clous komutu veya yetki bulunamadı — mevcut komut örneklerinden birini seçmek için Tab / ↓ ve Enter'a bas"
+            )
             relatedSuggestions = suggestRelatedCommands(for: cmd)
             selectedSuggestionIndex = nil
             withAnimation(.default) {
@@ -496,7 +521,10 @@ final class SierraPortViewModel: ObservableObject {
         if trimmedInput.isEmpty { return }
 
         guard let resolved = resolveStrictCommand(trimmedInput) else {
-            inputError = "Unknown command: \"\(trimmedInput)\" — select a related command below"
+            inputError = L(
+                "No matching Clous command or permission for \"\(trimmedInput)\" — choose an available command below",
+                "\"\(trimmedInput)\" için eşleşen bir Clous komutu veya yetki bulunamadı — aşağıdan mevcut bir komut örneği seç"
+            )
             relatedSuggestions = suggestRelatedCommands(for: trimmedInput)
             withAnimation(.default) {
                 inputShakeTrigger += 1
@@ -525,6 +553,64 @@ final class SierraPortViewModel: ObservableObject {
             return
         }
 
+        if subcmd == "history" || subcmd == "hist" {
+            let portArg = tokens.dropFirst().first.flatMap { Int($0.trimmingCharacters(in: CharacterSet(charactersIn: ":"))) }
+            let records = PortHistoryStore.shared.query(port: portArg)
+            let rawText = records.map { "\($0.timeLabel) \($0.kind) \($0.protocolName) \($0.endpoint) [\($0.scope)] \($0.process)" }.joined(separator: "\n")
+            appendBlock(cmd: cleaned, origin: displayOrigin, durationMs: 1, payload: .history(records, portArg), raw: rawText.isEmpty ? "No events recorded in last 24h" : rawText)
+            return
+        }
+
+        if subcmd == "guard" {
+            let arg = tokens.dropFirst().first?.lowercased()
+            if arg == "off" || arg == "stop" || arg == "disable" {
+                PortGuardManager.shared.isEnabled = false
+            } else if arg == "on" || arg == "start" || arg == "enable" {
+                PortGuardManager.shared.isEnabled = true
+            } else {
+                PortGuardManager.shared.isEnabled.toggle()
+            }
+            let enabled = PortGuardManager.shared.isEnabled
+            let msg = enabled
+                ? L("Clous Port Guard enabled — macOS alerts active for new exposed listeners.", "Clous Port Bekçisi aktif — yeni dışa açık portlarda macOS bildirimi gönderilecek.")
+                : L("Clous Port Guard paused.", "Clous Port Bekçisi durduruldu.")
+            showToast(msg)
+            appendBlock(cmd: cleaned, origin: displayOrigin, durationMs: 1, payload: .text(msg), raw: msg)
+            return
+        }
+
+        if subcmd == "open" || subcmd == "listen" || subcmd == "serve" {
+            let portArg = tokens.dropFirst().first(where: { !$0.hasPrefix("-") })
+                .flatMap { Int($0.trimmingCharacters(in: CharacterSet(charactersIn: ":"))) }
+            let isPublic = tokens.contains("--public") || tokens.contains("--exposed")
+            guard let port = portArg, port >= 1 && port <= 65535 else {
+                let err = L("Usage: open <port> [--public]", "Kullanım: open <port> [--public]")
+                appendBlock(cmd: cleaned, origin: displayOrigin, durationMs: 0, payload: .error(err), raw: err)
+                return
+            }
+
+            if isPublic && !privilegedControlAuthorized {
+                requestPrivilegedAction(
+                    title: L("Expose Port :\(port) on All Interfaces?", ":\(port) Portu Dışa Açık Başlatılsın mı?"),
+                    commandPreview: "clous open \(port) --public",
+                    targetSummary: "0.0.0.0:\(port)",
+                    detail: L(
+                        "Binding to 0.0.0.0 makes port :\(port) reachable from your local network. Confirm to open this externally reachable listener.",
+                        "0.0.0.0 üzerinde dinleme yapmak :\(port) portunu yerel ağdan erişilebilir kılar. Dışa açık port açmak için onay verin."
+                    )
+                ) { [weak self] in
+                    guard let self else { return }
+                    Task {
+                        await self.launchManagedPortListener(port: port, isPublic: true, cleaned: cleaned, displayOrigin: displayOrigin)
+                    }
+                }
+                return
+            }
+
+            await launchManagedPortListener(port: port, isPublic: isPublic, cleaned: cleaned, displayOrigin: displayOrigin)
+            return
+        }
+
         isExecuting = true
         defer { isExecuting = false }
 
@@ -536,7 +622,10 @@ final class SierraPortViewModel: ObservableObject {
             "inspect", "info", "deep",
             "check", "probe", "ping",
             "stats", "summary",
-            "diff", "free", "available"
+            "diff", "free", "available",
+            "project", "projects", "proj",
+            "doctor", "diag", "health",
+            "http", "curl"
         ].contains(subcmd) || (subcmd == "snapshot" && tokens.dropFirst().first == "diff")
 
         if supportsJson {
@@ -604,29 +693,83 @@ final class SierraPortViewModel: ObservableObject {
                 } else {
                     payload = .text(rawText)
                 }
+            case "project", "projects", "proj":
+                if let proj = try? decoder.decode(ProjectMapReport.self, from: data) {
+                    payload = .projects(proj)
+                } else {
+                    payload = .text(rawText)
+                }
+            case "doctor", "diag", "health":
+                if let doc = try? decoder.decode(DoctorReport.self, from: data) {
+                    payload = .doctor(doc)
+                } else {
+                    payload = .text(rawText)
+                }
+            case "http", "curl":
+                if let http = try? decoder.decode(HttpHealthReport.self, from: data) {
+                    payload = .httpHealth(http)
+                } else {
+                    payload = .text(rawText)
+                }
             default:
                 payload = .text(rawText)
             }
 
             appendBlock(cmd: cleaned, origin: displayOrigin, durationMs: jRes.durationMs, payload: payload, raw: rawText)
         } else {
-            var args = tokens
-            if subcmd == "kill" && !args.contains("-y") && !args.contains("--yes") {
-                args.append("-y")
-            }
-            if !args.contains("--no-color") && subcmd != "help" && subcmd != "version" && subcmd != "--help" && subcmd != "--version" {
-                args.append("--no-color")
+            if subcmd == "kill" && !privilegedControlAuthorized {
+                let targetDesc = tokens.dropFirst().joined(separator: " ")
+                let matchingPort = Int(tokens.dropFirst().first ?? "")
+                let liveMatch = matchingPort.flatMap { port in
+                    latestTick?.entries.first(where: { $0.localPort == port })
+                }
+                let summary: String? = liveMatch.map { entry in
+                    let proc = entry.process ?? "Unknown process"
+                    let pidText = entry.pid.map { "PID \($0)" } ?? "PID —"
+                    return "\(proc) · \(pidText) · Port :\(entry.localPort)"
+                }
+
+                requestPrivilegedAction(
+                    title: L("Permission Required to Terminate Process", "Süreci Sonlandırmak İçin İzin Gerekli"),
+                    commandPreview: "clous \(cleaned)",
+                    targetSummary: summary ?? (targetDesc.isEmpty ? nil : L("Target: \(targetDesc)", "Hedef: \(targetDesc)")),
+                    detail: L(
+                        "Terminating a running process can stop active services or cause unsaved work to be lost. Grant permission to allow Clous to run process termination commands.",
+                        "Çalışan bir süreci sonlandırmak aktif servisleri durdurabilir veya kaydedilmemiş verilerin kaybolmasına yol açabilir. Clous'un süreç sonlandırma komutlarını çalıştırması için onay verin."
+                    )
+                ) { [weak self] in
+                    guard let self else { return }
+                    Task {
+                        await self.runPrivilegedKillTokens(tokens, cleaned: cleaned, displayOrigin: displayOrigin)
+                    }
+                }
+                return
             }
 
-            let res = await bridge.run(arguments: args)
-            let output = res.stdout.isEmpty ? res.stderr : res.stdout
-            let payload: BlockPayload = res.exitCode == 0 ? .text(output) : .error(output)
-            appendBlock(cmd: cleaned, origin: displayOrigin, durationMs: res.durationMs, payload: payload, raw: output)
+            await runPrivilegedKillTokens(tokens, cleaned: cleaned, displayOrigin: displayOrigin)
         }
     }
 
-    /// Accepts valid English CLI commands and clean English shorthands only.
-    /// Returns `nil` for unknown commands, typos, or Turkish phrases so the UI shakes and suggests matches.
+    private func runPrivilegedKillTokens(_ tokens: [String], cleaned: String, displayOrigin: String?) async {
+        let subcmd = tokens.first?.lowercased() ?? ""
+        var args = tokens
+        if subcmd == "kill" && !args.contains("-y") && !args.contains("--yes") {
+            args.append("-y")
+        }
+        if !args.contains("--no-color") && subcmd != "help" && subcmd != "version" && subcmd != "--help" && subcmd != "--version" {
+            args.append("--no-color")
+        }
+
+        let res = await bridge.run(arguments: args)
+        let output = res.stdout.isEmpty ? res.stderr : res.stdout
+        let payload: BlockPayload = res.exitCode == 0 ? .text(output) : .error(output)
+        appendBlock(cmd: cleaned, origin: displayOrigin, durationMs: res.durationMs, payload: payload, raw: output)
+    }
+
+    /// Bilingual Natural-Language & CLI Intent Resolver (English + Turkish sentences -> Clous CLI).
+    /// Understands both English and Turkish plain sentences regardless of active UI language,
+    /// extracts ports/ranges/counts/protocols/profiles/states, and refuses unsupported or unauthorized
+    /// system actions cleanly so the UI lists available English CLI command examples.
     private func resolveStrictCommand(_ input: String) -> (command: String, wasTranslated: Bool)? {
         let stripped = input
             .replacingOccurrences(of: "^(clous|sierraport|sp)\\s+", with: "", options: [.regularExpression, .caseInsensitive])
@@ -644,6 +787,10 @@ final class SierraPortViewModel: ObservableObject {
             "kill", "stats", "summary",
             "snapshot", "snap", "diff",
             "free", "available", "wait",
+            "project", "projects", "proj",
+            "doctor", "diag", "health",
+            "http", "curl", "history", "hist", "guard", "forward", "proxy", "fwd",
+            "open", "listen", "serve",
             "help", "version", "--help", "-h", "--version", "-v",
             "clear", "cls"
         ]
@@ -651,37 +798,218 @@ final class SierraPortViewModel: ObservableObject {
             return (stripped, false)
         }
 
-        let lower = stripped.lowercased()
+        let lower = Self.normalizeIntentText(stripped)
 
-        // Bare port number (e.g. "5000" or ":3000" or "port 5432")
-        if tokens.count == 1, let p = Int(first.trimmingCharacters(in: CharacterSet(charactersIn: ":"))), p >= 1 && p <= 65535 {
-            return ("inspect \(p) --probe", true)
-        }
-        if tokens.count == 2 && first == "port", let p = Int(tokens[1]), p >= 1 && p <= 65535 {
-            return ("inspect \(p) --probe", true)
-        }
-
-        // Clean English shorthands: "close 3000", "stop 3000", "terminate 3000"
-        if tokens.count == 2 && ["close", "stop", "terminate"].contains(first),
-           let p = Int(tokens[1]), p >= 1 && p <= 65535 {
-            return ("kill \(p) -y --wait", true)
+        // 1. Reject out-of-scope / unauthorized OS actions immediately so available Clous commands are suggested
+        let unsupportedPhrases = [
+            "shutdown", "reboot", "restart computer", "restart mac", "format disk", "delete file",
+            "rm -rf", "wifi password", "block ip", "firewall rule", "install ", "uninstall ", "sudo ",
+            "bilgisayari kapat", "bilgisayari yeniden baslat", "sistemi kapat", "dosya sil",
+            "wifi sifresi", "sifre goster", "ag sifresi", "ip engelle", "kural ekle", "program yukle"
+        ]
+        if unsupportedPhrases.contains(where: { lower.contains($0) }) {
+            return nil
         }
 
-        // Single-word English shorthands
-        switch lower {
-        case "exposed": return ("list --exposed", true)
-        case "memory", "ram": return ("list --wide --sort mem --desc", true)
-        case "tcp": return ("list --tcp", true)
-        case "udp": return ("list --udp", true)
-        case "all", "all connections": return ("list --all", true)
-        case "live": return ("watch", true)
-        case "analytics": return ("stats", true)
-        case "free port", "free ports": return ("free --range 8000-8999 --count 3", true)
-        case "security scan", "deep audit": return ("audit --deep", true)
-        case "strict audit": return ("audit --profile strict --deep", true)
-        case "zero trust", "zero-trust": return ("audit --profile zero-trust --deep", true)
-        default: return nil
+        // Helper for phrase matching
+        func hasAny(_ phrases: [String]) -> Bool {
+            phrases.contains { lower.contains($0) }
         }
+
+        // Extract valid port numbers from text (handles "3000", ":3000", "3000'i", "3000.", etc.)
+        let extractedPorts: [Int] = tokens.compactMap { raw in
+            let digits = raw
+                .trimmingCharacters(in: CharacterSet(charactersIn: ":,.;?!()[]\"'"))
+                .split(separator: "'").first.map(String.init) ?? ""
+            guard let n = Int(digits), n >= 1 && n <= 65535 else { return nil }
+            return n
+        }
+
+        // Extract explicit port range (e.g. "8000-8999" or "8000 ile 8999" or "between 8000 and 8999")
+        let extractedRange: String? = {
+            if let rangeTok = tokens.first(where: { tok in
+                let parts = tok.split(separator: "-")
+                guard parts.count == 2, let a = Int(parts[0]), let b = Int(parts[1]) else { return false }
+                return a >= 1 && b <= 65535 && a < b
+            }) {
+                return rangeTok
+            }
+            if extractedPorts.count >= 2 && (lower.contains("ile") || lower.contains("arasi") || lower.contains("between") || lower.contains("to")) {
+                let lo = min(extractedPorts[0], extractedPorts[1])
+                let hi = max(extractedPorts[0], extractedPorts[1])
+                if hi - lo >= 2 && lo >= 1000 {
+                    return "\(lo)-\(hi)"
+                }
+            }
+            return nil
+        }()
+
+        // Optional flags detected from natural language
+        let protoFlag: String = {
+            if lower.contains("tcp") && !lower.contains("udp") { return " --tcp" }
+            if lower.contains("udp") && !lower.contains("tcp") { return " --udp" }
+            return ""
+        }()
+        let ipFlag: String = {
+            if lower.contains("ipv4") { return " -4" }
+            if lower.contains("ipv6") { return " -6" }
+            return ""
+        }()
+        let forceFlag = hasAny(["force", "zorla", "hemen", "acilen"]) ? " -f" : ""
+
+        // 2. Clear screen
+        if hasAny(["ekrani temizle", "temizle", "clear screen", "clear deck"]) && extractedPorts.isEmpty {
+            return ("clear", true)
+        }
+
+        // 3. Bare port number (e.g. "5000", ":3000", "port 5432", "5432 portu")
+        if extractedPorts.count == 1 && (tokens.count == 1 || (tokens.count == 2 && hasAny(["port", "portu", "portunu"]))) {
+            return ("inspect \(extractedPorts[0]) --probe", true)
+        }
+
+        // 4. Kill / Terminate process on port (TR + EN) — triggers Permission Sheet automatically!
+        if hasAny(["close", "stop", "terminate", "end", "shut down", "kapat", "durdur", "sonlandir", "oldur", "kes"]) {
+            if let port = extractedPorts.first {
+                return ("kill \(port)\(forceFlag) --wait", true)
+            }
+            return nil
+        }
+
+        // 4b. Open / Start listener on port (TR + EN: "3000 portunu aç", "open port 3000", "dışa açık 9000 portu aç")
+        if let port = extractedPorts.first,
+           !hasAny(["goster", "listele", "show", "list", "hangi", "kim", "incele", "detay"]),
+           hasAny(["portunu ac", "portu ac", "port ac", "'u ac", "'i ac", " ac", "baslat", "dinle", "open port", "open ", "start port", "listen on", "listen "]) {
+            let publicFlag = hasAny(["public", "exposed", "disa acik", "disariya acik", "herkese acik", "0.0.0.0"]) ? " --public" : ""
+            return ("open \(port)\(publicFlag)", true)
+        }
+
+        // 5. Who / Owner lookup (TR + EN)
+        if hasAny(["who", "owner", "which process", "what is using", "what runs on", "kim kullaniyor", "kim", "hangi surec", "hangi uygulama", "sahibi"]) {
+            if let port = extractedPorts.first {
+                return ("who \(port)", true)
+            }
+        }
+
+        // 6. Deep Inspect / Process Ancestry / Banner (TR + EN)
+        if hasAny(["inspect", "detail", "ancestry", "trace", "banner", "incele", "detay", "soyagaci", "soy agaci", "baslik", "bak"]) {
+            if let port = extractedPorts.first {
+                return ("inspect \(port) --probe", true)
+            }
+        }
+
+        // 7. Security Audit (TR + EN, supports strict & zero-trust profiles)
+        if hasAny(["security", "audit", "firewall", "signature", "trust", "risk", "vulnerability", "guvenlik", "denetim", "imza", "guvenlik duvari", "tarama"]) {
+            if hasAny(["zero trust", "zero-trust", "sifir guven"]) {
+                return ("audit --profile zero-trust --deep", true)
+            }
+            if hasAny(["strict", "siki", "kati"]) {
+                return ("audit --profile strict --deep", true)
+            }
+            return ("audit --deep", true)
+        }
+
+        // 8. Free / Available Ports (TR + EN, supports custom range & count)
+        if hasAny(["free port", "available port", "unused port", "empty port", "bos port", "musait port", "kullanilmayan port", "uygun port"]) {
+            let range = extractedRange ?? "8000-8999"
+            let smallCount = extractedPorts.first(where: { $0 >= 1 && $0 <= 20 }) ?? 3
+            return ("free --range \(range) --count \(smallCount)", true)
+        }
+
+        // 9. Snapshot Save / Baseline Diff (TR + EN)
+        if hasAny(["snapshot", "baseline", "anlik goruntu", "yedek al", "temel kaydet", "kaydet"]) && hasAny(["port", "snapshot", "baseline", "goruntu", "yedek", "temel"]) {
+            return ("snapshot save ~/clous_base.json", true)
+        }
+        if hasAny(["diff", "drift", "compare", "fark", "sapma", "karsilastir", "degisiklik"]) {
+            return ("diff ~/clous_base.json", true)
+        }
+
+        // 10. Probe / Check specific ports (TR + EN)
+        if hasAny(["check", "probe", "scan", "ping", "test", "tara", "kontrol et", "kontrol"]) && !extractedPorts.isEmpty {
+            let portList = extractedPorts.map(String.init).joined(separator: ",")
+            return ("check \(portList) 127.0.0.1 --banner", true)
+        }
+
+        // 11. Externally Exposed Ports (TR + EN)
+        if hasAny(["exposed", "external", "public", "0.0.0.0", "disa acik", "disariya acik", "herkese acik"]) {
+            return ("list --exposed\(protoFlag)\(ipFlag)", true)
+        }
+
+        // 12. Memory / RAM heavy consumers (TR + EN)
+        if hasAny(["memory", "ram", "heaviest", "bellek", "hafiza", "en cok bellek", "en fazla ram"]) {
+            return ("list --wide --sort mem --desc", true)
+        }
+
+        // 13. Stats / Charts / Analytics (TR + EN)
+        if hasAny(["stats", "statistics", "analytics", "chart", "graph", "summary", "overview", "istatistik", "grafik", "ozet", "analiz"]) {
+            return ("stats", true)
+        }
+
+        // 13b. Project / Git Repo Port Map (TR + EN)
+        if hasAny(["project", "git", "repo", "proje", "projeler", "klasore gore", "projeye gore"]) {
+            return ("project", true)
+        }
+
+        // 13c. Environment Doctor / Zombie Processes (TR + EN)
+        if hasAny(["doctor", "health", "zombie", "leak", "doktor", "zombi", "saglik", "ortam kontrol", "sistemi kontrol"]) {
+            return ("doctor", true)
+        }
+
+        // 13d. Local HTTP Health / TTFB / CORS (TR + EN)
+        if hasAny(["http", "cors", "ttfb", "header", "yanit suresi", "saglik testi"]) && !extractedPorts.isEmpty {
+            return ("http \(extractedPorts[0])", true)
+        }
+
+        // 13e. Forensic Port History (TR + EN)
+        if hasAny(["history", "past", "earlier", "gecmis", "az once", "eskiden", "zaman cizelgesi"]) {
+            if let port = extractedPorts.first {
+                return ("history \(port)", true)
+            }
+            return ("history", true)
+        }
+
+        // 13f. Port Guard Watchdog (TR + EN)
+        if hasAny(["guard", "watchdog", "alert", "bekci", "nobet", "bildirim"]) {
+            if hasAny(["off", "stop", "kapat", "durdur"]) {
+                return ("guard off", true)
+            }
+            return ("guard on", true)
+        }
+
+        // 14. Live Watch / Stream (TR + EN)
+        if hasAny(["live", "watch", "stream", "monitor", "canli", "izle", "takip"]) {
+            return ("watch", true)
+        }
+
+        // 15. General Port Listing / Connections / States (TR + EN)
+        if hasAny(["close_wait", "close wait"]) {
+            return ("list --all --state CLOSE_WAIT", true)
+        }
+        if hasAny(["established", "aktif baglanti", "kurulu baglanti"]) {
+            return ("list --all --state ESTABLISHED", true)
+        }
+        if hasAny(["all connections", "all sockets", "all ports", "tum baglanti", "tum port", "butun port", "hepsini goster", "hepsini listele"]) {
+            return ("list --all\(protoFlag)\(ipFlag)", true)
+        }
+        if hasAny(["tcp", "udp", "ipv4", "ipv6"]) && tokens.count <= 3 {
+            return ("list\(protoFlag)\(ipFlag)", true)
+        }
+        if hasAny(["show ports", "active ports", "listening", "open ports", "portlari goster", "acik port", "aktif port", "dinleyen", "listele"]) {
+            return ("list --wide\(protoFlag)\(ipFlag)", true)
+        }
+
+        return nil
+    }
+
+    private static func normalizeIntentText(_ text: String) -> String {
+        text
+            .lowercased(with: Locale(identifier: "tr_TR"))
+            .replacingOccurrences(of: "ı", with: "i")
+            .replacingOccurrences(of: "İ", with: "i")
+            .replacingOccurrences(of: "ğ", with: "g")
+            .replacingOccurrences(of: "ü", with: "u")
+            .replacingOccurrences(of: "ş", with: "s")
+            .replacingOccurrences(of: "ö", with: "o")
+            .replacingOccurrences(of: "ç", with: "c")
     }
 
     func runSuggestion(_ cmd: String) {
@@ -787,6 +1115,8 @@ final class SierraPortViewModel: ObservableObject {
                     self.tickHistory.removeFirst(self.tickHistory.count - 45)
                 }
                 if !tick.events.isEmpty {
+                    PortHistoryStore.shared.record(events: tick.events)
+                    PortGuardManager.shared.inspectNewEvents(tick.events)
                     self.recentEvents.insert(contentsOf: tick.events.reversed(), at: 0)
                     if self.recentEvents.count > 60 {
                         self.recentEvents.removeLast(self.recentEvents.count - 60)
@@ -940,19 +1270,142 @@ final class SierraPortViewModel: ObservableObject {
     }
 
     func killPort(_ port: Int, force: Bool = false) {
-        Task {
-            var args = ["kill", "\(port)", "-y", "--wait", "--no-color"]
-            if force { args.append("-f") }
-            let res = await bridge.run(arguments: args)
-            if res.exitCode == 0 {
-                showToast("Terminated process on port \(port)")
-                if inspectedReport?.port == port {
-                    showingInspector = false
+        let liveMatch = latestTick?.entries.first(where: { $0.localPort == port })
+        let summary: String = {
+            if let entry = liveMatch {
+                let proc = entry.process ?? "Unknown process"
+                let pidText = entry.pid.map { "PID \($0)" } ?? "PID —"
+                return "\(proc) · \(pidText) · Port :\(port)"
+            }
+            return "Port :\(port)"
+        }()
+        let preview = force ? "clous kill \(port) -f --wait" : "clous kill \(port) --wait"
+
+        requestPrivilegedAction(
+            title: L("Terminate Process on Port :\(port)?", ":\(port) Portundaki Süreç Sonlandırılsın mı?"),
+            commandPreview: preview,
+            targetSummary: summary,
+            detail: L(
+                "Stopping a process occupying a port requires your permission. You can allow this action once or remember your permission for future process controls.",
+                "Bir portu kullanan süreci durdurmak için onayınız gerekir. Bu işleme tek seferlik izin verebilir veya sonraki süreç kontrolleri için izninizi hatırlatabilirsiniz."
+            )
+        ) { [weak self] in
+            guard let self else { return }
+            Task {
+                var args = ["kill", "\(port)", "-y", "--wait", "--no-color"]
+                if force { args.append("-f") }
+                let res = await self.bridge.run(arguments: args)
+                if res.exitCode == 0 {
+                    self.showToast(L("Terminated process on port \(port)", "\(port) portundaki süreç sonlandırıldı"))
+                    if self.inspectedReport?.port == port {
+                        self.showingInspector = false
+                    }
+                } else {
+                    self.showToast(L("Kill failed: \(res.stderr.trimmingCharacters(in: .whitespacesAndNewlines))", "Sonlandırma başarısız: \(res.stderr.trimmingCharacters(in: .whitespacesAndNewlines))"))
                 }
-            } else {
-                showToast("Kill failed: \(res.stderr.trimmingCharacters(in: .whitespacesAndNewlines))")
             }
         }
+    }
+
+    func requestPrivilegedAction(
+        title: String,
+        commandPreview: String,
+        targetSummary: String?,
+        detail: String,
+        perform: @escaping @MainActor () -> Void
+    ) {
+        if privilegedControlAuthorized {
+            perform()
+            return
+        }
+        pendingPrivilegedAction = PrivilegedActionRequest(
+            title: title,
+            commandPreview: commandPreview,
+            targetSummary: targetSummary,
+            detail: detail,
+            perform: perform
+        )
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    func approvePendingPrivilegedAction(rememberPermission: Bool) {
+        guard let req = pendingPrivilegedAction else { return }
+        if rememberPermission {
+            privilegedControlAuthorized = true
+        }
+        pendingPrivilegedAction = nil
+        req.perform()
+    }
+
+    func cancelPendingPrivilegedAction() {
+        pendingPrivilegedAction = nil
+        showToast(L("Action cancelled — permission not granted", "İşlem iptal edildi — izin verilmedi"))
+    }
+
+    func revokePrivilegedPermission() {
+        privilegedControlAuthorized = false
+        showToast(L("Process termination permission revoked", "Süreç sonlandırma izni geri alındı"))
+    }
+
+    private func launchManagedPortListener(port: Int, isPublic: Bool, cleaned: String, displayOrigin: String?) async {
+        guard let bin = bridge.binaryPath else {
+            let err = L("Clous core binary not found.", "Clous çekirdek ikilisi bulunamadı.")
+            appendBlock(cmd: cleaned, origin: displayOrigin, durationMs: 0, payload: .error(err), raw: err)
+            return
+        }
+
+        if let existing = openedPortProcesses[port], existing.isRunning {
+            let msg = L(
+                "Port :\(port) is already open and managed by Clous (PID \(existing.processIdentifier)).",
+                ":\(port) portu zaten Clous tarafından açık tutuluyor (PID \(existing.processIdentifier))."
+            )
+            appendBlock(cmd: cleaned, origin: displayOrigin, durationMs: 1, payload: .text(msg), raw: msg)
+            return
+        }
+
+        let proc = Process()
+        proc.executableURL = URL(fileURLWithPath: bin)
+        proc.arguments = isPublic ? ["open", "\(port)", "--public"] : ["open", "\(port)"]
+        let errPipe = Pipe()
+        proc.standardOutput = FileHandle.nullDevice
+        proc.standardError = errPipe
+
+        do {
+            try proc.run()
+        } catch {
+            let err = L("Failed to open port :\(port): \(error.localizedDescription)", ":\(port) portu açılamadı: \(error.localizedDescription)")
+            appendBlock(cmd: cleaned, origin: displayOrigin, durationMs: 0, payload: .error(err), raw: err)
+            return
+        }
+
+        // Wait briefly to confirm TCP bind succeeded cleanly
+        try? await Task.sleep(for: .milliseconds(140))
+
+        if !proc.isRunning {
+            let errData = errPipe.fileHandleForReading.readDataToEndOfFile()
+            let errText = String(data: errData, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            let msg = errText.isEmpty
+                ? L("Port :\(port) could not be opened (already in use or permission denied).", ":\(port) portu açılamadı (zaten kullanımda veya yetki reddedildi).")
+                : errText
+            appendBlock(cmd: cleaned, origin: displayOrigin, durationMs: 140, payload: .error(msg), raw: msg)
+            return
+        }
+
+        openedPortProcesses[port] = proc
+        let bindHost = isPublic ? "0.0.0.0" : "127.0.0.1"
+        let msg = L(
+            "✓ Opened HTTP/TCP listener on http://\(bindHost):\(port) (PID \(proc.processIdentifier)). Run `kill \(port)` anytime to close it.",
+            "✓ http://\(bindHost):\(port) üzerinde HTTP/TCP dinleyici açıldı (PID \(proc.processIdentifier)). Kapatmak için `\(port) portunu kapat` veya `kill \(port)` yazabilirsiniz."
+        )
+        showToast(L("Opened port :\(port) (\(bindHost))", ":\(port) portu açıldı (\(bindHost))"))
+        appendBlock(cmd: cleaned, origin: displayOrigin, durationMs: 140, payload: .text(msg), raw: msg)
+    }
+
+    private func stopAllOpenedPorts() {
+        for (_, proc) in openedPortProcesses where proc.isRunning {
+            proc.terminate()
+        }
+        openedPortProcesses.removeAll()
     }
 
     private func showToast(_ msg: String) {

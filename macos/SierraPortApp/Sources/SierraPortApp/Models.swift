@@ -119,6 +119,15 @@ enum AuditProfileOption: String, CaseIterable, Identifiable {
         case .zeroTrust: return "Zero-Trust"
         }
     }
+
+    @MainActor
+    var localizedLabel: String {
+        switch self {
+        case .developer: return L("Developer", "Geliştirici")
+        case .strict: return L("Strict", "Sıkı")
+        case .zeroTrust: return L("Zero-Trust", "Sıfır Güven")
+        }
+    }
 }
 
 struct HostPosture: Codable {
@@ -403,6 +412,10 @@ enum BlockPayload {
     case stats(StatsReport)
     case diff(DiffReport)
     case freePorts(FreePortsResult)
+    case projects(ProjectMapReport)
+    case doctor(DoctorReport)
+    case httpHealth(HttpHealthReport)
+    case history([PortHistoryRecord], Int?)
     case text(String)
     case error(String)
 }
@@ -444,6 +457,17 @@ struct CommandBlock: Identifiable {
             return diff.hasDrift ? "+\(diff.added.count) -\(diff.removed.count) ~\(diff.changed.count)" : "No drift"
         case .freePorts(let free):
             return "\(free.freePorts.count) free port\(free.freePorts.count == 1 ? "" : "s")"
+        case .projects(let report):
+            return "\(report.projectCount) project\(report.projectCount == 1 ? "" : "s")"
+        case .doctor(let doc):
+            return "Health \(doc.score)/100"
+        case .httpHealth(let http):
+            if let code = http.statusCode {
+                return "HTTP \(code) · \(http.ttfbMs)ms"
+            }
+            return "HTTP error"
+        case .history(let records, _):
+            return "\(records.count) event\(records.count == 1 ? "" : "s")"
         case .text:
             return "Output"
         case .error:
@@ -466,6 +490,16 @@ enum AppTab: String, CaseIterable, Identifiable {
         case .watch: return "waveform.path.ecg"
         case .audit: return "shield.lefthalf.filled"
         case .stats: return "chart.bar.xaxis"
+        }
+    }
+
+    @MainActor
+    var localizedTitle: String {
+        switch self {
+        case .terminal: return L("Terminal Deck", "Terminal Masası")
+        case .watch: return L("Live Watch", "Canlı İzleme")
+        case .audit: return L("Security Audit", "Güvenlik Denetimi")
+        case .stats: return L("Analytics", "Analitik")
         }
     }
 }

@@ -1,73 +1,83 @@
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="assets/sierraport-banner-dark.svg" />
-    <source media="(prefers-color-scheme: light)" srcset="assets/sierraport-banner-light.svg" />
-    <img alt="SierraPort" src="assets/sierraport-banner-light.svg" width="640" />
+    <source media="(prefers-color-scheme: dark)" srcset="assets/clous-banner-dark.svg" />
+    <source media="(prefers-color-scheme: light)" srcset="assets/clous-banner-light.svg" />
+    <img alt="Clous" src="assets/clous-banner-light.svg" width="640" />
   </picture>
 </p>
 
 <p align="center">
-  <strong>A fast, zero-dependency Rust terminal extension for real-time port monitoring, security auditing, forensic inspection, and baseline drift detection.</strong>
+  <strong>A fast, zero-dependency Rust CLI &amp; native macOS SwiftUI desktop app for real-time port monitoring, security auditing, forensic inspection, project port mapping, and network diagnostics.</strong>
 </p>
 
 <p align="center">
   <img src="https://img.shields.io/badge/Rust-Edition%202024-orange?style=flat-square&logo=rust" alt="Rust Edition 2024" />
-  <img src="https://img.shields.io/badge/macOS%20App-SwiftUI%20Native-0071E3?style=flat-square&logo=apple" alt="macOS SwiftUI App" />
+  <img src="https://img.shields.io/badge/macOS%20App-SwiftUI%20Native-EB0020?style=flat-square&logo=apple" alt="macOS SwiftUI App" />
   <img src="https://img.shields.io/badge/Dependencies-Zero-brightgreen?style=flat-square" alt="Zero Dependencies" />
-  <img src="https://img.shields.io/badge/Platforms-Linux%20%7C%20macOS%20%7C%20Windows-blue?style=flat-square" alt="Cross-Platform" />
+  <img src="https://img.shields.io/badge/Platforms-macOS%20%7C%20Linux%20%7C%20Windows-blue?style=flat-square" alt="Cross-Platform" />
   <img src="https://img.shields.io/badge/License-MIT-lightgrey?style=flat-square" alt="MIT License" />
 </p>
 
 <p align="center">
-  <img src="assets/sierraport-preview.png" alt="SierraPort macOS Terminal Deck Preview" width="880" />
+  <img src="assets/clous-preview.png" alt="Clous macOS Command Deck Preview" width="880" />
 </p>
 
 ---
 
-**SierraPort** drops right into your terminal as a single, tiny, self-contained native binary—no runtime, no external crates, no background daemon. Whether you are debugging a local port conflict, hunting down an accidentally exposed database, tracing a process ancestry tree, or enforcing port baselines in CI/CD, SierraPort gives you instant visibility in milliseconds.
+**Clous** drops right into your terminal and macOS desktop as a single, self-contained native toolchain—zero external crates, zero runtime overhead, and millisecond visibility. Whether you are resolving a local port conflict, auditing externally exposed databases, grouping active ports by Git repository, opening or forwarding local ports, tracing process ancestry trees, or enforcing port baselines in CI/CD, Clous delivers instant answers.
 
 > Looking for Turkish documentation? See [DOCS.md](DOCS.md) · Engineering & Development Log: [DEVELOPMENT_LOG.md](DEVELOPMENT_LOG.md).
 
 ---
 
-## Quick Start
+## Install Clous
 
-### Build from Source
+### macOS Desktop App (`Clous.app`)
+
+**Option 1 — Direct DMG Download (Recommended):**
+Download the latest signed macOS installer from [GitHub Releases](https://github.com/efekanbahceci/clous/releases/latest/download/Clous.dmg), drag **Clous** into **Applications**, and launch.
+
+**Option 2 — One-Line Terminal Installer:**
 ```bash
-git clone <repo-url>
-cd SierraPort
+curl -fsSL https://github.com/efekanbahceci/clous/releases/latest/download/install.sh | bash
+```
+
+**Option 3 — Homebrew Tap:**
+```bash
+brew install --cask efekanbahceci/tap/clous
+```
+
+### Build from Source (CLI + Native macOS App)
+
+```bash
+git clone https://github.com/efekanbahceci/clous.git
+cd clous
+
+# Build the zero-dependency Rust CLI
 cargo build --release
-```
-The optimized binary (`opt-level = 3`, `lto = true`, `strip = true`) is created at `./target/release/sierraport`.
 
-### Install as a Global Terminal Command
-```bash
+# Install CLI globally
 cargo install --path .
-```
-Once installed, invoke `sierraport` from anywhere in your terminal:
-```bash
-sierraport                           # List all listening ports with exposure scope
-sierraport watch -i 500              # Live flicker-free terminal dashboard
-sierraport audit                     # Security & socket health audit (0-100 score)
-sierraport inspect 5432 --probe      # Deep forensic view + live protocol/banner probe
-```
 
-### Build the Native macOS App (`SierraPort.app`)
-SierraPort also ships with a lightweight (~2.6 MB) **native macOS SwiftUI application** (`macos/SierraPortApp`) powered directly by the Rust core—featuring a Ghostty-inspired Command Deck, collapsible visual output blocks, live Swift Charts analytics, a Forensic Inspector drawer, Dark (`#111110`) / Light / System themes, and a macOS Menu Bar quick monitor:
-
-```bash
+# Build & bundle the native macOS SwiftUI app (dist/Clous.app)
 ./scripts/build-macos-app.sh
-open dist/SierraPort.app
+open dist/Clous.app
 ```
 
 ---
 
-## Why SierraPort?
+## Key Highlights
 
-- **Zero External Dependencies (`std` only):** Zero supply-chain bloat, sub-second incremental compiles, and a tiny standalone binary.
+- **Zero External Dependencies (`std` only):** Zero supply-chain bloat in both the Rust CLI (`Cargo.toml`) and SwiftUI macOS client (`Package.swift`), sub-second incremental compiles, and a tiny standalone binary.
+- **Native macOS Desktop Client (`Clous.app`):**
+  - **Command Deck & Bilingual Natural Language Engine:** Run any `clous` CLI command or type a plain sentence in **English or Turkish** (e.g. `"close port 3000"`, `"open port 8080"`, `"show exposed ports"`, `"hangi projeler çalışıyor"`).
+  - **Live Language & Theme Switching:** Switch seamlessly between **English / Türkçe** and **Dark (`#07080A`) / Light (`#FFFFFF`) / System** with Apple Liquid Glass surfaces and `#EB0020` Crimson accents.
+  - **Privileged Action Approval Sheet:** Sensitive actions (`kill`, `open --public`) prompt with a native Liquid Glass confirmation dialog supporting instant `Enter (⏎)` approve, `Esc` cancel, and Allow Once / Remember Permission.
+  - **Live Auto-Updater (`Restart Update`):** Checks GitHub Releases `latest.json` with SHA-256 verification and atomic swap + rollback.
+  - **Global Quick Launcher (`⌥ Space`) & Menu Bar Monitor:** System-wide floating Spotlight-style launcher and persistent Menu Bar live status.
 - **Native OS-Level Speed:** Reads `/proc/net/*` and `/proc/<pid>/*` directly on Linux with zero subprocesses; uses `lsof` + single batched `ps` enrichment on macOS; uses `netstat -ano` + `tasklist` on Windows.
-- **Flicker-Free In-Place Live Dashboard:** `watch` renders into the terminal's alternate screen buffer (`\x1b[?1049h`) with atomic single-write refreshes—never polluting your terminal scrollback.
-- **Built for Both Humans and Machines:** Rich ANSI tables, wide views, and ASCII bar charts for interactive terminal use; `--json`, `--csv`, `--compact`, `--plain`, and deterministic exit codes for scripts and CI/CD pipelines.
+- **Flicker-Free In-Place Live Dashboard:** `watch` renders into the terminal's alternate screen buffer (`\x1b[?1049h`) with atomic single-write refreshes—never polluting scrollback.
+- **Built for Humans & CI/CD Pipelines:** Rich ANSI tables, wide views, and ASCII bar charts for interactive terminal use; `--json`, `--csv`, `--compact`, `--plain`, and deterministic exit codes for scripts and pipelines.
 
 ---
 
@@ -77,17 +87,19 @@ open dist/SierraPort.app
 flowchart TD
     A["src/main.rs (Entrypoint & ExitCode)"] --> B["src/cli.rs (CLI Parser & Help)"]
     B --> C["src/commands.rs (Command Handlers & Live Watch)"]
+    B --> X["src/extras.rs (project, doctor, guard, history, http, forward, open)"]
     C --> D["src/scanner/mod.rs (OS Abstraction, Prober, Free/Wait, Kill)"]
     D --> D1["src/scanner/linux.rs (/proc/net/* & /proc/pid)"]
     D --> D2["src/scanner/macos.rs (lsof + Batched ps & Ancestry)"]
     D --> D3["src/scanner/windows.rs (netstat -ano + tasklist)"]
-    C --> E["src/audit.rs (Security & Socket Health Engine)"]
+    C --> E["src/audit.rs (Security, Codesign & Firewall Audit Engine)"]
     C --> F["src/snapshot.rs (JSON Baseline & Drift Engine)"]
     C --> G["src/display.rs (Tables, JSON, CSV, ASCII Charts, ANSI Theme)"]
     D --> H["src/models.rs (PortEntry, BindScope, Filters, Sorting)"]
     E --> H
     F --> H
     G --> H
+    X --> D
 ```
 
 ### 1. Platform-Native Socket & Process Discovery
@@ -105,23 +117,8 @@ Every bound local address is automatically classified into an exposure scope:
 - **`ALL(*)`** *(Yellow)* — `0.0.0.0`, `::`, `*` (bound to **all interfaces** — reachable over LAN, Wi-Fi, VPN, or public NIC).
 - **`PUBLIC`** *(Red)* — Directly bound to a publicly routable IP address.
 
-### 3. Runtime & Container Tagging
-Process names and command lines are automatically tagged for quick visual scanning:
-`[container]` (Docker, containerd, Podman, Colima, OrbStack), `[database]` (PostgreSQL, MySQL, Redis, MongoDB), `[proxy/web]` (Nginx, Caddy, Envoy, HAProxy, httpd), `[js/ts]` (Node, Bun, Deno), `[python]` (Python, Uvicorn, Gunicorn), and `[jvm]` (Java, Gradle).
-
-### 4. In-Place Live Watch Engine (`watch`)
-Instead of printing new paragraphs on every tick:
-1. Enters the **alternate screen buffer** (`\x1b[?1049h`) and hides the cursor (`\x1b[?25l`).
-2. Composes the entire frame (live metric bar + table + recent `+ OPEN` / `- CLOSED` feed) in memory.
-3. Writes the full frame atomically in a single `stdout.write_all` call using `\x1b[H` (cursor home), `\x1b[K` (erase to end-of-line), and `\x1b[J` (erase to end-of-screen).
-4. Traps `SIGINT` (`Ctrl+C`) and restores your cursor and original terminal screen via a RAII `WatchTerminalGuard`.
-
-### 5. Concurrent Port Scanner & Banner Grabber (`check`)
-- Resolves the target host once and fans out across a configurable thread pool (`-c` / `--concurrency`, default `64`, up to `256`).
-- With `--banner`, performs a fast passive read first (catching SSH, SMTP, FTP, MySQL greetings), then sends a lightweight active probe (`PING\r\n` on Redis 6379, or `HEAD / HTTP/1.0` otherwise) to identify protocols (`HTTP`, `SSH`, `Redis`, `SMTP`, `FTP`, `MySQL`, `TLS`) and extract server headers.
-
-### 6. Security & Socket Health Audit Engine (`audit`)
-Evaluates all discovered sockets on a **0–100 score (`A`–`F` grade)**:
+### 3. Security & Socket Health Audit Engine (`audit`)
+Evaluates all discovered sockets, macOS firewall posture, and binary code signatures on a **0–100 score (`A`–`F` grade)**:
 
 | Severity | Penalty | Example Checks |
 |---|---|---|
@@ -131,31 +128,31 @@ Evaluates all discovered sockets on a **0–100 score (`A`–`F` grade)**:
 | **LOW** | `-3` | Exposed local dev servers (`3000`, `5000`, `5173`, `8000`, `8080`) on `0.0.0.0`/`*` or `>= 100` `TIME_WAIT` sockets |
 | **INFO** | `0` | Privileged ports (`< 1024`) with hidden PID metadata (elevated privileges required) |
 
-### 7. Baseline Snapshot & Drift Detection (`snapshot` / `diff`)
-- `snapshot save <file>` writes a deterministic, zero-dependency JSON baseline of active ports.
-- `diff <file>` compares live system state against the baseline by `(protocol, port)` and reports:
-  - `+ ADDED` — newly opened ports not in the baseline.
-  - `- REMOVED` — baseline ports no longer listening.
-  - `~ CHANGED` — process name, user, bind address, or PID changes on an existing port (restarts or potential port hijacking).
-
 ---
 
 ## Command Reference
 
 | Command | Aliases | Description |
 |---|---|---|
-| `sierraport list` | `ls` | List active ports with exposure scope and runtime tags (default command) |
-| `sierraport watch` | `monitor`, `w` | Live in-place terminal dashboard with open/close diff log and optional JSONL logging |
-| `sierraport inspect <port>` | `info`, `deep` | Deep forensic view: bindings, process ancestry tree, peer connections, and `--probe` |
-| `sierraport audit` | `sec`, `security` | Security & socket health audit with 0–100 score, grade, and remediation advice |
-| `sierraport snapshot save <file>` | `snap save` | Save current port state as a JSON baseline snapshot |
-| `sierraport diff <file>` | `snapshot diff` | Detect added, removed, or changed ports against a saved snapshot |
-| `sierraport check <ports> [host]` | `probe`, `ping` | Concurrent TCP connectivity scanner with optional `--banner` and `--open-only` |
-| `sierraport free` | `available` | Find free, verified-bindable TCP ports in a range |
-| `sierraport wait <port> [host]` | — | Block until a port becomes `open` or `closed` (dev & CI helper) |
-| `sierraport who <port>` | `find`, `pid` | Quick lookup of process(es) occupying a specific port |
-| `sierraport kill <target>` | — | Terminate process(es) by port/range, `--pid`, or `--proc`, with `--wait` verification |
-| `sierraport stats` | `summary` | Visual ASCII bar-chart breakdown by protocol, state, exposure scope, and process |
+| `clous list` | `ls` | List active ports with exposure scope and runtime tags (default command) |
+| `clous project` | `projects`, `proj`, `workspace` | Group active listening ports by working directory and Git repository/branch |
+| `clous doctor` | `diag`, `health` | Run local network diagnostics (Firewall, DNS, loopback, exposed & zombie sockets) |
+| `clous guard` | `sentinel`, `watch-guard` | Real-time security sentinel alerting on newly exposed or unexpected listeners |
+| `clous history [port]` | `timeline`, `events` | View 24-hour local port open/close timeline stored in `~/.clous/history.jsonl` |
+| `clous http <port> [/path]` | `curl`, `healthcheck` | Native HTTP/1.1 health probe returning status code, TTFB latency, and headers |
+| `clous forward <from> <to>` | `proxy`, `tunnel` | Zero-dependency multithreaded local TCP port forwarder (`127.0.0.1:from → to`) |
+| `clous open <port> [--public]` | `listen`, `bind`, `serve` | Open a live local TCP listener on `<port>` (`127.0.0.1` by default, or `0.0.0.0` with `--public`) |
+| `clous watch` | `monitor`, `w` | Live in-place terminal dashboard with open/close diff log and optional JSONL logging |
+| `clous inspect <port>` | `info`, `deep` | Deep forensic view: bindings, process ancestry tree, peer connections, and `--probe` |
+| `clous audit` | `sec`, `security` | Security & socket health audit with 0–100 score, grade, and remediation advice |
+| `clous snapshot save <file>` | `snap save` | Save current port state as a JSON baseline snapshot |
+| `clous diff <file>` | `snapshot diff` | Detect added, removed, or changed ports against a saved snapshot |
+| `clous check <ports> [host]` | `probe`, `ping` | Concurrent TCP connectivity scanner with optional `--banner` and `--open-only` |
+| `clous free` | `available` | Find free, verified-bindable TCP ports in a range |
+| `clous wait <port> [host]` | — | Block until a port becomes `open` or `closed` (dev & CI helper) |
+| `clous who <port>` | `find`, `pid` | Quick lookup of process(es) occupying a specific port |
+| `clous kill <target>` | — | Terminate process(es) by port/range, `--pid`, or `--proc`, with `--wait` verification |
+| `clous stats` | `summary` | Visual ASCII bar-chart breakdown by protocol, state, exposure scope, and process |
 
 ### Filtering, Sorting & Output Options (`list` / `watch` / `stats` / `snapshot`)
 
@@ -180,75 +177,70 @@ Evaluates all discovered sockets on a **0–100 score (`A`–`F` grade)**:
 
 ## Usage Examples
 
-### Listing & Filtering
+### Listing, Projects & Diagnostics
 ```bash
+# Group active dev servers by Git repository and working directory
+clous project
+
+# Run full local network & security health check
+clous doctor
+
 # Wide table sorted by memory usage (highest first)
-sierraport list --wide --sort mem --desc
+clous list --wide --sort mem --desc
 
 # Only externally exposed TCP listeners
-sierraport list --tcp --exposed
-
-# Hunt down potential socket leaks
-sierraport list --all --state CLOSE_WAIT --sort process
-
-# Export all sockets to CSV or JSON
-sierraport list --all --csv > sockets.csv
-sierraport list --exposed --json | jq '.[] | "\(.local_port) -> \(.process) (\(.user))"'
+clous list --tcp --exposed
 ```
 
-### Live Monitoring (`watch`)
+### Live Monitoring, Port Guard & Timeline
 ```bash
 # Refresh in-place every 500ms in wide mode
-sierraport watch -i 500 --wide
+clous watch -i 500 --wide
 
-# Monitor exposed ports, ring terminal bell on new openings, and record JSONL audit trail
-sierraport watch -i 500 --exposed --alert-new --log /tmp/port-events.jsonl
+# Real-time sentinel alerting on newly exposed ports
+clous guard --exposed-only
+
+# Inspect 24-hour port open/close history
+clous history
+clous history 3000
 ```
 
-### Forensic Inspection (`inspect`) & Banner Scanning (`check`)
+### HTTP Probe, Port Forwarding & Opening Ports
 ```bash
-# Full process ancestry tree + live HTTP/protocol banner probe
-sierraport inspect 5000 --probe
+# Instant HTTP/1.1 health check with TTFB latency
+clous http 3000 /health
 
-# Scan ports 1-1024 on localhost, showing only open ports and their banners
-sierraport check 1-1024 127.0.0.1 --open-only --banner -c 128
+# Forward local port 8080 to port 3000
+clous forward 8080 3000
+
+# Open a local TCP listener on port 3000 (Ctrl+C to stop)
+clous open 3000
 ```
 
-### Security Auditing (`audit`) & Drift Detection (`snapshot` / `diff`)
+### Forensic Inspection, Auditing & CI/CD Gates
 ```bash
-# Run security audit (exits 1 in CI if any HIGH/CRITICAL findings exist)
-sierraport audit --strict
+# Full process ancestry tree + live protocol banner probe
+clous inspect 5432 --probe
 
-# Capture a clean baseline and later verify no unauthorized ports appeared
-sierraport snapshot save baseline.json
-sierraport diff baseline.json --fail-on-drift
+# Security audit (exits 1 in CI if HIGH/CRITICAL findings exist)
+clous audit --strict
+
+# Baseline snapshot & drift verification
+clous snapshot save baseline.json
+clous diff baseline.json --fail-on-drift
 ```
 
 ### Developer Workflow Helpers (`free`, `wait`, `kill`)
 ```bash
 # Allocate a free port inside a shell script
-PORT=$(sierraport free --range 8000-8999 --plain)
+PORT=$(clous free --range 8000-8999 --plain)
 
 # Wait for a database or dev server to start accepting connections
-sierraport wait 5432 --until open --timeout 30000
+clous wait 5432 --until open --timeout 30000
 
-# Gracefully terminate whatever is on port 3000 and verify the port is released
-sierraport kill 3000 -y --wait
-
-# Terminate by process name or PID
-sierraport kill --proc vite -y --wait
-sierraport kill --pid 12345 -f -y
+# Gracefully terminate whatever is on port 3000 and verify it is released
+clous kill 3000 -y --wait
 ```
-
----
-
-## Real-World Use Cases
-
-1. **Local Development Productivity:** Eliminate `EADDRINUSE` friction (`who` / `kill --wait`), dynamically allocate conflict-free ports in test runners (`free --plain`), and synchronize service startup in dev scripts (`wait --until open`).
-2. **DevSecOps & CI/CD Security Gates:** Catch accidentally exposed databases (`0.0.0.0:6379`, `0.0.0.0:5432`) before deployment and enforce zero critical findings with `sierraport audit --strict`.
-3. **SRE & Production Drift Detection:** Snapshot known-good server port state (`snapshot save`) and run scheduled `diff --fail-on-drift` checks to detect unauthorized listeners, unexpected service restarts, or port hijacking.
-4. **Incident Response & Forensics:** Trace suspicious listening ports back to their parent process chain (`launchd` / `systemd` / `sshd` / shell) with `inspect <port> --probe`, and diagnose file-descriptor leaks with `--state CLOSE_WAIT`.
-5. **Automation & Pipelines:** Pipe structured `--json` or `--csv` output directly into `jq`, dashboards, or SIEM pipelines without parsing fragile `lsof`/`netstat` text.
 
 ---
 

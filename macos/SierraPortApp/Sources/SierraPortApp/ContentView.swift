@@ -4,6 +4,8 @@ struct ContentView: View {
     @ObservedObject var vm: SierraPortViewModel
     @ObservedObject var hotkeyManager: GlobalHotkeyManager
     @ObservedObject var updateManager: UpdateManager
+    @ObservedObject private var locale = AppLocale.shared
+    @ObservedObject private var portGuard = PortGuardManager.shared
     @Binding var themeRaw: String
     let onEditShortcut: () -> Void
     @FocusState private var isCommandFocused: Bool
@@ -150,6 +152,17 @@ struct ContentView: View {
         .onAppear {
             isCommandFocused = true
         }
+        .sheet(item: $vm.pendingPrivilegedAction) { req in
+            PrivilegedActionApprovalSheet(
+                request: req,
+                onApprove: { remember in
+                    vm.approvePendingPrivilegedAction(rememberPermission: remember)
+                },
+                onCancel: {
+                    vm.cancelPendingPrivilegedAction()
+                }
+            )
+        }
         .background {
             // Hidden global keyboard shortcuts for mouse-free tab switching (⌘1–⌘4, ⌘K, ⌘R, ⌥⌘I, ⌘\)
             Group {
@@ -213,12 +226,12 @@ struct ContentView: View {
                         Circle()
                             .fill(vm.isStreaming ? Color.green : Color.secondary)
                             .frame(width: 7, height: 7)
-                        Text("\(tick.active) active")
+                        Text("\(tick.active) \(locale.t("active", "aktif"))")
                             .font(SierraFont.mono(11, weight: .medium))
                             .contentTransition(.numericText())
                     }
                     if tick.exposed > 0 {
-                        Text("\(tick.exposed) exposed")
+                        Text("\(tick.exposed) \(locale.t("exposed", "dışa açık"))")
                             .font(SierraFont.mono(11, weight: .medium))
                             .foregroundStyle(.orange)
                             .contentTransition(.numericText())
@@ -245,7 +258,16 @@ struct ContentView: View {
             }
 
             HStack(spacing: 2) {
-                toolbarGlassIconButton(icon: "terminal", help: "Focus Command Bar (⌘K)") {
+                toolbarGlassIconButton(
+                    icon: portGuard.isEnabled ? "bell.badge.fill" : "bell",
+                    active: portGuard.isEnabled,
+                    help: portGuard.isEnabled
+                        ? locale.t("Port Guard Active (click to pause)", "Port Bekçisi Aktif (durdurmak için tıklayın)")
+                        : locale.t("Enable Port Guard Alerts", "Port Bekçisi Bildirimlerini Aç")
+                ) {
+                    portGuard.isEnabled.toggle()
+                }
+                toolbarGlassIconButton(icon: "terminal", help: locale.t("Focus Command Bar (⌘K)", "Komut Çubuğuna Odaklan (⌘K)")) {
                     isCommandFocused = true
                     vm.selectedTab = .terminal
                 }
@@ -319,7 +341,7 @@ struct ContentView: View {
                 Image(systemName: "checkmark.circle.fill")
                     .font(.system(size: 11))
                     .foregroundStyle(.green)
-                Text("Up to date (v\(updateManager.currentVersion))")
+                Text(locale.t("Up to date (v\(updateManager.currentVersion))", "Güncel (v\(updateManager.currentVersion))"))
                     .font(SierraFont.ui(11, weight: .medium))
                     .foregroundStyle(.secondary)
             }
@@ -381,10 +403,10 @@ struct ContentView: View {
 
     private var updateStatusLabel: String {
         switch updateManager.installState {
-        case .downloading: return "Downloading update…"
-        case .verifying: return "Verifying SHA-256…"
-        case .installing: return "Restarting…"
-        default: return "Updating…"
+        case .downloading: return locale.t("Downloading update…", "Güncelleme indiriliyor…")
+        case .verifying: return locale.t("Verifying SHA-256…", "SHA-256 doğrulanıyor…")
+        case .installing: return locale.t("Restarting…", "Yeniden başlatılıyor…")
+        default: return locale.t("Updating…", "Güncelleniyor…")
         }
     }
 
@@ -394,7 +416,7 @@ struct ContentView: View {
         HStack(spacing: 12) {
             HStack(spacing: 6) {
                 SierraAppIconView(size: 16)
-                Text(vm.selectedTab.rawValue)
+                Text(vm.selectedTab.localizedTitle)
                     .font(SierraFont.ui(11.5, weight: .medium))
                     .foregroundStyle(.secondary)
             }
@@ -403,21 +425,21 @@ struct ContentView: View {
 
             HStack(spacing: 14) {
                 HStack(spacing: 5) {
-                    Text(vm.focusedResultIndex != nil ? "Inspect" : "Run")
+                    Text(vm.focusedResultIndex != nil ? locale.t("Inspect", "İncele") : locale.t("Run", "Çalıştır"))
                         .font(SierraFont.ui(11, weight: .medium))
                         .foregroundStyle(.secondary)
                     RaycastKeycap(key: "⏎")
                 }
 
                 HStack(spacing: 5) {
-                    Text("Navigate")
+                    Text(locale.t("Navigate", "Gezin"))
                         .font(SierraFont.ui(11, weight: .medium))
                         .foregroundStyle(.secondary)
                     RaycastKeycap(key: "Tab")
                 }
 
                 HStack(spacing: 5) {
-                    Text("Inspector")
+                    Text(locale.t("Inspector", "İnceleyici"))
                         .font(SierraFont.ui(11, weight: .medium))
                         .foregroundStyle(.secondary)
                     RaycastKeycap(key: "⌥⌘I")
@@ -428,7 +450,7 @@ struct ContentView: View {
                         QuickLauncherController.shared.toggle()
                     } label: {
                         HStack(spacing: 5) {
-                            Text("Quick Launch")
+                            Text(locale.t("Quick Launch", "Hızlı Başlat"))
                                 .font(SierraFont.ui(11, weight: .medium))
                                 .foregroundStyle(.secondary)
                             HStack(spacing: 3) {
@@ -527,7 +549,7 @@ struct ContentView: View {
                                 .font(.system(size: 13.5, weight: isSelected ? .semibold : .regular))
                                 .foregroundStyle(isSelected ? Color.primary : Color.secondary)
                                 .frame(width: 18)
-                            Text(tab.rawValue)
+                            Text(tab.localizedTitle)
                                 .font(SierraFont.ui(13, weight: isSelected ? .semibold : .regular))
                                 .foregroundStyle(isSelected ? Color.primary : Color.primary.opacity(0.84))
                             Spacer()
@@ -567,10 +589,10 @@ struct ContentView: View {
                         Image(systemName: "command")
                             .font(.system(size: 10, weight: .semibold))
                             .foregroundStyle(SierraTheme.accent)
-                        Text("Quick Launch")
+                        Text(locale.t("Quick Launch", "Hızlı Başlat"))
                             .font(SierraFont.ui(11.5, weight: .medium))
                         Spacer()
-                        Text(hotkeyManager.currentHotkey?.displayString ?? "Set")
+                        Text(hotkeyManager.currentHotkey?.displayString ?? locale.t("Set", "Ayarla"))
                             .font(SierraFont.mono(10, weight: .semibold))
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
@@ -585,7 +607,43 @@ struct ContentView: View {
                     .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                 }
                 .buttonStyle(TactileGlassButtonStyle(cornerRadius: 12))
-                .help("Customize system-wide Raycast-style Quick Launcher hotkey")
+                .help(locale.t("Customize system-wide Quick Launcher hotkey", "Sistem geneli Hızlı Başlatıcı kısayolunu özelleştir"))
+
+                // Language Switcher (English / Türkçe)
+                HStack(spacing: 3) {
+                    ForEach(AppLanguage.allCases) { lang in
+                        let isSelected = locale.language == lang
+                        Button {
+                            withAnimation(.easeInOut(duration: 0.18)) {
+                                locale.language = lang
+                            }
+                        } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: "globe")
+                                    .font(.system(size: 9))
+                                Text(lang.displayName)
+                                    .font(SierraFont.ui(10.5, weight: isSelected ? .semibold : .regular))
+                            }
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 26)
+                            .background(
+                                isSelected ? SierraTheme.glassFillElevated : Color.clear,
+                                in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                    .strokeBorder(isSelected ? SierraTheme.glassBorderTop : Color.clear, lineWidth: 1)
+                            )
+                            .foregroundStyle(isSelected ? .primary : .secondary)
+                            .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                        }
+                        .buttonStyle(TactileGlassButtonStyle(cornerRadius: 8))
+                    }
+                }
+                .padding(3)
+                .frame(height: 34)
+                .background(SierraTheme.glassFill, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(SierraTheme.glassBorderBottom, lineWidth: 1))
 
                 HStack(spacing: 3) {
                     ForEach(AppThemePreference.allCases) { pref in
@@ -598,7 +656,7 @@ struct ContentView: View {
                             HStack(spacing: 3) {
                                 Image(systemName: pref.icon)
                                     .font(.system(size: 9))
-                                Text(pref.rawValue)
+                                Text(pref.localizedLabel)
                                     .font(SierraFont.ui(10, weight: isSelected ? .semibold : .regular))
                             }
                             .frame(maxWidth: .infinity)
@@ -627,9 +685,9 @@ struct ContentView: View {
                         .fill(vm.bridge.binaryPath != nil ? Color.green : Color.red)
                         .frame(width: 7, height: 7)
                     VStack(alignment: .leading, spacing: 1) {
-                        Text(vm.bridge.binaryPath != nil ? "Clous v\(updateManager.currentVersion)" : "Binary Missing")
+                        Text(vm.bridge.binaryPath != nil ? "Clous v\(updateManager.currentVersion)" : locale.t("Binary Missing", "Çekirdek Eksik"))
                             .font(SierraFont.ui(11, weight: .medium))
-                        Text(vm.isStreaming ? "Live stream · \(vm.streamIntervalMs)ms" : "Stream paused")
+                        Text(vm.isStreaming ? "\(locale.t("Live stream", "Canlı akış")) · \(vm.streamIntervalMs)ms" : locale.t("Stream paused", "Akış duraklatıldı"))
                             .font(SierraFont.mono(10))
                             .foregroundStyle(.secondary)
                     }
@@ -710,13 +768,16 @@ struct ContentView: View {
                     Text("Clous")
                         .font(SierraFont.display(38, weight: .semibold))
                         .tracking(-1.0)
-                    Text("COMMAND DECK")
+                    Text(locale.t("COMMAND DECK", "KOMUT MASASI"))
                         .font(SierraFont.ui(10.5, weight: .semibold))
                         .tracking(2.2)
                         .foregroundStyle(.secondary)
                 }
 
-                Text("Run any Clous CLI command to inspect listening ports, audit external exposure, trace process ancestry, or grab live protocol banners — rendered as clean, collapsible visual cards.")
+                Text(locale.t(
+                    "Run any Clous CLI command or type a plain sentence to inspect listening ports, audit external exposure, trace process ancestry, or grab live protocol banners.",
+                    "Dinleyen portları incelemek, dışa maruziyeti denetlemek, süreç soy ağacını görmek veya canlı protokol başlıklarını okumak için bir Clous CLI komutu ya da düz Türkçe/İngilizce cümle yazın."
+                ))
                     .font(SierraFont.ui(13))
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
@@ -916,7 +977,13 @@ struct ContentView: View {
                     .font(.system(size: 16, weight: .bold, design: .monospaced))
                     .foregroundStyle(hasError ? .red : SierraTheme.accent)
 
-                TextField("Type a command or plain English (e.g. 5000, close 3000, exposed, security scan, free port)...", text: $vm.commandInput)
+                TextField(
+                    locale.t(
+                        "Type a command or plain sentence (e.g. 5000, close port 3000, exposed, security scan, free port)...",
+                        "Komut veya düz cümle yazın (ör. 5000, 3000 portunu kapat, dışa açık portlar, güvenlik taraması, boş port)..."
+                    ),
+                    text: $vm.commandInput
+                )
                     .textFieldStyle(.plain)
                     .font(.system(size: 14, design: .monospaced))
                     .focused($isCommandFocused)
@@ -960,7 +1027,7 @@ struct ContentView: View {
                         .controlSize(.small)
                 }
 
-                Button("Run") {
+                Button(locale.t("Run", "Çalıştır")) {
                     vm.submitCommand()
                 }
                 .buttonStyle(.borderedProminent)
@@ -1213,6 +1280,24 @@ struct ContentView: View {
                             DiffVisualView(diff: diff)
                         case .freePorts(let free):
                             FreePortsVisualView(result: free)
+                        case .projects(let proj):
+                            ProjectMapVisualView(
+                                report: proj,
+                                onInspectPort: { vm.inspectPort($0) },
+                                onKillPort: { vm.killPort($0) }
+                            )
+                        case .doctor(let doc):
+                            DoctorVisualView(
+                                report: doc,
+                                onRunFix: { cmd in
+                                    Task { await vm.executeCommand(cmd) }
+                                },
+                                onInspectPort: { vm.inspectPort($0) }
+                            )
+                        case .httpHealth(let http):
+                            HttpHealthVisualView(report: http)
+                        case .history(let records, let port):
+                            HistoryTimelineVisualView(records: records, filterPort: port)
                         case .text(let str):
                             Text(str)
                                 .font(.system(size: 12, design: .monospaced))
@@ -1245,12 +1330,12 @@ struct ContentView: View {
                 Button {
                     if vm.isStreaming { vm.stopLiveStream() } else { vm.startLiveStream() }
                 } label: {
-                    Label(vm.isStreaming ? "Pause" : "Resume", systemImage: vm.isStreaming ? "pause.fill" : "play.fill")
+                    Label(vm.isStreaming ? locale.t("Pause", "Duraklat") : locale.t("Resume", "Devam Et"), systemImage: vm.isStreaming ? "pause.fill" : "play.fill")
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.small)
 
-                Picker("Interval", selection: $vm.streamIntervalMs) {
+                Picker(locale.t("Interval", "Aralık"), selection: $vm.streamIntervalMs) {
                     Text("500ms").tag(500)
                     Text("1s").tag(1000)
                     Text("2s").tag(2000)
@@ -1262,7 +1347,7 @@ struct ContentView: View {
                     vm.restartStreamWithSettings(resetHistory: false)
                 }
 
-                Toggle("All States", isOn: $vm.streamAllStates)
+                Toggle(locale.t("All States", "Tüm Durumlar"), isOn: $vm.streamAllStates)
                     .toggleStyle(.switch)
                     .controlSize(.small)
                     .onChange(of: vm.streamAllStates) { _, _ in
@@ -1283,12 +1368,12 @@ struct ContentView: View {
 
             if let tick = vm.latestTick {
                 HStack(spacing: 10) {
-                    KpiPill(title: "Active", value: "\(tick.active)", tint: .primary, icon: "network")
+                    KpiPill(title: locale.t("Active", "Aktif"), value: "\(tick.active)", tint: .primary, icon: "network")
                     KpiPill(title: "TCP / UDP", value: "\(tick.tcp) / \(tick.udp)", tint: .primary, icon: "arrow.left.arrow.right")
-                    KpiPill(title: "Exposed", value: "\(tick.exposed)", tint: tick.exposed > 0 ? .orange : .green, icon: "globe")
-                    KpiPill(title: "Opened", value: "+\(tick.openedTotal)", tint: .green, icon: "plus.circle")
-                    KpiPill(title: "Closed", value: "-\(tick.closedTotal)", tint: .red, icon: "minus.circle")
-                    KpiPill(title: "Scan", value: "\(tick.scanMs)ms", tint: .secondary, icon: "speedometer")
+                    KpiPill(title: locale.t("Exposed", "Dışa Açık"), value: "\(tick.exposed)", tint: tick.exposed > 0 ? .orange : .green, icon: "globe")
+                    KpiPill(title: locale.t("Opened", "Açılan"), value: "+\(tick.openedTotal)", tint: .green, icon: "plus.circle")
+                    KpiPill(title: locale.t("Closed", "Kapanan"), value: "-\(tick.closedTotal)", tint: .red, icon: "minus.circle")
+                    KpiPill(title: locale.t("Scan", "Tarama"), value: "\(tick.scanMs)ms", tint: .secondary, icon: "speedometer")
                 }
                 .padding(.horizontal, 16)
             }
@@ -1364,17 +1449,17 @@ struct ContentView: View {
             VStack(alignment: .leading, spacing: 14) {
                 HStack(spacing: 12) {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Security & Binary Trust Audit")
+                        Text(locale.t("Security & Binary Trust Audit", "Güvenlik ve İkili Güven Denetimi"))
                             .font(.system(size: 18, weight: .semibold))
-                        Text("macOS firewall posture, code-signature verification, active probing, and remediation playbooks")
+                        Text(locale.t("macOS firewall posture, code-signature verification, active probing, and remediation playbooks", "macOS güvenlik duvarı durumu, dijital imza doğrulaması, aktif yoklama ve düzeltme önerileri"))
                             .font(.system(size: 12))
                             .foregroundStyle(.secondary)
                     }
                     Spacer()
 
-                    Picker("Profile", selection: $vm.auditProfile) {
+                    Picker(locale.t("Profile", "Profil"), selection: $vm.auditProfile) {
                         ForEach(AuditProfileOption.allCases) { opt in
-                            Text(opt.label).tag(opt)
+                            Text(opt.localizedLabel).tag(opt)
                         }
                     }
                     .pickerStyle(.segmented)
@@ -1383,7 +1468,7 @@ struct ContentView: View {
                         Task { await vm.refreshAudit() }
                     }
 
-                    Toggle("Deep Probe", isOn: $vm.auditDeepScan)
+                    Toggle(locale.t("Deep Probe", "Derin Tarama"), isOn: $vm.auditDeepScan)
                         .toggleStyle(.switch)
                         .controlSize(.small)
                         .onChange(of: vm.auditDeepScan) { _, _ in
@@ -1393,7 +1478,7 @@ struct ContentView: View {
                     Button {
                         vm.exportAuditMarkdown()
                     } label: {
-                        Label("Export MD", systemImage: "square.and.arrow.up")
+                        Label(locale.t("Export MD", "MD Dışa Aktar"), systemImage: "square.and.arrow.up")
                     }
                     .buttonStyle(.bordered)
                     .controlSize(.small)
@@ -1405,7 +1490,7 @@ struct ContentView: View {
                         if vm.isLoadingAudit {
                             ProgressView().controlSize(.small)
                         } else {
-                            Label("Scan", systemImage: "shield.checkerboard")
+                            Label(locale.t("Scan", "Tara"), systemImage: "shield.checkerboard")
                         }
                     }
                     .buttonStyle(.borderedProminent)
@@ -1439,22 +1524,22 @@ struct ContentView: View {
             VStack(alignment: .leading, spacing: 14) {
                 HStack(spacing: 12) {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Socket & Exposure Analytics")
+                        Text(locale.t("Socket & Exposure Analytics", "Soket ve Maruziyet Analitiği"))
                             .font(.system(size: 18, weight: .semibold))
-                        Text("Real-time telemetry, bind exposure breakdown, and process activity")
+                        Text(locale.t("Real-time telemetry, bind exposure breakdown, and process activity", "Gerçek zamanlı telemetri, dışa maruziyet dağılımı ve süreç aktivitesi"))
                             .font(.system(size: 12))
                             .foregroundStyle(.secondary)
                     }
                     Spacer()
 
-                    Toggle("Live Sync", isOn: $vm.liveAnalyticsEnabled)
+                    Toggle(locale.t("Live Sync", "Canlı Eşitle"), isOn: $vm.liveAnalyticsEnabled)
                         .toggleStyle(.switch)
                         .controlSize(.small)
 
                     Button {
                         Task { await vm.refreshStats() }
                     } label: {
-                        Label("Refresh", systemImage: "arrow.clockwise")
+                        Label(locale.t("Refresh", "Yenile"), systemImage: "arrow.clockwise")
                     }
                     .buttonStyle(.bordered)
                     .controlSize(.small)
@@ -1483,7 +1568,7 @@ struct ContentView: View {
     private var inspectorDrawer: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
-                Label("Forensic Inspector", systemImage: "sparkle.magnifyingglass")
+                Label(locale.t("Forensic Inspector", "Adli İnceleyici"), systemImage: "sparkle.magnifyingglass")
                     .font(.system(size: 13, weight: .semibold))
                 Spacer()
                 Button {
@@ -1504,16 +1589,16 @@ struct ContentView: View {
 
             ScrollView {
                 if vm.isInspecting {
-                    ProgressView("Probing & tracing ancestry...")
+                    ProgressView(locale.t("Probing & tracing ancestry...", "Yoklanıyor ve süreç soy ağacı izleniyor..."))
                         .frame(maxWidth: .infinity, minHeight: 160)
                 } else if let report = vm.inspectedReport {
                     InspectVisualView(report: report, onKill: { vm.killPort($0) })
                         .padding(14)
                 } else {
                     ContentUnavailableView(
-                        "No Port Selected",
+                        locale.t("No Port Selected", "Port Seçilmedi"),
                         systemImage: "sparkle.magnifyingglass",
-                        description: Text("Click any row in a port table to inspect its process ancestry and live banner.")
+                        description: Text(locale.t("Click any row in a port table to inspect its process ancestry and live banner.", "Süreç soy ağacını ve canlı protokol başlığını incelemek için tablodan herhangi bir satıra tıklayın."))
                     )
                     .padding(.top, 40)
                 }
@@ -1545,6 +1630,7 @@ struct ShakeEffect: GeometryEffect {
 struct MenuBarView: View {
     @ObservedObject var vm: SierraPortViewModel
     @ObservedObject var hotkeyManager: GlobalHotkeyManager
+    @ObservedObject private var locale = AppLocale.shared
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -1553,7 +1639,7 @@ struct MenuBarView: View {
                     .font(.system(size: 13, weight: .semibold))
                 Spacer()
                 if let tick = vm.latestTick {
-                    Text("\(tick.active) active · \(tick.exposed) exposed")
+                    Text("\(tick.active) \(locale.t("active", "aktif")) · \(tick.exposed) \(locale.t("exposed", "dışa açık"))")
                         .font(.system(size: 11, design: .monospaced))
                         .foregroundStyle(.secondary)
                 }
@@ -1589,7 +1675,7 @@ struct MenuBarView: View {
                     }
                 }
             } else {
-                Text("No active listeners")
+                Text(locale.t("No active listeners", "Aktif dinleyen port yok"))
                     .font(.system(size: 12))
                     .foregroundStyle(.secondary)
             }
@@ -1597,15 +1683,15 @@ struct MenuBarView: View {
             Divider()
 
             HStack {
-                Button("Quick Launcher") {
+                Button(locale.t("Quick Launcher", "Hızlı Başlatıcı")) {
                     QuickLauncherController.shared.show()
                 }
                 Spacer()
-                Button("Open App") {
+                Button(locale.t("Open App", "Uygulamayı Aç")) {
                     NSApp.activate(ignoringOtherApps: true)
                 }
                 Spacer()
-                Button("Quit") {
+                Button(locale.t("Quit", "Çıkış")) {
                     NSApp.terminate(nil)
                 }
             }
@@ -1638,5 +1724,246 @@ private struct SlowMotionBlockReveal<Content: View>: View {
                     }
                 }
             }
+    }
+}
+
+// MARK: - Privileged Command Permission & Approval Sheet (Apple Liquid Glass)
+
+private struct PrivilegedActionApprovalSheet: View {
+    let request: PrivilegedActionRequest
+    let onApprove: (Bool) -> Void
+    let onCancel: () -> Void
+    @ObservedObject private var locale = AppLocale.shared
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @State private var rememberPermission: Bool = false
+    @State private var keyMonitor: Any? = nil
+
+    private var isDark: Bool { colorScheme == .dark }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            HStack(alignment: .top, spacing: 14) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 13, style: .continuous)
+                        .fill(.ultraThinMaterial)
+                        .frame(width: 44, height: 44)
+                    RoundedRectangle(cornerRadius: 13, style: .continuous)
+                        .fill(SierraTheme.accent.opacity(isDark ? 0.18 : 0.12))
+                        .frame(width: 44, height: 44)
+                    RoundedRectangle(cornerRadius: 13, style: .continuous)
+                        .strokeBorder(
+                            LinearGradient(
+                                colors: [SierraTheme.accent.opacity(0.55), SierraTheme.accent.opacity(0.15)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: 1
+                        )
+                        .frame(width: 44, height: 44)
+                    Image(systemName: "lock.shield.fill")
+                        .font(.system(size: 19, weight: .semibold))
+                        .foregroundStyle(SierraTheme.accent)
+                }
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(request.title)
+                        .font(SierraFont.display(16, weight: .semibold))
+                        .foregroundStyle(.primary)
+                    Text(request.detail)
+                        .font(SierraFont.ui(12))
+                        .foregroundStyle(.secondary)
+                        .lineSpacing(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
+            VStack(alignment: .leading, spacing: 8) {
+                if let target = request.targetSummary {
+                    HStack(spacing: 6) {
+                        Image(systemName: "cpu")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                        Text(target)
+                            .font(SierraFont.ui(11.5, weight: .medium))
+                            .foregroundStyle(.primary)
+                    }
+                }
+
+                HStack(spacing: 8) {
+                    Text("❯")
+                        .font(SierraFont.mono(12, weight: .bold))
+                        .foregroundStyle(SierraTheme.accent)
+                    Text(request.commandPreview)
+                        .font(SierraFont.mono(12, weight: .medium))
+                        .foregroundStyle(.primary)
+                        .textSelection(.enabled)
+                    Spacer()
+                }
+                .padding(.horizontal, 13)
+                .padding(.vertical, 10)
+                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .background(SierraTheme.codeWell.opacity(0.75), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .strokeBorder(
+                            LinearGradient(
+                                colors: [SierraTheme.glassBorderTop, SierraTheme.glassBorderBottom],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            ),
+                            lineWidth: 1
+                        )
+                )
+            }
+
+            Toggle(isOn: $rememberPermission) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(locale.t("Remember permission for process termination", "Süreç sonlandırma iznini hatırla"))
+                        .font(SierraFont.ui(12, weight: .medium))
+                    Text(locale.t(
+                        "You can revoke this anytime from Actions → Revoke Process Control Permission.",
+                        "Bu izni istediğiniz zaman İşlemler → Süreç Sonlandırma İznini Geri Al menüsünden iptal edebilirsiniz."
+                    ))
+                        .font(SierraFont.ui(10.5))
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .toggleStyle(.checkbox)
+
+            Divider().opacity(0.28)
+
+            HStack(spacing: 10) {
+                // Apple Liquid Glass Cancel Button (Esc)
+                Button {
+                    onCancel()
+                } label: {
+                    HStack(spacing: 7) {
+                        Text(locale.t("Cancel", "Vazgeç"))
+                            .font(SierraFont.ui(12.5, weight: .medium))
+                            .foregroundStyle(.primary.opacity(0.9))
+                        Text("Esc")
+                            .font(SierraFont.mono(10, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 1.5)
+                            .background(SierraTheme.glassFillElevated, in: RoundedRectangle(cornerRadius: 5, style: .continuous))
+                    }
+                    .padding(.horizontal, 14)
+                    .frame(height: 36)
+                    .background(.ultraThinMaterial, in: Capsule())
+                    .background(SierraTheme.glassFill, in: Capsule())
+                    .overlay(
+                        Capsule().strokeBorder(
+                            LinearGradient(
+                                colors: [SierraTheme.glassBorderTop, SierraTheme.glassBorderBottom],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            ),
+                            lineWidth: 1
+                        )
+                    )
+                    .contentShape(Capsule())
+                }
+                .buttonStyle(TactileGlassButtonStyle(cornerRadius: 18))
+                .keyboardShortcut(.cancelAction)
+
+                Spacer()
+
+                // Apple Liquid Glass Prominent Crimson Approve Button (⏎)
+                Button {
+                    onApprove(rememberPermission)
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "checkmark.shield.fill")
+                            .font(.system(size: 12, weight: .semibold))
+                        Text(rememberPermission
+                             ? locale.t("Allow Always & Run", "Her Zaman İzin Ver ve Çalıştır")
+                             : locale.t("Allow Once", "Bir Kez İzin Ver"))
+                            .font(SierraFont.ui(12.5, weight: .semibold))
+                        Text("⏎")
+                            .font(SierraFont.mono(10.5, weight: .bold))
+                            .padding(.horizontal, 5.5)
+                            .padding(.vertical, 1.5)
+                            .background(Color.white.opacity(0.20), in: RoundedRectangle(cornerRadius: 5, style: .continuous))
+                    }
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 16)
+                    .frame(height: 36)
+                    .background(
+                        ZStack {
+                            Capsule().fill(SierraTheme.accent)
+                            Capsule().fill(
+                                LinearGradient(
+                                    colors: [Color.white.opacity(0.18), Color.clear],
+                                    startPoint: .top,
+                                    endPoint: .center
+                                )
+                            )
+                        }
+                    )
+                    .overlay(
+                        Capsule().strokeBorder(
+                            LinearGradient(
+                                colors: [Color.white.opacity(0.36), Color.white.opacity(0.08)],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            ),
+                            lineWidth: 1
+                        )
+                    )
+                    .shadow(color: SierraTheme.accent.opacity(isDark ? 0.36 : 0.24), radius: 10, y: 3)
+                    .contentShape(Capsule())
+                }
+                .buttonStyle(TactileGlassButtonStyle(cornerRadius: 18))
+                .keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(22)
+        .frame(width: 472)
+        .background {
+            if reduceTransparency {
+                SierraTheme.canvas
+            } else {
+                ZStack {
+                    Rectangle().fill(.ultraThinMaterial)
+                    SierraTheme.canvas.opacity(isDark ? 0.82 : 0.88)
+                }
+            }
+        }
+        .onAppear {
+            installKeyMonitor()
+        }
+        .onDisappear {
+            removeKeyMonitor()
+        }
+    }
+
+    private func installKeyMonitor() {
+        removeKeyMonitor()
+        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            // Return (36) or Numpad Enter (76) -> instant approve
+            if event.keyCode == 36 || event.keyCode == 76 {
+                DispatchQueue.main.async {
+                    onApprove(rememberPermission)
+                }
+                return nil
+            }
+            // Escape (53) -> instant cancel
+            if event.keyCode == 53 {
+                DispatchQueue.main.async {
+                    onCancel()
+                }
+                return nil
+            }
+            return event
+        }
+    }
+
+    private func removeKeyMonitor() {
+        if let monitor = keyMonitor {
+            NSEvent.removeMonitor(monitor)
+            keyMonitor = nil
+        }
     }
 }

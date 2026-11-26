@@ -97,6 +97,25 @@ pub enum Command {
     Stats {
         filter: FilterOptions,
     },
+    Project {
+        filter: FilterOptions,
+    },
+    Doctor,
+    Http {
+        host: String,
+        port: u16,
+        path: String,
+        timeout_ms: u64,
+    },
+    Forward {
+        listen_port: u16,
+        target: String,
+        public_bind: bool,
+    },
+    Open {
+        port: u16,
+        public_bind: bool,
+    },
     Help,
     Version,
 }
@@ -667,6 +686,154 @@ pub fn parse_args<I: IntoIterator<Item = String>>(args: I) -> Result<CliArgs, St
                 global,
             })
         }
+        "project" | "projects" | "proj" => {
+            let filter = parse_filter_flags(rest, &mut global, true)?;
+            Ok(CliArgs {
+                command: Command::Project { filter },
+                global,
+            })
+        }
+        "doctor" | "diag" | "health" => {
+            let _ = parse_filter_flags(rest, &mut global, false)?;
+            Ok(CliArgs {
+                command: Command::Doctor,
+                global,
+            })
+        }
+        "http" | "curl" => {
+            let mut port_opt: Option<u16> = None;
+            let mut host = "127.0.0.1".to_string();
+            let mut path = "/".to_string();
+            let mut timeout_ms = 2000u64;
+            let mut i = 0;
+            while i < rest.len() {
+                match rest[i].as_str() {
+                    "-H" | "--host" => {
+                        i += 1;
+                        host = rest.get(i).ok_or("Missing value for --host")?.clone();
+                    }
+                    "-t" | "--timeout" => {
+                        i += 1;
+                        timeout_ms = rest
+                            .get(i)
+                            .ok_or("Missing value for --timeout")?
+                            .parse::<u64>()
+                            .map_err(|_| "Invalid --timeout value")?;
+                    }
+                    "--json" => global.format = OutputFormat::Json,
+                    "--no-color" => global.no_color = true,
+                    "-h" | "--help" => {
+                        return Ok(CliArgs {
+                            command: Command::Help,
+                            global,
+                        });
+                    }
+                    other if !other.starts_with('-') => {
+                        if port_opt.is_none() {
+                            port_opt = Some(
+                                other
+                                    .trim_start_matches(':')
+                                    .parse::<u16>()
+                                    .map_err(|_| format!("Invalid port: '{other}'"))?,
+                            );
+                        } else if other.starts_with('/') {
+                            path = other.to_string();
+                        } else {
+                            host = other.to_string();
+                        }
+                    }
+                    other => return Err(format!("Unknown option for http: '{other}'")),
+                }
+                i += 1;
+            }
+            let port = port_opt
+                .ok_or_else(|| "Usage: clous http <port> [/path] [-H <host>] [--json]".to_string())?;
+            Ok(CliArgs {
+                command: Command::Http {
+                    host,
+                    port,
+                    path,
+                    timeout_ms,
+                },
+                global,
+            })
+        }
+        "forward" | "proxy" | "fwd" => {
+            let mut listen_port_opt: Option<u16> = None;
+            let mut target_opt: Option<String> = None;
+            let mut public_bind = false;
+            for arg in rest {
+                match arg.as_str() {
+                    "--public" => public_bind = true,
+                    "-h" | "--help" => {
+                        return Ok(CliArgs {
+                            command: Command::Help,
+                            global,
+                        });
+                    }
+                    other if !other.starts_with('-') => {
+                        if listen_port_opt.is_none() {
+                            listen_port_opt = Some(
+                                other
+                                    .trim_start_matches(':')
+                                    .parse::<u16>()
+                                    .map_err(|_| format!("Invalid listen port: '{other}'"))?,
+                            );
+                        } else if target_opt.is_none() {
+                            let tgt = if other.contains(':') {
+                                other.to_string()
+                            } else {
+                                format!("127.0.0.1:{other}")
+                            };
+                            target_opt = Some(tgt);
+                        }
+                    }
+                    other => return Err(format!("Unknown option for forward: '{other}'")),
+                }
+            }
+            let listen_port = listen_port_opt
+                .ok_or_else(|| "Usage: clous forward <listen_port> <target_host:port> [--public]".to_string())?;
+            let target = target_opt
+                .ok_or_else(|| "Usage: clous forward <listen_port> <target_host:port> [--public]".to_string())?;
+            Ok(CliArgs {
+                command: Command::Forward {
+                    listen_port,
+                    target,
+                    public_bind,
+                },
+                global,
+            })
+        }
+        "open" | "listen" | "serve" => {
+            let mut port_opt: Option<u16> = None;
+            let mut public_bind = false;
+            for arg in rest {
+                match arg.as_str() {
+                    "--public" | "--exposed" => public_bind = true,
+                    "-h" | "--help" => {
+                        return Ok(CliArgs {
+                            command: Command::Help,
+                            global,
+                        });
+                    }
+                    other if !other.starts_with('-') && port_opt.is_none() => {
+                        port_opt = Some(
+                            other
+                                .trim_start_matches(':')
+                                .parse::<u16>()
+                                .map_err(|_| format!("Invalid port: '{other}'"))?,
+                        );
+                    }
+                    other => return Err(format!("Unknown option for open: '{other}'")),
+                }
+            }
+            let port = port_opt
+                .ok_or_else(|| "Usage: clous open <port> [--public]".to_string())?;
+            Ok(CliArgs {
+                command: Command::Open { port, public_bind },
+                global,
+            })
+        }
         other => Err(format!(
             "Unknown command: '{other}'. Run 'clous --help' for usage."
         )),
@@ -815,6 +982,11 @@ COMMANDS:
   who, find, pid <port>    Quick lookup of process(es) occupying a port
   kill <target>            Terminate process(es) by port(s), --pid, or --proc
   stats, summary           Visual ASCII bar-chart socket & exposure statistics
+  project, proj            Group active listening ports by project folder & Git branch
+  doctor, health           Run developer environment doctor (zombies, leaks, exposed DBs)
+  http <port> [/path]      Check HTTP health, TTFB latency, CORS & security headers
+  forward <from> <to>      Zero-dependency local TCP port forwarder (--public optional)
+  open <port> [--public]   Open a lightweight HTTP/TCP listener on a port
   help / version           Show help or version information
 
 FILTER, SORT & FORMAT OPTIONS (list / watch / stats / snapshot):

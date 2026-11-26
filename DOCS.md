@@ -1,20 +1,20 @@
-# SierraPort — Kapsamlı Sistem Mimarisi ve Kullanım Rehberi
+# Clous — Kapsamlı Sistem Mimarisi ve Kullanım Rehberi
 
-**SierraPort**, Rust (Edition 2024) ile **sıfır harici bağımlılık** (yalnızca `std`) kullanılarak geliştirilmiş; yüksek hızlı, hafif ve çapraz platformlu bir terminal port izleme, güvenlik denetimi, adli süreç inceleme ve ağ analiz sistemidir.
+**Clous**, Rust (Edition 2024) ve yerel macOS SwiftUI ile **sıfır harici bağımlılık** (yalnızca `std` ve Apple SDK) kullanılarak geliştirilmiş; yüksek hızlı, hafif ve çapraz platformlu bir port izleme, güvenlik denetimi, adli süreç inceleme, proje port haritalama ve ağ analiz sistemidir.
 
 ---
 
 ## 1. Tasarım Felsefesi ve Mimari
 
-SierraPort üç temel prensip üzerine kuruludur:
+Clous üç temel prensip üzerine kuruludur:
 
-1. **Sıfır Harici Bağımlılık (`Cargo.toml` içinde crate yok):**
+1. **Sıfır Harici Bağımlılık (`Cargo.toml` ve `Package.swift` içinde harici paket yok):**
    - Tedarik zinciri (supply-chain) riskini sıfıra indirir.
-   - Derleme süresi saniyeler sürer, ortaya tek bir küçük native binary çıkar (`opt-level = 3`, `lto = true`, `strip = true`).
+   - Derleme süresi saniyeler sürer, ortaya tek bir küçük native binary (`opt-level = 3`, `lto = true`, `strip = true`) ve hafif bir macOS masaüstü uygulaması (`Clous.app`) çıkar.
 2. **İşletim Sistemine Özgü En Hızlı Veri Toplama:**
    - Her platformda en doğrudan ve en düşük maliyetli mekanizmayı kullanır.
-3. **İnsan + Makine Dostu Çıktı:**
-   - Terminalde renkli tablolar, ASCII çubuk grafikleri ve titremesiz canlı panel (TUI); otomasyon ve CI/CD için `--json`, `--csv`, `--compact`, `--plain` ve anlamlı çıkış kodları (`0`, `1`, `2`).
+3. **İnsan + Makine Dostu Çıktı & Çift Dilli Arayüz:**
+   - Terminalde renkli tablolar, ASCII çubuk grafikleri ve titremesiz canlı panel (TUI); macOS uygulamasında **İngilizce / Türkçe** dil desteği, doğal dil komut çözümleyici ve Apple Liquid Glass arayüz; otomasyon ve CI/CD için `--json`, `--csv`, `--compact`, `--plain` ve anlamlı çıkış kodları (`0`, `1`, `2`).
 
 ### Modül Mimarisi
 
@@ -22,17 +22,19 @@ SierraPort üç temel prensip üzerine kuruludur:
 flowchart TD
     A["src/main.rs (Giriş Noktası & ExitCode)"] --> B["src/cli.rs (Komut & Bayrak Ayrıştırıcı)"]
     B --> C["src/commands.rs (Komut Orkestrasyonu & Live Watch)"]
+    B --> X["src/extras.rs (project, doctor, guard, history, http, forward, open)"]
     C --> D["src/scanner/mod.rs (OS Soyutlama, Prober, Free/Wait, Kill)"]
     D --> D1["src/scanner/linux.rs (/proc/net/* & /proc/pid)"]
     D --> D2["src/scanner/macos.rs (lsof + Toplu ps & Ancestry)"]
     D --> D3["src/scanner/windows.rs (netstat -ano + tasklist)"]
-    C --> E["src/audit.rs (Güvenlik & Soket Sağlığı Motoru)"]
+    C --> E["src/audit.rs (Güvenlik, Codesign & Firewall Denetim Motoru)"]
     C --> F["src/snapshot.rs (JSON Snapshot & Drift Motoru)"]
     C --> G["src/display.rs (Tablo, JSON, CSV, ASCII Grafik, ANSI Tema)"]
     D --> H["src/models.rs (PortEntry, BindScope, Filtre, Sıralama)"]
     E --> H
     F --> H
     G --> H
+    X --> D
 ```
 
 ---
@@ -68,23 +70,14 @@ Süreç adı ve komut satırı incelenerek soketlere bağlam etiketleri eklenir:
 
 ### 2.4. Titremesiz Canlı İzleme (`watch` — In-Place Alternate Screen)
 
-`sierraport watch` komutu standart ekrana alt alta yeni metin blokları basmak yerine gerçek bir terminal paneli gibi çalışır:
+`clous watch` komutu standart ekrana alt alta yeni metin blokları basmak yerine gerçek bir terminal paneli gibi çalışır:
 
 1. **Alternate Screen Buffer (`\x1b[?1049h`)** açılır ve imleç gizlenir (`\x1b[?25l`). Böylece terminal geçmişiniz (scrollback) kirlenmez.
-2. Her yenileme döngüsünde tüm ekran (üst istatistik şeridi + port tablosu + son değişiklikler) tek bir bellek tamponunda (string buffer) oluşturulur.
-3. `\x1b[H` (sol üst köşeye git), her satır sonunda `\x1b[K` (satır sonunu temizle) ve en altta `\x1b[J` (ekran sonunu temizle) dizileriyle **tek bir atomik `write_all` + `flush`** çağrısında ekrana yazılır — sıfır titreme (flicker-free).
+2. Her yenileme döngüsünde tüm ekran (üst istatistik şeridi + port tablosu + son değişiklikler) tek bir bellek tamponunda oluşturulur.
+3. `\x1b[H`, `\x1b[K` ve `\x1b[J` dizileriyle **tek bir atomik `write_all` + `flush`** çağrısında ekrana yazılır — sıfır titreme (flicker-free).
 4. `SIGINT` (`Ctrl+C`) yakalanır; RAII `WatchTerminalGuard` sayesinde imleç yeniden görünür yapılır ve ana terminal ekranınız bozulmadan geri yüklenir.
 
-### 2.5. Çok İş Parçacıklı Port Tarama ve Banner Tespiti (`check`)
-
-- Hedef hostname yalnızca bir kez DNS üzerinden çözümlenir.
-- Ayarlanabilir iş parçacığı havuzu (`-c` / `--concurrency`, varsayılan 64, üst sınır 256) ile yüksek hızda paralel `TcpStream::connect_timeout` çalıştırılır.
-- `--banner` etkinleştirildiğinde:
-  1. Önce pasif okuma (180ms) ile sunucunun kendiliğinden gönderdiği karşılama mesajları yakalanır (SSH, SMTP, FTP, MySQL).
-  2. Sunucu sessizse güvenli bir aktif prob gönderilir (6379 için `PING\r\n`, diğerleri için `HEAD / HTTP/1.0`).
-  3. Yanıttan protokol (`HTTP`, `SSH`, `Redis`, `SMTP`, `FTP`, `MySQL`, `TLS`) ve varsa HTTP `Server` başlığı çıkarılır.
-
-### 2.6. Güvenlik & Soket Sağlığı Denetim Motoru (`audit`)
+### 2.5. Güvenlik & Soket Sağlığı Denetim Motoru (`audit`)
 
 Sistem 100 puan üzerinden başlar ve tespit edilen bulgulara göre puan düşerek `A–F` notu hesaplar:
 
@@ -96,31 +89,29 @@ Sistem 100 puan üzerinden başlar ve tespit edilen bulgulara göre puan düşer
 | **LOW** | `-3` | Dışa açık geliştirme sunucusu portları (3000, 5000, 5173, 8000, 8080) veya `>= 100` adet `TIME_WAIT` soketi |
 | **INFO** | `0` | Yetkisiz erişim nedeniyle PID bilgisi gizli `< 1024` ayrıcalıklı portlar |
 
-### 2.7. Baseline Snapshot ve Drift Motoru (`snapshot` / `diff`)
-
-- `snapshot save <dosya>`: Dinleyen portları `(protokol, yerel adres, port, durum, PID, kullanıcı, süreç)` şeklinde deterministik bir JSON dosyasına yazar.
-- `diff <dosya>`: Kaydedilen baseline ile canlı sistemi `(protokol, port)` slotları üzerinden karşılaştırır:
-  - `+ ADDED`: Baseline'da olmayan yeni açılmış portlar.
-  - `- REMOVED`: Baseline'da olup artık kapanmış portlar.
-  - `~ CHANGED`: Aynı portta süreç adı, kullanıcı, bind adresi veya PID değişmişse (ör. servis yeniden başlatma veya port devralma/hijacking şüphesi).
-
 ---
 
 ## 3. Kurulum ve Başlangıç
 
+### macOS Masaüstü Uygulaması (`Clous.app`)
+```bash
+# Tek satırda kurulum:
+curl -fsSL https://github.com/efekanbahceci/clous/releases/latest/download/install.sh | bash
+
+# veya Homebrew Tap ile:
+brew install --cask efekanbahceci/tap/clous
+```
+
 ### Kaynaktan Derleme
 ```bash
-git clone <repo-url>
-cd SierraPort
+git clone https://github.com/efekanbahceci/clous.git
+cd clous
 cargo build --release
-```
-Derlenen binary: `./target/release/sierraport`
-
-### Sisteme Global Kurulum
-```bash
 cargo install --path .
-# Artık her dizinden doğrudan kullanılabilir:
-sierraport --version
+
+# Native macOS uygulamasını derlemek için:
+./scripts/build-macos-app.sh
+open dist/Clous.app
 ```
 
 ---
@@ -128,121 +119,85 @@ sierraport --version
 ## 4. Kapsamlı Komut Referansı
 
 ### 4.1. `list` (`ls`) — Portları Listele
-Varsayılan olarak yalnızca dinleyen (`LISTEN` / bound UDP) portları gösterir.
 ```bash
-sierraport                           # Dinleyen portlar
-sierraport list --wide               # USER, MEM ve tam COMMAND sütunları
-sierraport list --all                # ESTABLISHED, TIME_WAIT, CLOSE_WAIT dahil tümü
-sierraport list --tcp --exposed      # Sadece dışa açık TCP portları
-sierraport list --state CLOSE_WAIT   # Sadece belirli soket durumundaki bağlantılar
-sierraport list --user root          # Belirli kullanıcıya ait soketler
-sierraport list --proc node          # Süreç adı veya komut satırında 'node' geçenler
-sierraport list -p 80,443,3000-3100  # Port listesi veya aralığı filtresi
-sierraport list --sort mem --desc    # Bellek kullanımına göre azalan sıralama
-sierraport list --csv                # CSV dışa aktarma
-sierraport list --json               # JSON dışa aktarma
-sierraport list --compact            # Tek satırlık özet görünüm
+clous                                # Dinleyen portlar
+clous list --wide                    # USER, MEM ve tam COMMAND sütunları
+clous list --all                     # ESTABLISHED, TIME_WAIT, CLOSE_WAIT dahil tümü
+clous list --tcp --exposed           # Sadece dışa açık TCP portları
+clous list --state CLOSE_WAIT        # Sadece belirli soket durumundaki bağlantılar
+clous list --user root               # Belirli kullanıcıya ait soketler
+clous list --proc node               # Süreç adı veya komut satırında 'node' geçenler
+clous list -p 80,443,3000-3100       # Port listesi veya aralığı filtresi
+clous list --sort mem --desc         # Bellek kullanımına göre azalan sıralama
+clous list --csv / --json / --compact
 ```
 
-### 4.2. `watch` (`monitor`, `w`) — Canlı Panel (In-Place)
-Ekranı kaydırmadan, aynı terminal alanında anlık istatistikleri ve port değişikliklerini günceller.
+### 4.2. `project` (`projects`, `proj`, `workspace`) — Proje Bazlı Port Haritası
 ```bash
-sierraport watch                                    # 1000ms aralıkla canlı izleme
-sierraport watch -i 500 --wide                      # 500ms aralıkla geniş görünüm
-sierraport watch -i 500 --exposed --alert-new       # Yeni dışa açık port açılınca sesli uyarı
-sierraport watch --log /tmp/port_events.jsonl       # Açılan/kapanan portları JSONL dosyasına kaydet
+clous project                        # Çalışan portları çalışma dizini ve Git deposuna göre grupla
+clous project --json                 # JSON formatında proje port haritası
 ```
 
-### 4.3. `inspect` (`info`, `deep`) — Derin Adli İnceleme
+### 4.3. `doctor` (`diag`, `health`) — Ağ & Sistem Sağlık Teşhisi
 ```bash
-sierraport inspect 5432                 # Bağlantılar, süreç soyağacı, aktif peer'lar
-sierraport inspect 5000 --probe         # + Canlı TCP/HTTP/banner probu
-sierraport inspect 5000 --probe --json  # JSON formatında tam rapor
+clous doctor                         # Firewall, DNS, loopback, dışa açık ve zombi soket teşhisi
+clous doctor --json                  # Otomasyon için JSON teşhis raporu
 ```
 
-### 4.4. `audit` (`sec`, `security`) — Güvenlik & Sağlık Denetimi
+### 4.4. `guard` (`sentinel`) — Gerçek Zamanlı Port Güvenlik Bekçisi
 ```bash
-sierraport audit            # Renkli güvenlik skoru ve öneriler
-sierraport audit --strict   # HIGH/CRITICAL bulgu varsa exit code 1 ile çık (CI/CD)
-sierraport audit --json     # SIEM / otomasyon sistemleri için JSON çıktı
+clous guard                          # Yeni açılan tüm portları gerçek zamanlı izle ve uyar
+clous guard --exposed-only           # Yalnızca dışa açık (0.0.0.0 / *) yeni portlarda uyar
 ```
 
-### 4.5. `snapshot` & `diff` — Baseline ve Sapma Kontrolü
+### 4.5. `history` (`timeline`, `events`) — 24 Saatlik Port Zaman Çizelgesi
 ```bash
-sierraport snapshot save baseline.json          # Mevcut durumu kaydet
-sierraport diff baseline.json                   # Sapmaları raporla
-sierraport diff baseline.json --fail-on-drift   # Sapma varsa exit code 1 ile çık
+clous history                        # Son 24 saatte açılan/kapanan port kayıtları (~/.clous/history.jsonl)
+clous history 3000                   # Yalnızca 3000 portuna ait geçmiş olaylar
 ```
 
-### 4.6. `check` (`probe`, `ping`) — Eşzamanlı Port Tarayıcı
+### 4.6. `http` (`curl`, `healthcheck`) — Yerleşik HTTP/1.1 Sağlık & Gecikme Probu
 ```bash
-sierraport check 80,443,5432,6379 127.0.0.1
-sierraport check 1-1024 127.0.0.1 --open-only --banner
-sierraport check 8000-8500 10.0.0.5 -t 250 -c 128 --open-only
+clous http 3000                      # 127.0.0.1:3000/ için HTTP durum kodu, TTFB ve başlıklar
+clous http 8080 /api/health          # Özel uç nokta kontrolü
 ```
 
-### 4.7. `free` (`available`) — Boş Port Bulucu
+### 4.7. `forward` (`proxy`, `tunnel`) — Yerel TCP Port Yönlendirici
 ```bash
-sierraport free                                    # 3000-9999 aralığında 1 boş port
-sierraport free --range 8000-8999 --count 5        # 5 adet boş port
-PORT=$(sierraport free --range 8000-8999 --plain)  # Shell script içinde kullanım
+clous forward 8080 3000              # 127.0.0.1:8080 trafiğini 127.0.0.1:3000 adresine aktar
 ```
 
-### 4.8. `wait` — Port Hazır / Kapanma Bekleyici
+### 4.8. `open` (`listen`, `bind`, `serve`) — Yerel Port Açma
 ```bash
-sierraport wait 5432 --until open --timeout 30000      # Veritabanı açılana kadar bekle
-sierraport wait 3000 --until closed --timeout 10000    # Servis kapanana kadar bekle
+clous open 3000                      # 127.0.0.1:3000 üzerinde güvenli yerel TCP dinleyici aç
+clous open 8080 --public             # 0.0.0.0:8080 üzerinde tüm arayüzlerden dinle (macOS'ta izin onayı ister)
 ```
 
-### 4.9. `who` (`find`, `pid`) ve `kill` — Hızlı Sorgu ve Sonlandırma
+### 4.9. `watch` (`monitor`, `w`) — Canlı Panel (In-Place)
 ```bash
-sierraport who 3000                       # 3000 portunu kim tutuyor?
-sierraport kill 3000                      # Onay isteyerek SIGTERM gönder
-sierraport kill 3000 -y --wait            # Onaysız sonlandır ve portun boşaldığını doğrula
-sierraport kill 3000-3005 -f -y           # Aralıktaki tüm süreçlere SIGKILL gönder
-sierraport kill --pid 12345 -y            # Doğrudan PID ile sonlandır
-sierraport kill --proc vite -y --wait     # Süreç adına göre sonlandır
+clous watch                                    # 1000ms aralıkla canlı izleme
+clous watch -i 500 --wide                      # 500ms aralıkla geniş görünüm
+clous watch -i 500 --exposed --alert-new       # Yeni dışa açık port açılınca uyarı
+clous watch --log /tmp/port_events.jsonl       # Açılan/kapanan portları JSONL dosyasına kaydet
 ```
 
-### 4.10. `stats` (`summary`) — Görsel Soket İstatistikleri
+### 4.10. `inspect`, `audit`, `snapshot`, `diff`, `check`, `free`, `wait`, `who`, `kill`, `stats`
 ```bash
-sierraport stats          # Protokol, durum, bind kapsamı ve süreçler için ASCII çubuk grafikler
-sierraport stats --json   # JSON istatistik özeti
+clous inspect 5432 --probe                     # Süreç soyağacı + canlı protokol/banner probu
+clous audit --strict                           # HIGH/CRITICAL bulgu varsa exit code 1 (CI/CD)
+clous snapshot save baseline.json              # Mevcut port durumunu kaydet
+clous diff baseline.json --fail-on-drift       # Sapma varsa exit code 1 ile çık
+clous check 1-1024 127.0.0.1 --open-only --banner
+PORT=$(clous free --range 8000-8999 --plain)   # Boş port tahsisi
+clous wait 5432 --until open --timeout 30000   # Port açılana kadar bekle
+clous who 3000                                 # 3000 portunu kim tutuyor?
+clous kill 3000 -y --wait                      # Temizce sonlandır ve portun boşaldığını doğrula
+clous stats                                    # ASCII çubuk grafiklerle soket istatistikleri
 ```
 
 ---
 
-## 5. Gerçek Dünya Kullanım Alanları
-
-### 1. Yerel Yazılım Geliştirme (Developer Productivity)
-- **"Address already in use" hatasını 1 saniyede çözme:** `sierraport who 3000` ile portu tutan süreci görün, `sierraport kill 3000 -y --wait` ile temizce kapatıp portun serbest kaldığından emin olun.
-- **Dinamik port tahsisi:** Mikroservis veya paralel test ortamlarında çakışma olmadan boş port bulmak için `PORT=$(sierraport free --range 4000-4999 --plain)`.
-- **Servis bağımlılığı senkronizasyonu:** Entegrasyon testlerinden önce `sierraport wait 5432 --until open` ile veritabanının hazır olmasını bekleyin.
-
-### 2. DevSecOps ve Güvenlik Denetimi
-- **Yanlışlıkla dışa açılan servisleri yakalama:** Docker/yerel geliştirme sırasında `0.0.0.0` üzerinde unutulan Redis, PostgreSQL veya MongoDB portlarını `sierraport audit` ile anında görün.
-- **CI/CD güvenlik kapısı (Security Gate):** Dağıtım sonrası (post-deploy) pipeline'da `sierraport audit --strict` çalıştırarak kritik port maruziyeti durumunda pipeline'ı otomatik durdurun.
-
-### 3. SRE / Sunucu Operasyonları ve Konfigürasyon Sapması (Drift)
-- **Üretim sunucusu baseline kontrolü:** Sunucu temiz kurulduğunda `sierraport snapshot save /etc/sierraport-baseline.json` alın; cron job veya izleme ajanından periyodik `sierraport diff /etc/sierraport-baseline.json --fail-on-drift` çalıştırarak yetkisiz açılan portları veya beklenmedik süreç değişimlerini yakalayın.
-- **Olay kaydı (Audit Trail):** `sierraport watch --log /var/log/sierraport-events.jsonl` ile geçici (ephemeral) olarak açılıp kapanan şüpheli portları zaman damgasıyla kaydedin.
-
-### 4. Olay Müdahalesi ve Adli Analiz (Incident Response / Forensics)
-- **Bilinmeyen bir portun kaynağını çözme:** `sierraport inspect <port> --probe` komutuyla portun arkasındaki sürecin hangi üst süreçten (`launchd` / `systemd` / `sshd` / `bash`) türediğini (ancestry), hangi kullanıcıyla çalıştığını, ne kadar bellek tükettiğini ve dışarıya hangi banner'ı verdiğini tek komutta görün.
-- **Soket sızıntısı teşhisi:** Sunucuda dosya tanımlayıcı (FD) tükenmesi yaşandığında `sierraport list --all --state CLOSE_WAIT --sort process` ile bağlantıları kapatmayan uygulamayı hızla izole edin.
-
-### 5. Otomasyon ve Veri Boru Hatları (JSON / CSV + `jq`)
-```bash
-# Dışa açık tüm portları ve süreçlerini jq ile filtrele
-sierraport list --exposed --json | jq '.[] | "\(.local_port) -> \(.process) (\(.user))"'
-
-# Raporlama için CSV olarak dışa aktar
-sierraport list --all --csv > sockets_report.csv
-```
-
----
-
-## 6. Çıkış Kodları (Exit Codes)
+## 5. Çıkış Kodları (Exit Codes)
 
 | Çıkış Kodu | Anlamı |
 |---|---|

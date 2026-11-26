@@ -6,6 +6,7 @@ import AppKit
 struct ShortcutOnboardingView: View {
     @ObservedObject var vm: SierraPortViewModel
     @ObservedObject var hotkeyManager: GlobalHotkeyManager
+    @ObservedObject private var locale = AppLocale.shared
     @Binding var themeRaw: String
     let isFirstLaunch: Bool
     let onComplete: () -> Void
@@ -213,18 +214,42 @@ struct ShortcutOnboardingView: View {
     private var themeStepView: some View {
         VStack(spacing: 24) {
             VStack(spacing: 6) {
-                Text("Welcome to Clous")
+                Text(locale.t("Welcome to Clous", "Clous'a Hoş Geldiniz"))
                     .font(SierraFont.display(28, weight: .semibold))
                     .tracking(-0.6)
-                Text("Choose your preferred interface appearance. You can switch anytime.")
+                Text(locale.t("Choose your preferred interface appearance and language. You can switch anytime.", "Tercih ettiğiniz görünümü ve dili seçin. İstediğiniz zaman değiştirebilirsiniz."))
                     .font(SierraFont.ui(13.5))
                     .foregroundStyle(.secondary)
             }
 
+            HStack(spacing: 6) {
+                ForEach(AppLanguage.allCases) { lang in
+                    let isSelected = locale.language == lang
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.18)) {
+                            locale.language = lang
+                        }
+                    } label: {
+                        HStack(spacing: 5) {
+                            Image(systemName: "globe")
+                                .font(.system(size: 10.5))
+                            Text(lang.displayName)
+                                .font(SierraFont.ui(11.5, weight: isSelected ? .semibold : .regular))
+                        }
+                        .padding(.horizontal, 14)
+                        .frame(height: 30)
+                        .background(isSelected ? SierraTheme.accent : SierraTheme.glassFill, in: Capsule())
+                        .foregroundStyle(isSelected ? Color.white : Color.primary)
+                        .overlay(Capsule().strokeBorder(isSelected ? Color.clear : SierraTheme.glassBorderBottom, lineWidth: 1))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+
             HStack(spacing: 14) {
-                themeCard(.dark, title: "Dark", subtitle: "Obsidian #07080A", previewBg: Color(red: 0x07/255, green: 0x08/255, blue: 0x0A/255), previewCard: Color(red: 0x18/255, green: 0x1A/255, blue: 0x20/255), previewText: .white)
-                themeCard(.light, title: "Light", subtitle: "Pure White #FFFFFF", previewBg: .white, previewCard: Color(red: 0xF3/255, green: 0xF4/255, blue: 0xF6/255), previewText: Color(red: 0x07/255, green: 0x08/255, blue: 0x0A/255))
-                themeCard(.system, title: "System", subtitle: "Follows macOS", previewBg: Color(red: 0x0C/255, green: 0x0D/255, blue: 0x10/255), previewCard: Color(red: 0x1E/255, green: 0x20/255, blue: 0x26/255), previewText: .white, isSplit: true)
+                themeCard(.dark, title: locale.t("Dark", "Koyu"), subtitle: "Obsidian #07080A", previewBg: Color(red: 0x07/255, green: 0x08/255, blue: 0x0A/255), previewCard: Color(red: 0x18/255, green: 0x1A/255, blue: 0x20/255), previewText: .white)
+                themeCard(.light, title: locale.t("Light", "Açık"), subtitle: locale.t("Pure White #FFFFFF", "Saf Beyaz #FFFFFF"), previewBg: .white, previewCard: Color(red: 0xF3/255, green: 0xF4/255, blue: 0xF6/255), previewText: Color(red: 0x07/255, green: 0x08/255, blue: 0x0A/255))
+                themeCard(.system, title: locale.t("System", "Sistem"), subtitle: locale.t("Follows macOS", "macOS ile Eşleşir"), previewBg: Color(red: 0x0C/255, green: 0x0D/255, blue: 0x10/255), previewCard: Color(red: 0x1E/255, green: 0x20/255, blue: 0x26/255), previewText: .white, isSplit: true)
             }
             .frame(maxWidth: 580)
 
@@ -233,7 +258,7 @@ struct ShortcutOnboardingView: View {
                     advanceCurrentStep()
                 } label: {
                     HStack(spacing: 8) {
-                        Text("Continue")
+                        Text(locale.t("Continue", "Devam Et"))
                             .font(SierraFont.ui(13.5, weight: .semibold))
                         EnterKeyHintPill()
                     }
@@ -330,10 +355,10 @@ struct ShortcutOnboardingView: View {
     private var profileStepView: some View {
         VStack(spacing: 24) {
             VStack(spacing: 6) {
-                Text("Default Security Posture")
+                Text(locale.t("Default Security Posture", "Varsayılan Güvenlik Profili"))
                     .font(SierraFont.display(26, weight: .semibold))
                     .tracking(-0.5)
-                Text("Tailor how strictly Clous evaluates exposed ports, firewall state, and binary signatures.")
+                Text(locale.t("Tailor how strictly Clous evaluates exposed ports, firewall state, and binary signatures.", "Clous'un dışa açık portları, güvenlik duvarını ve dijital imzaları ne kadar sıkı denetleyeceğini seçin."))
                     .font(SierraFont.ui(13.5))
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
@@ -341,14 +366,14 @@ struct ShortcutOnboardingView: View {
             }
 
             VStack(spacing: 10) {
-                profileRow(.developer, icon: "hammer.fill", desc: "Balanced for local dev — ignores Apple AirPlay noise, flags real DB exposures & unsigned threats.")
-                profileRow(.strict, icon: "shield.lefthalf.filled", desc: "Production-grade — flags all 0.0.0.0 dev servers, disabled firewall, and unsigned listeners.")
-                profileRow(.zeroTrust, icon: "lock.shield.fill", desc: "Maximum scrutiny — flags every non-loopback listener, disabled stealth mode, and unverified binary.")
+                profileRow(.developer, icon: "hammer.fill", desc: locale.t("Balanced for local dev — ignores Apple AirPlay noise, flags real DB exposures & unsigned threats.", "Yerel geliştirme için dengeli — AirPlay gürültüsünü yoksayar, gerçek veritabanı ve imzasız tehditleri işaretler."))
+                profileRow(.strict, icon: "shield.lefthalf.filled", desc: locale.t("Production-grade — flags all 0.0.0.0 dev servers, disabled firewall, and unsigned listeners.", "Üretim seviyesi — tüm 0.0.0.0 sunucularını, kapalı güvenlik duvarını ve imzasız dinleyicileri işaretler."))
+                profileRow(.zeroTrust, icon: "lock.shield.fill", desc: locale.t("Maximum scrutiny — flags every non-loopback listener, disabled stealth mode, and unverified binary.", "Maksimum denetim — localhost dışındaki her portu, kapalı gizli modu ve doğrulanmamış ikilileri işaretler."))
             }
             .frame(maxWidth: 520)
 
             HStack(spacing: 14) {
-                Button("Back") {
+                Button(locale.t("Back", "Geri")) {
                     navigate(to: .theme)
                 }
                 .buttonStyle(.borderless)
@@ -358,7 +383,7 @@ struct ShortcutOnboardingView: View {
                     advanceCurrentStep()
                 } label: {
                     HStack(spacing: 8) {
-                        Text("Continue to Shortcut")
+                        Text(locale.t("Continue to Shortcut", "Kısayol Ayarına Geç"))
                             .font(SierraFont.ui(13.5, weight: .semibold))
                         EnterKeyHintPill()
                     }
@@ -386,7 +411,7 @@ struct ShortcutOnboardingView: View {
                     .frame(width: 28)
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(opt.label)
+                    Text(opt.localizedLabel)
                         .font(SierraFont.ui(13.5, weight: .semibold))
                         .foregroundStyle(.primary)
                     Text(desc)
@@ -419,10 +444,12 @@ struct ShortcutOnboardingView: View {
     private var shortcutStepView: some View {
         VStack(spacing: 22) {
             VStack(spacing: 6) {
-                Text(isFirstLaunch ? "Set Your Global Hotkey" : "Global Quick Launcher Shortcut")
+                Text(isFirstLaunch
+                     ? locale.t("Set Your Global Hotkey", "Global Kısayolunu Belirle")
+                     : locale.t("Global Quick Launcher Shortcut", "Global Hızlı Başlatıcı Kısayolu"))
                     .font(SierraFont.display(26, weight: .semibold))
                     .tracking(-0.5)
-                Text("Summon Clous from any app on your Mac — just like Raycast or Spotlight.")
+                Text(locale.t("Summon Clous from any app on your Mac — just like Raycast or Spotlight.", "Mac'indeki herhangi bir uygulamadayken Clous'u anında çağır — tıpkı Raycast veya Spotlight gibi."))
                     .font(SierraFont.ui(13.5))
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)

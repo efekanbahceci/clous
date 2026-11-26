@@ -24,6 +24,15 @@ enum AppThemePreference: String, CaseIterable, Identifiable {
         case .system: return "circle.lefthalf.filled"
         }
     }
+
+    @MainActor
+    var localizedLabel: String {
+        switch self {
+        case .dark: return L("Dark", "Koyu")
+        case .light: return L("Light", "Açık")
+        case .system: return L("System", "Sistem")
+        }
+    }
 }
 
 // MARK: - Raycast Typography System (Bundled SIL-OFL Inter + SF Mono)

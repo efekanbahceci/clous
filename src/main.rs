@@ -2,6 +2,7 @@ mod audit;
 mod cli;
 mod commands;
 mod display;
+mod extras;
 mod models;
 mod scanner;
 mod snapshot;
@@ -94,6 +95,20 @@ fn main() -> ExitCode {
             wait_release,
         } => commands::run_kill(&target, force, yes, wait_release, &parsed.global),
         Command::Stats { filter } => commands::run_stats(&filter, &parsed.global),
+        Command::Project { filter } => extras::run_project(&filter, &parsed.global),
+        Command::Doctor => extras::run_doctor(&parsed.global),
+        Command::Http {
+            host,
+            port,
+            path,
+            timeout_ms,
+        } => extras::run_http(&host, port, &path, timeout_ms, &parsed.global),
+        Command::Forward {
+            listen_port,
+            target,
+            public_bind,
+        } => extras::run_forward(listen_port, &target, public_bind),
+        Command::Open { port, public_bind } => extras::run_open(port, public_bind),
         Command::Help => {
             println!("{}", help_text());
             Ok(())
@@ -349,5 +364,60 @@ mod tests {
         assert!(terminate_pid(0, false).is_err());
         assert!(terminate_pid(1, false).is_err());
         assert!(terminate_pid(std::process::id(), false).is_err());
+    }
+
+    #[test]
+    fn test_extras_project_doctor_http_and_cli() {
+        use std::io::Write;
+        use crate::extras::{analyze_doctor, detect_git_project, probe_http};
+
+        // 1. CLI parsing for project, doctor, http, forward
+        let p = parse_args(["clous", "project", "--json"].map(String::from)).unwrap();
+        assert!(matches!(p.command, Command::Project { .. }) && p.global.is_json());
+
+        let d = parse_args(["clous", "doctor", "--json"].map(String::from)).unwrap();
+        assert!(matches!(d.command, Command::Doctor) && d.global.is_json());
+
+        let h = parse_args(["clous", "http", "8080", "/health", "--json"].map(String::from)).unwrap();
+        assert!(matches!(h.command, Command::Http { port: 8080, .. }));
+
+        let f = parse_args(["clous", "forward", "8080", "3000"].map(String::from)).unwrap();
+        assert!(matches!(f.command, Command::Forward { listen_port: 8080, public_bind: false, .. }));
+
+        // 2. Doctor detects exposed DB + suspicious /tmp path + dev port
+        let exposed_pg = sample_entry(5432, "0.0.0.0", "postgres", SocketState::Listen);
+        let mut tmp_proc = sample_entry(3000, "127.0.0.1", "node", SocketState::Listen);
+        tmp_proc.cmdline = Some("/tmp/rogue-server".to_string());
+        let doc = analyze_doctor(&[exposed_pg, tmp_proc]);
+        assert!(doc.score < 100);
+        assert!(doc.issues.iter().any(|i| i.category == "EXPOSED_DATABASE"));
+        assert!(doc.issues.iter().any(|i| i.category == "SUSPICIOUS_PATH"));
+        assert!(doc.issues.iter().any(|i| i.category == "DEV_PORT_ACTIVE"));
+
+        // 3. Git project detection works on current repo
+        let cwd = std::env::current_dir().unwrap();
+        let (proj_name, _, branch) = detect_git_project(&cwd.to_string_lossy());
+        assert!(!proj_name.is_empty());
+        assert!(branch.is_some());
+
+        // 4. Live local HTTP health probe + CORS wildcard detection
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let server = std::thread::spawn(move || {
+            if let Ok((mut stream, _)) = listener.accept() {
+                let mut req_buf = [0u8; 512];
+                let _ = std::io::Read::read(&mut stream, &mut req_buf);
+                let _ = stream.write_all(
+                    b"HTTP/1.1 200 OK\r\nServer: ClousTest\r\nAccess-Control-Allow-Origin: *\r\nX-Frame-Options: DENY\r\n\r\nOK",
+                );
+            }
+        });
+        let http_res = probe_http("127.0.0.1", port, "/ping", 1500);
+        let _ = server.join();
+        assert!(http_res.reachable);
+        assert_eq!(http_res.status_code, Some(200));
+        assert!(http_res.cors_wildcard);
+        assert!(http_res.has_xfo);
+        assert_eq!(http_res.server_header.as_deref(), Some("ClousTest"));
     }
 }

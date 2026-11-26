@@ -1,6 +1,6 @@
-# SierraPort — Geliştirme Kayıtları ve Kullanım Analizi
+# Clous — Geliştirme Kayıtları ve Kullanım Analizi
 
-Bu doküman, **SierraPort** projesinde yapılan tüm geliştirmeleri **gün, tarih, saat ve GitHub commit/push kodu** bazında kronolojik olarak kayıt altına alır; her değişikliğin teknik detaylarını, amacını ve bireysel/kurumsal kullanım değerini belgeler.
+Bu doküman, **Clous** (eski adıyla SierraPort) projesinde yapılan tüm geliştirmeleri **gün, tarih, saat ve GitHub commit/push kodu** bazında kronolojik olarak kayıt altına alır; her değişikliğin teknik detaylarını, amacını ve bireysel/kurumsal kullanım değerini belgeler.
 
 ---
 
@@ -62,6 +62,12 @@ Bu doküman, **SierraPort** projesinde yapılan tüm geliştirmeleri **gün, tar
 | Çarşamba, 25 Kasım 2026 | `15:14` | *(push bekliyor)* | `NSThemeFrame` & Kök `.clipShape` Pencere Kenar Bozulmasının Kaldırılması, Native macOS Pencere Kompozisyonu + `12pt` Uyumlu Sol Menü Köşesi |
 | Perşembe, 26 Kasım 2026 | `13:56` | *(push bekliyor)* | Limitsiz CDN `latest.json` Güncelleyici, Salt-Okunur DMG / İzin Koruması ve Otomatik Homebrew Tap (`Casks/clous.rb`) Üretimi |
 | Perşembe, 26 Kasım 2026 | `14:03` | *(push bekliyor)* | Homebrew 5.x Uyumlu `postflight` Cask Güncellemesi (`--no-quarantine` Kaldırıldı) ve Tek Satırlık `scripts/install.sh` Kurulum Betiği |
+| Perşembe, 26 Kasım 2026 | `14:15` | *(push bekliyor)* | Yetki Gerektiren Komutlar (`kill`) İçin Native İzin & Onay Penceresi (`PrivilegedActionApprovalSheet`, Tek Seferlik / Kalıcı İzin + İptal) |
+| Perşembe, 26 Kasım 2026 | `14:38` | *(push bekliyor)* | Uygulama Geneli İngilizce / Türkçe (`EN/TR`) Dil Desteği (`Localization.swift`) ve Gelişmiş Çift Dilli Doğal Dil → CLI Niyet Motoru (`ViewModel.swift`) |
+| Perşembe, 26 Kasım 2026 | `14:54` | *(push bekliyor)* | 6 Yeni Fark Yaratan Özellik (`project`, `doctor`, `guard`, `history`, `http`, `forward`) — Sıfır Bağımlılıklı Rust Çekirdek + SwiftUI Görsel Kartları & Doğal Dil Desteği |
+| Perşembe, 26 Kasım 2026 | `15:09` | *(push bekliyor)* | `clous open <port> [--public]` Port Açma Komutu + Çift Dilli Doğal Dil (`3000 portunu aç` / `open port 3000`) ve Çıkışta Otomatik Temizlik |
+| Perşembe, 26 Kasım 2026 | `15:15` | *(push bekliyor)* | Apple Liquid Glass Yetki Onay Penceresi (`Enter ⏎` Anında Onay, `Esc` Anında İptal, Cam Kapsül Butonlar & Speküler Işık Kenarlığı) |
+| Perşembe, 26 Kasım 2026 | `15:58` | *(push bekliyor)* | GitHub `README.md`, `DOCS.md` ve Görsel Varlıkların Tam **Clous** Markasına Geçişi (`assets/clous-preview.png`, `clous-banner-dark/light.svg`) |
 
 ---
 
@@ -585,6 +591,69 @@ Bu doküman, **SierraPort** projesinde yapılan tüm geliştirmeleri **gün, tar
 
 - **Homebrew 5.x Uyumluluğu:** Güncel Homebrew sürümlerinde `--no-quarantine` bayrağı kaldırıldığı için `Casks/clous.rb` içine `postflight` (`xattr -dr com.apple.quarantine`) eklendi; artık bayraksız `brew install --cask efekanbahceci/tap/clous` komutu doğrudan çalışır.
 - **Tek Satırlık `install.sh` Betiği:** `Clous.zip` indirip `latest.json` üzerinden SHA-256 doğrulayan, `/Applications/Clous.app` kurup karantinayı temizleyen ve global `clous` CLI bağlantısını oluşturan `scripts/install.sh` oluşturuldu ve `package-release.sh` çıktısına dahil edildi.
+
+---
+
+## Perşembe, 26 Kasım 2026 — `14:15` · Commit: *(push bekliyor)*
+### Yetki Gerektiren Komutlar İçin Native İzin & Onay Penceresi (`kill`)
+**Etkilenen Modüller:** `macos/SierraPortApp/Sources/SierraPortApp/{ViewModel,ContentView,SierraPortApp}.swift`
+
+- **Merkezi Yetki Kapısı (`ViewModel.swift`):** Hem Terminal Deck / Quick Launcher üzerinden yazılan `kill` komutları hem de tablo, Live Watch, Forensic Inspector ve Menü Çubuğu üzerinden tetiklenen `killPort` aksiyonları `requestPrivilegedAction(...)` izin kapısından geçirildi; varsayılan olarak kullanıcı onayı olmadan süreç sonlandırılmaz.
+- **Native Onay Penceresi (`PrivilegedActionApprovalSheet`):** Hedef süreç/PID/port özeti, çalıştırılacak komut önizlemesi (`clous kill ...`), **Cancel (`Esc`)**, **Allow Once (`⏎`)** ve **Remember permission** (kalıcı izin) seçenekleriyle Apple HIG uyumlu modal onay ekranı eklendi.
+- **İzin Geri Alma (`SierraPortApp.swift`):** Üst macOS `Actions` menüsüne **Revoke Process Control Permission** seçeneği eklenerek kullanıcının verdiği kalıcı izni istediği an tek tıkla iptal edebilmesi sağlandı.
+
+---
+
+## Perşembe, 26 Kasım 2026 — `14:38` · Commit: *(push bekliyor)*
+### Uygulama Geneli İngilizce / Türkçe (`EN/TR`) Dil Sistemi ve Gelişmiş Çift Dilli Doğal Dil → CLI Motoru
+**Etkilenen Modüller:** `macos/SierraPortApp/Sources/SierraPortApp/{Localization,Models,Theme,ViewModel,ContentView,SierraPortApp,ShortcutOnboardingView,QuickLauncherPanel,VisualBlocks}.swift`
+
+- **Sıfır Bağımlılıklı Çift Dil Motoru (`Localization.swift`):** `AppLocale.shared` + `L(en, tr)` altyapısı ile sol menü, İlk Kurulum Sihirbazı ve macOS üst menüsüne **English / Türkçe** dil seçici eklendi. Tüm arayüz metinleri, sekmeler, KPI etiketleri, Forensic Inspector, Güvenlik Denetimi, Analitik, Quick Launcher, Menü Çubuğu, Güncelleme bildirimleri ve Yetki Onay Penceresi seçili dile anında geçer; CLI komut örnekleri ve öneri çipleri her iki dilde de İngilizce CLI formatında korunur.
+- **Gelişmiş Çift Dilli Doğal Dil → CLI Motoru (`ViewModel.swift`):** Aktif arayüz dili ne olursa olsun hem **Türkçe hem İngilizce düz cümleleri** (*"3000 portunu kapat"*, *"dışa açık portları göster"*, *"8000 ile 8999 arası 3 boş port bul"*, *"run a strict security audit"* vb.) parametreleriyle (port, aralık, adet, protokol, profil, durum) çözümleyip doğrudan çalıştırır; sistemde karşılığı veya yetkisi olmayan istekleri reddederek seçili dilde açıklama ile mevcut İngilizce CLI komut örneklerini listeler.
+
+---
+
+## Perşembe, 26 Kasım 2026 — `14:54` · Commit: *(push bekliyor)*
+### 6 Yeni Fark Yaratan Özellik (`project`, `doctor`, `guard`, `history`, `http`, `forward`)
+**Etkilenen Modüller:** `src/{extras,cli,main}.rs`, `macos/SierraPortApp/Sources/SierraPortApp/{ExtraFeatures,Models,ViewModel,ContentView}.swift`
+
+- **Rust Çekirdek (`src/extras.rs` — 0 Harici Crate):**
+  - `clous project`: Tüm aktif dinleyicilerin `cwd` dizinini tek toplu çağrıyla çözüp `.git/HEAD` üzerinden proje & Git branch bazında gruplar.
+  - `clous doctor`: Dışa açık veritabanları, `/tmp`/`/Downloads` şüpheli yolları, `CLOSE_WAIT`/`TIME_WAIT` soket sızıntıları, boşta yüksek bellekli dev sunucuları ve yaygın dev port çakışmalarını `0–100` sağlık skoruyla raporlar.
+  - `clous http <port> [/path]`: Saf `std::net::TcpStream` ile TCP bağlantı süresi, TTFB (ms), HTTP durum kodu, `CORS: *` uyarısı ve `HSTS/CSP/XFO/XCTO` güvenlik başlıklarını ölçer.
+  - `clous forward <from> <to>`: Varsayılan localhost korumalı, sıfır bağımlılıklı tam çift yönlü yerel TCP yönlendirici.
+- **Native macOS UI (`ExtraFeatures.swift` & `ContentView.swift`):**
+  - `PortGuardManager`: Mevcut canlı akış üzerinde ek CPU harcamadan yeni dışa açık portlar için native macOS bildirimi (`UserNotifications`) + üst araç çubuğunda tek tıkla aç/kapat zili.
+  - `PortHistoryStore`: Son 24 saatlik port açılma/kapanma olaylarını `0o600` izinli `history.jsonl` dosyasında tutar (`history [port]`).
+  - `ProjectMapVisualView`, `DoctorVisualView`, `HttpHealthVisualView`, `HistoryTimelineVisualView` Apple Liquid Glass kartları ve tümü için EN/TR doğal dil desteği eklendi; `cargo clippy -D warnings` (0 uyarı), `cargo test` (`10/10`) ve `Clous.app` derlemesi doğrulandı.
+
+---
+
+## Perşembe, 26 Kasım 2026 — `15:09` · Commit: *(push bekliyor)*
+### `clous open <port>` Port Açma Komutu & Doğal Dil Desteği
+**Etkilenen Modüller:** `src/{extras,cli,main}.rs`, `macos/SierraPortApp/Sources/SierraPortApp/ViewModel.swift`
+
+- **Rust Çekirdek (`clous open <port> [--public]`):** Saf `std::net::TcpListener` ile varsayılan `127.0.0.1` üzerinde (veya `--public` ile `0.0.0.0` üzerinde) hafif, `HTTP 200 OK` JSON yanıtı veren dinleyici başlatır (`http`, `curl`, tarayıcı ve `guard` testleriyle tam uyumlu).
+- **macOS Yönetilen Dinleyici & Güvenlik (`ViewModel.swift`):** `3000 portunu aç`, `open port 3000`, `dışa açık 9000 portu aç` gibi Türkçe/İngilizce doğal dil komutlarını doğrudan çözümler; `--public` (dışa açık) port açılırken **Yetki Onay Penceresi** ister ve uygulama kapanırken açılan tüm portları otomatik sonlandırır.
+
+---
+
+## Perşembe, 26 Kasım 2026 — `15:15` · Commit: *(push bekliyor)*
+### Apple Liquid Glass Yetki Onay Penceresi ve Tek Tuş (`⏎` / `Esc`) Kontrolü
+**Etkilenen Modüller:** `macos/SierraPortApp/Sources/SierraPortApp/ContentView.swift`
+
+- **Anında Klavye Kontrolü:** `PrivilegedActionApprovalSheet` içine `NSEvent.addLocalMonitorForEvents` eklenerek odak durumundan bağımsız tek **`Enter (⏎)`** basışıyla onaylama ve tek **`Esc`** basışıyla iptal etme sağlandı.
+- **Apple Liquid Glass Buton & Yüzey Tasarımı:** Standart sistem çerçeveli butonlar yerine `.ultraThinMaterial` + üst speküler ışık kenarlıklı cam kapsül **Vazgeç (`Esc`)** butonu, üst parlaklık gradyanlı `#EB0020` cam kapsül **İzin Ver (`⏎`)** butonu ve `Reduce Transparency` uyumlu buzlu cam pencere zemini uygulandı.
+
+---
+
+## Perşembe, 26 Kasım 2026 — `15:58` · Commit: *(push bekliyor)*
+### GitHub `README.md`, `DOCS.md` ve Görsel Varlıkların Tam **Clous** Markasına Geçişi
+**Etkilenen Dosyalar:** `README.md`, `DOCS.md`, `DEVELOPMENT_LOG.md`, `scripts/test-onboarding.sh`, `assets/clous-preview.png`, `assets/clous-banner-dark.svg`, `assets/clous-banner-light.svg`
+
+- **Yeni Client Önizleme Görseli (`assets/clous-preview.png`):** Güncel **Clous v0.2.2** arayüzünü yansıtan `#07080A` obsidian zemin, `#EB0020` crimson vurgular, monokrom beyaz maskot, `English | Türkçe` dil seçici, `Dark | Light | System` tema seçici, `Clous v0.2.2` durum kartı ve yeni `project` / `doctor` / `history` öneri kartlarıyla `1800×1140` Retina önizleme oluşturuldu.
+- **Yeni SVG Banner'lar & Temizlik:** `assets/clous-banner-dark.svg` ve `assets/clous-banner-light.svg` üretildi; kullanılmayan eski `sierraport-banner-*.svg` ve `sierraport-preview.png` dosyaları kaldırıldı.
+- **Tam Marka & Dokümantasyon Güncellemesi:** `README.md`, `DOCS.md`, `DEVELOPMENT_LOG.md` ve `scripts/test-onboarding.sh` genelindeki tüm marka referansları **Clous** / `clous` olarak güncellendi; `Clous.dmg`, tek satırlık `install.sh`, Homebrew Tap (`efekanbahceci/tap/clous`) ve tüm yeni komutlar (`project`, `doctor`, `guard`, `history`, `http`, `forward`, `open`) dokümante edildi.
 
 ---
 

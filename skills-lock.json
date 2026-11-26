@@ -29,6 +29,13 @@
       "skillPath": "skills/ci-security-scanning-with-strix/SKILL.md",
       "computedHash": "13949ab1e24f8cac87a11b221e55e52e6bfcf712ccd9eaeefeae4e3608c70d44"
     },
+    "devops-engineer": {
+      "source": "Jeffallan/claude-skills",
+      "commit": "d98d06edb54c25cfb94017c0ef830342a34a43ba",
+      "sourceType": "github",
+      "skillPath": "plugin/skills/devops-engineer/SKILL.md",
+      "computedHash": "a2df2992303b024a1f6c3f40bf28b2bd359087d3a43c9956665ebdffd7787cd5"
+    },
     "diagnosing-bugs": {
       "source": "mattpocock/skills",
       "commit": "abeeaf95660ba9e8b7c753eb38f441ca707a8823",

@@ -418,6 +418,7 @@ struct PortTableView: View {
     @State private var filterText: String = ""
     @State private var sortCol: TableSortColumn = .port
     @State private var sortAsc: Bool = true
+    @ObservedObject private var locale = AppLocale.shared
 
     private var displayed: [PortEntry] {
         let q = filterText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
@@ -458,7 +459,7 @@ struct PortTableView: View {
                     Image(systemName: "magnifyingglass")
                         .foregroundStyle(.secondary)
                         .font(.system(size: 12))
-                    TextField("Filter ports, processes, users, scopes...", text: $filterText)
+                    TextField(locale.t("Filter ports, processes, users, scopes...", "Port, süreç, kullanıcı veya kapsam filtrele..."), text: $filterText)
                         .textFieldStyle(.plain)
                         .font(.system(size: 12))
                     if !filterText.isEmpty {

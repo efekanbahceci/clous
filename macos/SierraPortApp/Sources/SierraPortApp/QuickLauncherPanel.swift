@@ -148,6 +148,7 @@ struct QuickLauncherItem: Identifiable {
 struct QuickLauncherView: View {
     @ObservedObject var vm: SierraPortViewModel
     @ObservedObject var hotkeyManager: GlobalHotkeyManager
+    @ObservedObject private var locale = AppLocale.shared
     let onDismiss: () -> Void
     let onOpenMainWindow: () -> Void
 
@@ -166,12 +167,12 @@ struct QuickLauncherView: View {
 
         if trimmed.isEmpty {
             let defaults: [(String, String, String, String)] = [
-                ("globe", "list --exposed", "Show externally exposed ports", "list --exposed"),
-                ("memorychip", "list --wide --sort mem --desc", "Sort active ports by RAM", "list --wide --sort mem --desc"),
-                ("shield.lefthalf.filled", "audit --deep", "Run security & binary trust audit", "audit --deep"),
-                ("sparkle.magnifyingglass", "inspect 5000 --probe", "Forensic inspect + live banner probe", "inspect 5000 --probe"),
-                ("plus.circle", "free --range 8000-8999 --count 3", "Find 3 available TCP ports", "free --range 8000-8999 --count 3"),
-                ("chart.bar.xaxis", "stats", "Socket & exposure statistics", "stats")
+                ("globe", "list --exposed", locale.t("Show externally exposed ports", "Dışa açık portları göster"), "list --exposed"),
+                ("memorychip", "list --wide --sort mem --desc", locale.t("Sort active ports by RAM", "Aktif portları RAM'e göre sırala"), "list --wide --sort mem --desc"),
+                ("shield.lefthalf.filled", "audit --deep", locale.t("Run security & binary trust audit", "Güvenlik ve imza denetimi çalıştır"), "audit --deep"),
+                ("sparkle.magnifyingglass", "inspect 5000 --probe", locale.t("Forensic inspect + live banner probe", "Adli inceleme + canlı protokol yoklama"), "inspect 5000 --probe"),
+                ("plus.circle", "free --range 8000-8999 --count 3", locale.t("Find 3 available TCP ports", "3 adet boş TCP portu bul"), "free --range 8000-8999 --count 3"),
+                ("chart.bar.xaxis", "stats", locale.t("Socket & exposure statistics", "Soket ve maruziyet istatistikleri"), "stats")
             ]
             for (icon, title, sub, cmd) in defaults {
                 items.append(QuickLauncherItem(id: "def-\(cmd)", icon: icon, title: title, subtitle: sub, command: cmd))
@@ -228,7 +229,13 @@ struct QuickLauncherView: View {
             HStack(spacing: 12) {
                 SierraMascotMarkView(size: 24)
 
-                TextField("Type a command, port, or process (e.g. 5000, exposed, close 3000)...", text: $query)
+                TextField(
+                    locale.t(
+                        "Type a command, port, or sentence (e.g. 5000, exposed, close port 3000)...",
+                        "Komut, port veya düz cümle yazın (ör. 5000, dışa açık portlar, 3000 portunu kapat)..."
+                    ),
+                    text: $query
+                )
                     .textFieldStyle(.plain)
                     .font(SierraFont.ui(15, weight: .regular))
                     .focused($isInputFocused)
@@ -376,6 +383,22 @@ struct QuickLauncherView: View {
                             DiffVisualView(diff: diff)
                         case .stats(let stats):
                             StatsVisualView(stats: stats)
+                        case .projects(let proj):
+                            ProjectMapVisualView(
+                                report: proj,
+                                onInspectPort: { runSpecific("inspect \($0) --probe") },
+                                onKillPort: { vm.killPort($0) }
+                            )
+                        case .doctor(let doc):
+                            DoctorVisualView(
+                                report: doc,
+                                onRunFix: { runSpecific($0) },
+                                onInspectPort: { runSpecific("inspect \($0) --probe") }
+                            )
+                        case .httpHealth(let http):
+                            HttpHealthVisualView(report: http)
+                        case .history(let records, let port):
+                            HistoryTimelineVisualView(records: records, filterPort: port)
                         case .text(let s):
                             Text(s)
                                 .font(SierraFont.mono(11.5))
