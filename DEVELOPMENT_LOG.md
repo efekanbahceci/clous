@@ -60,6 +60,8 @@ Bu doküman, **SierraPort** projesinde yapılan tüm geliştirmeleri **gün, tar
 | Salı, 24 Kasım 2026 | `13:11` | *(push bekliyor)* | `UpdateManager` Aynı Sürüm Tekrar Güncelleme Döngüsü Koruması (`clous_installed_release_tag`) ve `v0.2.1` Paketlemesi |
 | Çarşamba, 25 Kasım 2026 | `15:12` | *(push bekliyor)* | Pencere Dış Köşelerinin Sol Menüyle Eş Merkezli `22pt` Continuous Apple Squircle Yumuşaklığına Uyarlanması |
 | Çarşamba, 25 Kasım 2026 | `15:14` | *(push bekliyor)* | `NSThemeFrame` & Kök `.clipShape` Pencere Kenar Bozulmasının Kaldırılması, Native macOS Pencere Kompozisyonu + `12pt` Uyumlu Sol Menü Köşesi |
+| Perşembe, 26 Kasım 2026 | `13:56` | *(push bekliyor)* | Limitsiz CDN `latest.json` Güncelleyici, Salt-Okunur DMG / İzin Koruması ve Otomatik Homebrew Tap (`Casks/clous.rb`) Üretimi |
+| Perşembe, 26 Kasım 2026 | `14:03` | *(push bekliyor)* | Homebrew 5.x Uyumlu `postflight` Cask Güncellemesi (`--no-quarantine` Kaldırıldı) ve Tek Satırlık `scripts/install.sh` Kurulum Betiği |
 
 ---
 
@@ -564,6 +566,25 @@ Bu doküman, **SierraPort** projesinde yapılan tüm geliştirmeleri **gün, tar
 
 - **Kök Neden:** `.windowStyle(.hiddenTitleBar)` kullanan SwiftUI pencerelerinde kök `ZStack` üzerine `.clipShape` eklendiğinde kırpma 28pt güvenli alanın altından başlayarak üst şeridi kesiyor; `NSThemeFrame` katmanına `masksToBounds` + `isOpaque = false` vermek ise macOS WindowServer çerçevesini bozuyor.
 - **Düzeltme:** `NSThemeFrame` müdahalesi ve kök `.clipShape`/`.overlay` tamamen kaldırılarak donanım hızlandırmalı saf native `NSWindow` kompozisyonuna (`isOpaque = true`, `#07080A` / `#FFFFFF` zemin) dönüldü; sol yüzen menünün köşe yarıçapı da pencerenin doğal macOS köşe eğrisiyle birebir uyumlu olması için `12pt` continuous olarak hizalandı.
+
+---
+
+## Perşembe, 26 Kasım 2026 — `13:56` · Commit: *(push bekliyor)*
+### Limitsiz CDN Güncelleyici (`latest.json`), Salt-Okunur DMG Koruması ve Otomatik Homebrew Cask
+**Etkilenen Modüller:** `macos/SierraPortApp/Sources/SierraPortApp/UpdateManager.swift`, `scripts/package-release.sh`
+
+- **GitHub API Limitinden Bağımsız Güncelleme (`UpdateManager.swift`):** Birincil güncelleme kaynağı olarak GitHub CDN üzerinden saatlik hız sınırı olmayan `releases/latest/download/latest.json` (satır içi `zip_sha256` / `dmg_sha256` doğrulamalı) eklendi; `latest.json` yoksa otomatik olarak GitHub REST API'ye güvenli fallback yapar.
+- **Salt-Okunur DMG & Yazma İzni Koruması:** Uygulama doğrudan `/Volumes/` (DMG) içinden, App Translocation'dan veya yazma izni olmayan bir dizinden çalıştırıldığında `Restart Update` çökmeden kullanıcıyı uyarıp ilgili sürüm sayfasını açar.
+- **Otomatik Homebrew Tap Üretimi (`package-release.sh`):** Her paketlemede güncel sürüm ve SHA-256 ile `dist/latest.json` ve hem `Clous.app` hem global `clous` CLI ikilisini kuran `dist/Casks/clous.rb` dosyası otomatik üretilir.
+
+---
+
+## Perşembe, 26 Kasım 2026 — `14:03` · Commit: *(push bekliyor)*
+### Homebrew 5.x `postflight` Düzeltmesi ve `install.sh` Tek Satırlık Kurulum Betiği
+**Etkilenen Modüller:** `scripts/install.sh`, `scripts/package-release.sh`, `dist/{install.sh,Casks/clous.rb}`
+
+- **Homebrew 5.x Uyumluluğu:** Güncel Homebrew sürümlerinde `--no-quarantine` bayrağı kaldırıldığı için `Casks/clous.rb` içine `postflight` (`xattr -dr com.apple.quarantine`) eklendi; artık bayraksız `brew install --cask efekanbahceci/tap/clous` komutu doğrudan çalışır.
+- **Tek Satırlık `install.sh` Betiği:** `Clous.zip` indirip `latest.json` üzerinden SHA-256 doğrulayan, `/Applications/Clous.app` kurup karantinayı temizleyen ve global `clous` CLI bağlantısını oluşturan `scripts/install.sh` oluşturuldu ve `package-release.sh` çıktısına dahil edildi.
 
 ---
 

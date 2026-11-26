@@ -118,18 +118,82 @@ MOUNT_DIR=""
     -imagekey zlib-level=9 \
     -o "$DMG_PATH" >/dev/null
 
-# 4. Generate SHA-256 checksums for cryptographic verification by UpdateManager
-echo "==> Generating SHA-256 checksums..."
+# 4. Generate SHA-256 checksums, unlimited-CDN latest.json, and Homebrew Cask (Casks/clous.rb)
+echo "==> Generating SHA-256 checksums, latest.json, and Homebrew Casks/clous.rb..."
+DMG_SHA256="$(/usr/bin/shasum -a 256 "$DMG_PATH" | awk '{print $1}')"
+ZIP_SHA256="$(/usr/bin/shasum -a 256 "$ZIP_PATH" | awk '{print $1}')"
+
 (
     cd "$DIST_DIR"
     /usr/bin/shasum -a 256 "${APP_NAME}.dmg" "${APP_NAME}.zip" > "$CHECKSUM_PATH"
 )
 
+LATEST_JSON_PATH="$DIST_DIR/latest.json"
+cat > "$LATEST_JSON_PATH" << EOF
+{
+  "version": "${VERSION}",
+  "tag": "v${VERSION}",
+  "name": "${APP_NAME} v${VERSION}",
+  "zip_url": "https://github.com/${UPDATE_REPO}/releases/download/v${VERSION}/${APP_NAME}.zip",
+  "dmg_url": "https://github.com/${UPDATE_REPO}/releases/download/v${VERSION}/${APP_NAME}.dmg",
+  "zip_sha256": "${ZIP_SHA256}",
+  "dmg_sha256": "${DMG_SHA256}",
+  "release_url": "https://github.com/${UPDATE_REPO}/releases/tag/v${VERSION}"
+}
+EOF
+
+CASK_DIR="$DIST_DIR/Casks"
+CASK_PATH="$CASK_DIR/clous.rb"
+mkdir -p "$CASK_DIR"
+cat > "$CASK_PATH" << EOF
+cask "clous" do
+  version "${VERSION}"
+  sha256 "${DMG_SHA256}"
+
+  url "https://github.com/${UPDATE_REPO}/releases/download/v#{version}/${APP_NAME}.dmg"
+  name "${APP_NAME}"
+  desc "Zero-dependency Rust port monitor, security auditor, and forensic inspector"
+  homepage "https://github.com/${UPDATE_REPO}"
+
+  depends_on arch: :arm64
+  depends_on macos: ">= :sonoma"
+
+  app "${APP_NAME}.app"
+  binary "#{appdir}/${APP_NAME}.app/Contents/Resources/sierraport", target: "clous"
+
+  postflight do
+    system_command "/usr/bin/xattr",
+                   args: ["-dr", "com.apple.quarantine", "#{appdir}/${APP_NAME}.app"],
+                   sudo: false
+  end
+
+  zap trash: [
+    "~/Library/Preferences/dev.clous.macos.plist",
+  ]
+end
+EOF
+
+INSTALL_SH_PATH="$DIST_DIR/install.sh"
+cp "$ROOT_DIR/scripts/install.sh" "$INSTALL_SH_PATH"
+chmod +x "$INSTALL_SH_PATH"
+
 echo ""
 echo "✓ Branded release artifacts ready for v${VERSION}:"
-echo "  • DMG (Branded Website Installer): $DMG_PATH"
-echo "  • ZIP (In-App Restart Update)    : $ZIP_PATH"
-echo "  • SHA-256 Checksums              : $CHECKSUM_PATH"
+echo "  • DMG (Website Installer)     : $DMG_PATH"
+echo "  • ZIP (In-App Restart Update) : $ZIP_PATH"
+echo "  • CDN Manifest (No Rate Limit): $LATEST_JSON_PATH"
+echo "  • One-Line Curl Installer     : $INSTALL_SH_PATH"
+echo "  • SHA-256 Checksums           : $CHECKSUM_PATH"
+echo "  • Homebrew Tap Cask           : $CASK_PATH"
+echo ""
+echo "Upload these 5 files to GitHub Release v${VERSION}:"
+echo "  Clous.dmg · Clous.zip · latest.json · install.sh · checksums.txt"
 echo ""
 echo "Permanent Website Download URL:"
 echo "  https://github.com/${UPDATE_REPO}/releases/latest/download/${APP_NAME}.dmg"
+echo ""
+echo "One-Line Curl Install Command:"
+echo "  curl -fsSL https://github.com/${UPDATE_REPO}/releases/latest/download/install.sh | bash"
+echo ""
+echo "Homebrew Tap Install Command (after pushing dist/Casks/clous.rb to efekanbahceci/homebrew-tap):"
+echo "  brew install --cask efekanbahceci/tap/clous"
